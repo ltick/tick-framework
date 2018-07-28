@@ -5,9 +5,10 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
-	"os"
 
 	"github.com/ltick/tick-framework/module"
 	libConfig "github.com/ltick/tick-framework/module/config"
@@ -35,7 +36,7 @@ func TestAppCallback(t *testing.T) {
 	var values map[string]interface{} = make(map[string]interface{}, 0)
 	var modules []*module.Module = []*module.Module{}
 	var configs map[string]libConfig.Option = make(map[string]libConfig.Option, 0)
-	a := New(os.Args[0], "", "", modules, configs).
+	a := New(os.Args[0], filepath.Dir(filepath.Dir(os.Args[0])), "ltick.json", "LTICK", modules, configs).
 		WithCallback(&TestCallback{}).WithValues(values)
 	a.SetSystemLogWriter(ioutil.Discard)
 	err := a.Startup()
@@ -191,7 +192,7 @@ func TestModule(t *testing.T) {
 		&module.Module{Name: "testModule2", Module: &testModule2{}},
 	}
 	var options map[string]libConfig.Option = make(map[string]libConfig.Option, 0)
-	a := New(os.Args[0], "", "", modules, options).
+	a := New(os.Args[0], filepath.Dir(filepath.Dir(os.Args[0])), "ltick.json", "LTICK", modules, options).
 		WithCallback(&TestCallback{}).
 		WithValues(values)
 	a.SetSystemLogWriter(ioutil.Discard)
@@ -221,8 +222,9 @@ func TestModule(t *testing.T) {
   }
 }`), nil, "testModule1")
 	assert.Equal(t, "Bar1", module.Foo)
-	a.WithServer("test", 8080, 30*time.Second, 3*time.Second)
-	rg := a.GetServer("test").Router.AddRouteGroup("")
+	srv := a.NewServer("test", 8080, 30*time.Second, 3*time.Second)
+	rg := srv.GetRouteGroup("/")
+	assert.NotNil(t,  rg)
 	rg.AddRoute("GET", "/test", func(ctx context.Context, c *routing.Context) (context.Context, error) {
 		c.Response.Write([]byte(c.Get("Foo").(string)))
 		return ctx, nil
@@ -242,7 +244,7 @@ func TestInjectModule(t *testing.T) {
 	var options map[string]libConfig.Option = map[string]libConfig.Option{}
 	var values map[string]interface{} = make(map[string]interface{}, 0)
 	var modules []*module.Module = []*module.Module{}
-	a := New(os.Args[0], "", "", modules, options).
+	a := New(os.Args[0], filepath.Dir(filepath.Dir(os.Args[0])), "ltick.json", "LTICK", modules, options).
 		WithCallback(&TestCallback{}).
 		WithValues(values)
 	a.SetSystemLogWriter(ioutil.Discard)
@@ -276,7 +278,7 @@ func TestBuildinModule(t *testing.T) {
 	var options map[string]libConfig.Option = map[string]libConfig.Option{}
 	var values map[string]interface{} = make(map[string]interface{}, 0)
 	var modules []*module.Module = []*module.Module{}
-	a := New(os.Args[0], "","",  modules, options).
+	a := New(os.Args[0], filepath.Dir(filepath.Dir(os.Args[0])), "ltick.json", "LTICK", modules, options).
 		WithCallback(&TestCallback{}).
 		WithValues(values)
 	a.SetSystemLogWriter(ioutil.Discard)

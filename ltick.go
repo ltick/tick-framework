@@ -22,14 +22,13 @@ import (
 	libUtility "github.com/ltick/tick-framework/module/utility"
 	"github.com/ltick/tick-graceful"
 	"github.com/ltick/tick-routing"
-	"github.com/ltick/tick-routing/access"
-	"github.com/ltick/tick-routing/fault"
 	"time"
 )
 
 var (
 	errNew                        = "ltick: new error"
 	errNewClassic                 = "ltick: new classic error"
+	errNewServer                 = "ltick: new server error"
 	errConfigure                  = "ltick: configure error"
 	errStartup                    = "ltick: startup error"
 	errGetLogger                  = "ltick: get logger error"
@@ -107,7 +106,7 @@ func NewClassic(modules []*module.Module, configOptions map[string]libConfig.Opt
 		fmt.Printf(errNewClassic+": %s\r\n", err.Error())
 		os.Exit(1)
 	}
-	if option.PathPrefix != "" {
+	if option.PathPrefix == "" {
 		option.PathPrefix = filepath.Dir(filepath.Dir(executePath))
 	}
 	engine = New(executeFile, option.PathPrefix, defaultConfigName, option.EnvPrefix, modules, configOptions)
@@ -369,27 +368,6 @@ func (e *Engine) WithValues(values map[string]interface{}) *Engine {
 }
 func (e *Engine) WithCallback(callback Callback) *Engine {
 	e.callback = callback
-	return e
-}
-func (e *Engine) WithServerLogFunc(name string, accessLogFunc access.LogWriterFunc, faultLogFunc fault.LogFunc, recoveryHandler ...fault.ConvertErrorFunc) *Engine {
-	server := e.GetServer(name)
-	server.Router.WithAccessLogger(accessLogFunc).
-		WithRecoveryHandler(faultLogFunc, recoveryHandler...)
-	return e
-}
-func (e *Engine) WithServerReuqestCallback(name string, reuqestCallback RouterCallback) *Engine {
-	server := e.GetServer(name)
-	server.Router.WithCallback(reuqestCallback)
-	return e
-}
-func (e *Engine) WithServerHanlders(name string, handlers []*ServerHanlder) *Engine {
-	server := e.GetServer(name)
-	server.Router.WithSlashRemover(http.StatusMovedPermanently).
-		WithCors(CorsAllowAll)
-	routerGroup := server.Router.AddRouteGroup("/")
-	for _, handler := range handlers {
-		routerGroup.AddRoute(handler.Method, handler.Path, handler.Handler)
-	}
 	return e
 }
 func (e *Engine) GetLogger(name string) (*libLogger.Logger, error) {

@@ -7,10 +7,13 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/ltick/tick-framework/module"
+	libConfig "github.com/ltick/tick-framework/module/config"
 	"github.com/ltick/tick-framework/module/logger"
 	"github.com/ltick/tick-framework/module/utility"
 	"github.com/ltick/tick-log"
@@ -42,15 +45,11 @@ func (f *ServerAppInitFunc) OnStartup(e *Engine) error {
 	if err != nil {
 		return err
 	}
-	e.WithContextValue("testlogger", logger.NewLogger("test"))
+	e.SetContextValue("testlogger", logger.NewLogger("test"))
 
 	return nil
 }
 func (f *ServerAppInitFunc) OnShutdown(e *Engine) error {
-	err := e.unregisterModule("logger")
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -83,14 +82,18 @@ func (f *ServerGroupRequestInitFunc) OnRequestShutdown(ctx context.Context, c *r
 }
 
 func TestServerCallback(t *testing.T) {
-	a := New(&ServerAppInitFunc{})
+	var options map[string]libConfig.Option = map[string]libConfig.Option{}
+	var values map[string]interface{} = make(map[string]interface{}, 0)
+	var modules []*module.Module = []*module.Module{}
+	a := New(os.Args[0], filepath.Dir(filepath.Dir(os.Args[0])), "ltick.json", "LTICK", modules, options).
+		WithCallback(&ServerAppInitFunc{}).WithValues(values)
 	a.SetSystemLogWriter(ioutil.Discard)
 	err := a.Startup()
 	assert.Nil(t, err)
 	assert.NotNil(t, a.Context.Value("testlogger"))
 	utilityModule, err := a.GetBuiltinModule("utility")
 	assert.Nil(t, err)
-	a.WithContextValue("utility",utilityModule)
+	a.SetContextValue("utility", utilityModule)
 	accessLogFunc := func(ctx context.Context, c *routing.Context, rw *access.LogResponseWriter, elapsed float64) {
 		testlogger := ctx.Value("testlogger").(*log.Logger)
 		utility := ctx.Value("utility").(*utility.Instance)
@@ -105,7 +108,7 @@ func TestServerCallback(t *testing.T) {
 	}
 	// server
 	testlogger := a.Context.Value("testlogger").(*log.Logger)
-	a.WithContextValue("Foo", "Bar")
+	a.SetContextValue("Foo", "Bar")
 	a.NewServer("test", 8080, 30*time.Second, 3*time.Second)
 	s := a.GetServer("test")
 	r := s.Router.WithAccessLogger(accessLogFunc).
@@ -116,7 +119,10 @@ func TestServerCallback(t *testing.T) {
 		WithLanguageNegotiator("zh-CN", "en-US").
 		WithCors(CorsAllowAll).
 		WithCallback(&ServerRequestInitFunc{})
-	rg := r.AddRouteGroup("").WithCallback(&ServerGroupRequestInitFunc{})
+	assert.NotNil(t, r)
+	rg := s.GetRouteGroup("/")
+	assert.NotNil(t, rg)
+	rg.WithCallback(&ServerGroupRequestInitFunc{})
 	rg.AddRoute("GET", "/test/<id>", func(ctx context.Context, c *routing.Context) (context.Context, error) {
 		c.Response.Write([]byte(c.Param("id")))
 		return ctx, nil
