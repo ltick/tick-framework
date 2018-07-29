@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
 	"time"
-	"net/http"
 
 	"github.com/ltick/tick-framework/module"
 	"github.com/ltick/tick-routing"
@@ -22,9 +22,9 @@ import (
 
 type (
 	Server struct {
+		gracefulStopTimeout time.Duration
 		systemLogWriter     io.Writer
 		Port                uint
-		gracefulStopTimeout time.Duration
 		Router              *ServerRouter
 		RouteGroups         map[string]*ServerRouteGroup
 		mutex               sync.RWMutex
@@ -91,33 +91,54 @@ func (e *Engine) SetServerReuqestCallback(name string, reuqestCallback RouterCal
 	server.Router.WithCallback(reuqestCallback)
 	return e
 }
-func (e *Engine) SetServerHanlders(name string, handlers []*ServerHanlder) *Engine {
+func (e *Engine) AddServerHanlders(name string, handlers []*ServerHanlder) *Engine {
 	server := e.GetServer(name)
 	server.Router.WithSlashRemover(http.StatusMovedPermanently).
 		WithCors(CorsAllowAll)
-	routerGroup := server.GetRouteGroup("/")
 	for _, handler := range handlers {
-		routerGroup.AddRoute(handler.Method, handler.Path, handler.Handler)
+		server.addRoute(handler.Method, handler.Path, handler.Handler)
 	}
 	return e
 }
 func (e *Engine) GetServer(name string) *Server {
 	return e.Servers[name]
 }
-
 func (s *Server) Get(route string, handlers ...routing.Handler) *Server {
-	routes := strings.Split(route, "/")
+	return s.addRoute("GET", route, handlers...)
+}
+func (s *Server) Post(route string, handlers ...routing.Handler) *Server {
+	return s.addRoute("POST", route, handlers...)
+}
+func (s *Server) Put(route string, handlers ...routing.Handler) *Server {
+	return s.addRoute("PUT", route, handlers...)
+}
+func (s *Server) Patch(route string, handlers ...routing.Handler) *Server {
+	return s.addRoute("PATCH", route, handlers...)
+}
+func (s *Server) Delete(route string, handlers ...routing.Handler) *Server {
+	return s.addRoute("DELETE", route, handlers...)
+}
+func (s *Server) Connect(route string, handlers ...routing.Handler) *Server {
+	return s.addRoute("CONNECT", route, handlers...)
+}
+func (s *Server) Options(route string, handlers ...routing.Handler) *Server {
+	return s.addRoute("OPTIONS", route, handlers...)
+}
+func (s *Server) Trace(route string, handlers ...routing.Handler) *Server {
+	return s.addRoute("TRACE", route, handlers...)
+}
+func (s *Server) addRoute(method string, path string, handlers ...routing.Handler) *Server {
+	paths := strings.Split(path, "/")
 	prefix := "/"
-	for _, routePrefix := range routes {
+	for _, routePrefix := range paths {
 		if _, ok := s.RouteGroups[routePrefix]; ok {
 			prefix = routePrefix
 			break
 		}
 	}
-	s.RouteGroups[prefix].AddRoute("GET", strings.Replace(route, prefix, "", 1), handlers...)
+	s.RouteGroups[prefix].AddRoute(method, strings.Replace(path, prefix, "", 1), handlers...)
 	return s
 }
-
 func (s *Server) GetRouter() *ServerRouter {
 	return s.Router
 }

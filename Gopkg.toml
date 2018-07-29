@@ -65,8 +65,8 @@
   name = "github.com/ltick/tick-log"
 
 [[constraint]]
+  branch = "master"
   name = "github.com/ltick/tick-routing"
-  version = "2.2"
 
 [[constraint]]
   branch = "master"
