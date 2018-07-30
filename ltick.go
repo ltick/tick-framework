@@ -15,14 +15,14 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ltick/tick-framework/module"
 	libConfig "github.com/ltick/tick-framework/module/config"
 	libLogger "github.com/ltick/tick-framework/module/logger"
 	libUtility "github.com/ltick/tick-framework/module/utility"
 	"github.com/ltick/tick-graceful"
-	"github.com/ltick/tick-routing"
-	"time"
+
 )
 
 var (
@@ -75,11 +75,6 @@ type (
 	Callback interface {
 		OnStartup(*Engine) error  // Execute On After All Engine Module OnStartup
 		OnShutdown(*Engine) error // Execute On After All Engine Module OnShutdown
-	}
-	ServerHanlder struct {
-		Method  string
-		Path    string
-		Handler routing.Handler
 	}
 	LogHanlder struct {
 		Name      string

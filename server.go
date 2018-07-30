@@ -82,26 +82,41 @@ func (e *Engine) NewServer(name string, port uint, gracefulStopTimeout time.Dura
 }
 func (e *Engine) SetServerLogFunc(name string, accessLogFunc access.LogWriterFunc, faultLogFunc fault.LogFunc, recoveryHandler ...fault.ConvertErrorFunc) *Engine {
 	server := e.GetServer(name)
-	server.Router.WithAccessLogger(accessLogFunc).
-		WithRecoveryHandler(faultLogFunc, recoveryHandler...)
+	if server != nil {
+		server.SetLogFunc(accessLogFunc, faultLogFunc, recoveryHandler...)
+	}
 	return e
 }
 func (e *Engine) SetServerReuqestCallback(name string, reuqestCallback RouterCallback) *Engine {
 	server := e.GetServer(name)
-	server.Router.WithCallback(reuqestCallback)
+	if server != nil {
+		server.SetReuqestCallback(reuqestCallback)
+	}
 	return e
 }
-func (e *Engine) AddServerHanlders(name string, handlers []*ServerHanlder) *Engine {
+func (e *Engine) SetServerReuqestSlashRemover(name string, status int) *Engine {
 	server := e.GetServer(name)
-	server.Router.WithSlashRemover(http.StatusMovedPermanently).
-		WithCors(CorsAllowAll)
-	for _, handler := range handlers {
-		server.addRoute(handler.Method, handler.Path, handler.Handler)
+	if server != nil {
+		server.SetReuqestSlashRemover(status)
+	}
+	return e
+}
+func (e *Engine) SetServerReuqestCors(name string, corsOptions cors.Options) *Engine {
+	server := e.GetServer(name)
+	if server != nil {
+		if &corsOptions != nil {
+			server.Router.WithCors(corsOptions)
+		} else {
+			server.Router.WithCors(CorsAllowAll)
+		}
 	}
 	return e
 }
 func (e *Engine) GetServer(name string) *Server {
-	return e.Servers[name]
+	if _, ok := e.Servers[name]; ok {
+		return e.Servers[name]
+	}
+	return nil
 }
 func (s *Server) Get(route string, handlers ...routing.Handler) *Server {
 	return s.addRoute("GET", route, handlers...)
@@ -127,6 +142,30 @@ func (s *Server) Options(route string, handlers ...routing.Handler) *Server {
 func (s *Server) Trace(route string, handlers ...routing.Handler) *Server {
 	return s.addRoute("TRACE", route, handlers...)
 }
+func (s *Server) SetLogFunc(accessLogFunc access.LogWriterFunc, faultLogFunc fault.LogFunc, recoveryHandler ...fault.ConvertErrorFunc) *Server {
+	s.Router.WithAccessLogger(accessLogFunc).
+		WithRecoveryHandler(faultLogFunc, recoveryHandler...)
+	return s
+}
+func (s *Server) SetReuqestCallback(reuqestCallback RouterCallback) *Server {
+	s.Router.WithCallback(reuqestCallback)
+	return s
+}
+func (s *Server) SetReuqestSlashRemover(status int) *Server {
+	switch status {
+	case http.StatusMovedPermanently, http.StatusFound:
+		s.Router.WithSlashRemover(status)
+	}
+	return s
+}
+func (s *Server) SetServerReuqestCors(corsOptions cors.Options) *Server {
+	if &corsOptions != nil {
+		s.Router.WithCors(corsOptions)
+	} else {
+		s.Router.WithCors(CorsAllowAll)
+	}
+	return s
+}
 func (s *Server) addRoute(method string, path string, handlers ...routing.Handler) *Server {
 	paths := strings.Split(path, "/")
 	prefix := "/"
@@ -142,7 +181,6 @@ func (s *Server) addRoute(method string, path string, handlers ...routing.Handle
 func (s *Server) GetRouter() *ServerRouter {
 	return s.Router
 }
-
 func (s *Server) GetRouteGroup(name string) *ServerRouteGroup {
 	if _, ok := s.RouteGroups[name]; ok {
 		return nil
