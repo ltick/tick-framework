@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -29,8 +31,21 @@ type (
 		RouteGroups         map[string]*ServerRouteGroup
 		mutex               sync.RWMutex
 	}
+	ServerRouterProxy struct {
+		Host     string
+		Route    string
+		Upstream string
+	}
+	ServerRouterRoute struct {
+		Host     string
+		Method   string
+		Route    string
+		Handlers []routing.Handler
+	}
 	ServerRouter struct {
 		*routing.Router
+		proxys   []*ServerRouterProxy
+		routes   []*ServerRouterRoute
 		callback RouterCallback
 	}
 	ServerRouteGroup struct {
@@ -43,6 +58,53 @@ type (
 	}
 )
 
+func (sp *ServerRouterProxy) FindStringSubmatchMap(s string) map[string]string {
+	captures := make(map[string]string)
+	r := regexp.MustCompile(sp.Route)
+	match := r.FindStringSubmatch(s)
+	if match == nil {
+		return captures
+	}
+	for i, name := range r.SubexpNames() {
+		if i == 0 || name == "" {
+			continue
+		}
+		captures[name] = match[i]
+	}
+	return captures
+}
+
+func (sp *ServerRouterProxy) MatchProxy(r *http.Request) (*url.URL, error) {
+	host := r.Host
+	if host == "" {
+		host = r.URL.Host
+	}
+	RequestURL := host + r.RequestURI
+	HitRule := sp.FindStringSubmatchMap(RequestURL)
+	if len(HitRule) != 0 {
+		//命中
+		upstreamURL, err := url.Parse(sp.Upstream)
+		if err != nil {
+			return nil, err
+		}
+		UpstreamRequestURI := "/"
+		//拼接配置文件指定中的uri，$符号分割
+		pathArr := strings.Split(strings.TrimLeft(upstreamURL.Path, "/"), "$")
+		for _, path := range pathArr {
+			if _, ok := HitRule[path]; ok {
+				UpstreamRequestURI += strings.TrimLeft(HitRule[path], "/") + "/"
+			}
+		}
+		Upstream := upstreamURL.Scheme + "://" + upstreamURL.Host + strings.TrimRight(UpstreamRequestURI, "/")
+		UpstreamURL, err := url.Parse(Upstream)
+		if err != nil {
+			return nil, err
+		}
+		return UpstreamURL, nil
+	}
+	return nil, nil
+}
+
 func (e *Engine) NewClassicServer(name string, requestTimeoutHandlers ...routing.Handler) (server *Server) {
 	port := uint(e.Config.GetInt("server.port"))
 	if port == 0 {
@@ -51,7 +113,36 @@ func (e *Engine) NewClassicServer(name string, requestTimeoutHandlers ...routing
 	}
 	gracefulStopTimeout := e.Config.GetDuration("server.graceful_stop_timeout")
 	requestTimeout := e.Config.GetDuration("server.request_timeout")
-	return e.NewServer(name, port, gracefulStopTimeout, requestTimeout, requestTimeoutHandlers...)
+	server = e.NewServer(name, port, gracefulStopTimeout, requestTimeout, requestTimeoutHandlers...)
+	proxyMaps := e.Config.GetStringMap("router.proxy")
+	if proxyMaps != nil {
+		if len(proxyMaps) != 0 {
+			for proxyHost, proxyMap := range proxyMaps {
+				proxyMap, ok := proxyMap.(map[string]interface{})
+				if !ok {
+					fmt.Printf("request: read all proxy config to map error\n")
+					os.Exit(1)
+				}
+				proxyUpstream, ok := proxyMap["upstream"].(string)
+				if !ok {
+					fmt.Printf("request: read one proxy Config upstream error\n")
+					os.Exit(1)
+				}
+				proxyRules, ok := proxyMap["rule"].(map[string]interface{})
+				if !ok {
+					fmt.Printf("request: read proxy config rule error\n")
+					os.Exit(1)
+				}
+				for _, routeInterface := range proxyRules {
+					proxyRoute, ok := routeInterface.(string)
+					if ok {
+						server.Proxy(proxyHost, proxyRoute, proxyUpstream)
+					}
+				}
+			}
+		}
+	}
+	return server
 }
 func (e *Engine) NewServer(name string, port uint, gracefulStopTimeout time.Duration, requestTimeout time.Duration, requestTimeoutHandlers ...routing.Handler) (server *Server) {
 	if _, ok := e.Servers[name]; ok {
@@ -64,6 +155,8 @@ func (e *Engine) NewServer(name string, port uint, gracefulStopTimeout time.Dura
 		gracefulStopTimeout: gracefulStopTimeout,
 		Router: &ServerRouter{
 			Router: routing.New(e.Context).Timeout(requestTimeout, requestTimeoutHandlers...),
+			routes: make([]*ServerRouterRoute, 0),
+			proxys: make([]*ServerRouterProxy, 0),
 		},
 		mutex: sync.RWMutex{},
 	}
@@ -118,29 +211,85 @@ func (e *Engine) GetServer(name string) *Server {
 	}
 	return nil
 }
-func (s *Server) Get(route string, handlers ...routing.Handler) *Server {
-	return s.addRoute("GET", route, handlers...)
+func (s *Server) Get(host string, route string, handlers ...routing.Handler) *Server {
+	s.Router.routes = append(s.Router.routes, &ServerRouterRoute{
+		Method:   "GET",
+		Host:     host,
+		Route:    route,
+		Handlers: handlers,
+	})
+	return s
 }
-func (s *Server) Post(route string, handlers ...routing.Handler) *Server {
-	return s.addRoute("POST", route, handlers...)
+func (s *Server) Post(host string, route string, handlers ...routing.Handler) *Server {
+	s.Router.routes = append(s.Router.routes, &ServerRouterRoute{
+		Method:   "POST",
+		Host:     host,
+		Route:    route,
+		Handlers: handlers,
+	})
+	return s
 }
-func (s *Server) Put(route string, handlers ...routing.Handler) *Server {
-	return s.addRoute("PUT", route, handlers...)
+func (s *Server) Put(host string, route string, handlers ...routing.Handler) *Server {
+	s.Router.routes = append(s.Router.routes, &ServerRouterRoute{
+		Method:   "PUT",
+		Host:     host,
+		Route:    route,
+		Handlers: handlers,
+	})
+	return s
 }
-func (s *Server) Patch(route string, handlers ...routing.Handler) *Server {
-	return s.addRoute("PATCH", route, handlers...)
+func (s *Server) Patch(host string, route string, handlers ...routing.Handler) *Server {
+	s.Router.routes = append(s.Router.routes, &ServerRouterRoute{
+		Method:   "PATCH",
+		Host:     host,
+		Route:    route,
+		Handlers: handlers,
+	})
+	return s
 }
-func (s *Server) Delete(route string, handlers ...routing.Handler) *Server {
-	return s.addRoute("DELETE", route, handlers...)
+func (s *Server) Delete(host string, route string, handlers ...routing.Handler) *Server {
+	s.Router.routes = append(s.Router.routes, &ServerRouterRoute{
+		Method:   "DELETE",
+		Host:     host,
+		Route:    route,
+		Handlers: handlers,
+	})
+	return s
 }
-func (s *Server) Connect(route string, handlers ...routing.Handler) *Server {
-	return s.addRoute("CONNECT", route, handlers...)
+func (s *Server) Connect(host string, route string, handlers ...routing.Handler) *Server {
+	s.Router.routes = append(s.Router.routes, &ServerRouterRoute{
+		Method:   "CONNECT",
+		Host:     host,
+		Route:    route,
+		Handlers: handlers,
+	})
+	return s
 }
-func (s *Server) Options(route string, handlers ...routing.Handler) *Server {
-	return s.addRoute("OPTIONS", route, handlers...)
+func (s *Server) Options(host string, route string, handlers ...routing.Handler) *Server {
+	s.Router.routes = append(s.Router.routes, &ServerRouterRoute{
+		Method:   "OPTIONS",
+		Host:     host,
+		Route:    route,
+		Handlers: handlers,
+	})
+	return s
 }
-func (s *Server) Trace(route string, handlers ...routing.Handler) *Server {
-	return s.addRoute("TRACE", route, handlers...)
+func (s *Server) Trace(host string, route string, handlers ...routing.Handler) *Server {
+	s.Router.routes = append(s.Router.routes, &ServerRouterRoute{
+		Method:   "TRACE",
+		Host:     host,
+		Route:    route,
+		Handlers: handlers,
+	})
+	return s
+}
+func (s *Server) Proxy(host string, route string, upstream string) *Server {
+	s.Router.proxys = append(s.Router.proxys, &ServerRouterProxy{
+		Host:     host,
+		Route:    route,
+		Upstream: upstream,
+	})
+	return s
 }
 func (s *Server) SetLogFunc(accessLogFunc access.LogWriterFunc, faultLogFunc fault.LogFunc, recoveryHandler ...fault.ConvertErrorFunc) *Server {
 	s.Router.WithAccessLogger(accessLogFunc).
@@ -365,6 +514,8 @@ func (g *ServerRouteGroup) AddRoute(method string, path string, handlers ...rout
 		g.Options(path, handlers...)
 	case "TRACE":
 		g.Trace(path, handlers...)
+	case "ANY":
+		g.Any(path, handlers...)
 	default:
 		g.To(method, path, handlers...)
 	}

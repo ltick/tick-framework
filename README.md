@@ -19,6 +19,7 @@ Package tick-framework help you build your Go application extremely fast.
 - [x] Database
 - [x] Cache
 - [x] Queue
+- [x] Filesystem 
 
 ## Installation
 

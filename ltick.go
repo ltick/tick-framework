@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"net/http/httputil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,13 +23,13 @@ import (
 	libLogger "github.com/ltick/tick-framework/module/logger"
 	libUtility "github.com/ltick/tick-framework/module/utility"
 	"github.com/ltick/tick-graceful"
-
+	"github.com/ltick/tick-routing"
 )
 
 var (
 	errNew                        = "ltick: new error"
 	errNewClassic                 = "ltick: new classic error"
-	errNewServer                 = "ltick: new server error"
+	errNewServer                  = "ltick: new server error"
 	errConfigure                  = "ltick: configure error"
 	errStartup                    = "ltick: startup error"
 	errGetLogger                  = "ltick: get logger error"
@@ -470,6 +471,35 @@ func (e *Engine) Startup() (err error) {
 		}
 	}
 	for _, server := range e.Servers {
+		if server.Router.routes != nil && len(server.Router.routes) > 0 {
+			for _, route := range server.Router.routes {
+				server.addRoute(route.Method, route.Host, route.Handlers...)
+			}
+		}
+		// proxy
+		if server.Router.proxys != nil && len(server.Router.proxys) > 0 {
+			server.addRoute("ANY", "/", func(ctx context.Context, c *routing.Context) (context.Context, error) {
+				for _, proxy := range server.Router.proxys {
+					upstreamURL, err := proxy.MatchProxy(c.Request)
+					if err != nil {
+						return ctx, routing.NewHTTPError(http.StatusInternalServerError, err.Error())
+					}
+					if upstreamURL != nil {
+						director := func(req *http.Request) {
+							req = c.Request
+							req.URL.Scheme = upstreamURL.Scheme
+							req.URL.Host = upstreamURL.Host
+							req.RequestURI = upstreamURL.RequestURI()
+						}
+						proxy := &httputil.ReverseProxy{Director: director}
+						proxy.ServeHTTP(c.Response, c.Request)
+						c.Abort()
+						return ctx, nil
+					}
+				}
+				return ctx, nil
+			})
+		}
 		if server.RouteGroups != nil {
 			for _, routeGroup := range server.RouteGroups {
 				if routeGroup.callback != nil {
