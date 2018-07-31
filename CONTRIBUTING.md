@@ -1,0 +1,2 @@
+- 丁靖 (Maintainer) <sam42@outlook.com> 
+- 林芳荣 (Developer)

@@ -4,7 +4,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/ltick/tick-framework/datatypes/kvstore"
+	"github.com/ltick/tick-framework/module/utility/kvstore"
 )
 
 type WriteCloser interface {

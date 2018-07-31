@@ -3,7 +3,10 @@ package kvstore
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"io"
+	"os"
 	"sync"
 )
 
@@ -25,6 +28,77 @@ var (
 )
 
 type KVStore struct {
+	reader io.ReadSeeker
+	writer io.WriteSeeker
+}
+
+func NewKVStore(reader io.ReadSeeker, writer io.WriteSeeker) (fr *KVStore, err error) {
+	fr = &KVStore{
+		reader: reader,
+		writer: writer,
+	}
+	return
+}
+
+func (fr *KVStore) get(offset uint32) (data []byte, err error) {
+	var (
+		overheadLength uint32 = 10
+		buf            []byte = make([]byte, overheadLength)
+		keyLength      uint32
+		valueLength    uint32
+	)
+	_, err = fr.reader.Seek(int64(offset), os.SEEK_CUR)
+	if err != nil {
+		return nil, errors.New(err.Error())
+	}
+	_, err = fr.reader.Read(buf)
+	if err != nil {
+		return nil, errors.New(err.Error())
+	}
+	keyLength = binary.BigEndian.Uint32(buf[2:6])
+	valueLength = binary.BigEndian.Uint32(buf[6:10])
+	data = make([]byte, overheadLength+keyLength+valueLength)
+	var (
+		bufferBytes []byte
+		readN       int
+	)
+	for bufferBytes = data; len(bufferBytes) > 0; bufferBytes = bufferBytes[readN:] {
+		if readN, err = fr.reader.Read(bufferBytes); err != nil {
+			return nil, errors.New(err.Error())
+		}
+	}
+	return
+}
+
+func (fr *KVStore) Get(offset uint32) (s *KVStoreData, err error) {
+	var data []byte
+	if data, err = fr.get(offset); err != nil {
+		return
+	}
+	s = &KVStoreData{}
+	err = s.UnmarshalBinary(data)
+	if err != nil {
+		return nil, errors.New(err.Error())
+	}
+	return s, nil
+}
+
+func (fr *KVStore) Set(s *KVStoreData) (err error) {
+	var data []byte
+	if data, err = s.MarshalBinary(); err != nil {
+		return errors.New(err.Error())
+	}
+	_, err = fr.writer.Seek(0, os.SEEK_END)
+	if err != nil {
+		return  errors.New(err.Error())
+	}
+	if _, err = fr.writer.Write(data); err != nil {
+		return errors.New(err.Error())
+	}
+	return nil
+}
+
+type KVStoreData struct {
 	magicNumber  uint16 // MagicNumber
 	keyLength    uint32 // Key长度
 	valueLength  uint32 // Value长度
@@ -32,8 +106,8 @@ type KVStore struct {
 	valueContent []byte // Value内容
 }
 
-func NewKVStore(key []byte, value []byte) KVStore {
-	return KVStore{
+func NewKVStoreData(key []byte, value []byte) KVStoreData {
+	return KVStoreData{
 		magicNumber:  KVSTORE_MAGIC_NUM,
 		keyLength:    uint32(len(key)),
 		valueLength:  uint32(len(value)),
@@ -42,31 +116,31 @@ func NewKVStore(key []byte, value []byte) KVStore {
 	}
 }
 
-func (r KVStore) KeyLength() uint32 {
+func (r KVStoreData) KeyLength() uint32 {
 	return r.keyLength
 }
 
-func (r KVStore) Key() string {
+func (r KVStoreData) Key() string {
 	return string(r.keyContent)
 }
 
-func (r KVStore) ValueOffset() uint32 {
+func (r KVStoreData) ValueOffset() uint32 {
 	return 10 + r.keyLength
 }
 
-func (r KVStore) ValueLength() uint32 {
+func (r KVStoreData) ValueLength() uint32 {
 	return r.valueLength
 }
 
-func (r KVStore) Value() []byte {
+func (r KVStoreData) Value() []byte {
 	return r.valueContent
 }
 
-func (r KVStore) Size() uint32 {
+func (r KVStoreData) Size() uint32 {
 	return 10 + r.keyLength + r.valueLength
 }
 
-func (r KVStore) MarshalBinary() (data []byte, err error) {
+func (r KVStoreData) MarshalBinary() (data []byte, err error) {
 	if r.magicNumber != KVSTORE_MAGIC_NUM {
 		return nil, errIllegalMagicNumber
 	}
@@ -93,7 +167,7 @@ func (r KVStore) MarshalBinary() (data []byte, err error) {
 	return
 }
 
-func (r *KVStore) UnmarshalBinary(data []byte) (err error) {
+func (r *KVStoreData) UnmarshalBinary(data []byte) (err error) {
 	if len(data) < 10 {
 		return errInvalidLength
 	}

@@ -1,20 +1,22 @@
-package lru
+package kvstore
 
 import (
 	"container/list"
 	"context"
 	//"fmt"
+	"bufio"
+	"encoding"
 	"io"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
-	"github.com/ltick/tick-framework/datatypes/kvstore"
+	"github.com/ltick/tick-framework/module/utility/kvstorestore"
 	"github.com/ltick/tick-framework/module/config"
 )
 
-type LRUCache struct {
+type KVLruFileStore struct {
 	sync.RWMutex
 
 	list     *list.List
@@ -25,8 +27,8 @@ type LRUCache struct {
 	saveItem chan kvstore.KVStore
 }
 
-func NewLRUHandler() Handler {
-	return &LRUCache{
+func NewKVLruFileStore() *KVLruFileStore {
+	return &KVLruFileStore{
 		list:     list.New(),
 		table:    make(map[string]*list.Element),
 		size:     0,
@@ -34,7 +36,7 @@ func NewLRUHandler() Handler {
 	}
 }
 
-func (lru *LRUCache) Initiate(ctx context.Context, conf *config.Instance) (err error) {
+func (lru *KVLruFileStore) Initiate(ctx context.Context, conf *config.Instance) (err error) {
 	var (
 		tempDir      string        = conf.GetString("LRU_DIR")
 		capacity     uint64        = uint64(conf.GetInt64("LRU_CAPACITY"))
@@ -90,7 +92,7 @@ func (lru *LRUCache) Initiate(ctx context.Context, conf *config.Instance) (err e
 	return
 }
 
-func (lru *LRUCache) load() (err error) {
+func (lru *KVLruFileStore) load() (err error) {
 	lru.Lock()
 	defer lru.Unlock()
 
@@ -117,7 +119,7 @@ func (lru *LRUCache) load() (err error) {
 	return
 }
 
-func (lru *LRUCache) Peek(key string) (v []byte, ok bool) {
+func (lru *KVLruFileStore) Peek(key string) (v []byte, ok bool) {
 	lru.RLock()
 	defer lru.RUnlock()
 
@@ -129,7 +131,7 @@ func (lru *LRUCache) Peek(key string) (v []byte, ok bool) {
 	return
 }
 
-func (lru *LRUCache) Update(key string, value []byte) {
+func (lru *KVLruFileStore) Update(key string, value []byte) {
 	lru.Lock()
 	defer lru.Unlock()
 
@@ -145,7 +147,7 @@ func (lru *LRUCache) Update(key string, value []byte) {
 	lru.saveItem <- item
 }
 
-func (lru *LRUCache) Get(key string) (v []byte, ok bool) {
+func (lru *KVLruFileStore) Get(key string) (v []byte, ok bool) {
 	lru.RLock()
 	defer lru.RUnlock()
 
@@ -158,7 +160,7 @@ func (lru *LRUCache) Get(key string) (v []byte, ok bool) {
 	return
 }
 
-func (lru *LRUCache) Set(key string, value []byte) {
+func (lru *KVLruFileStore) Set(key string, value []byte) {
 	lru.Lock()
 	defer lru.Unlock()
 
@@ -167,7 +169,7 @@ func (lru *LRUCache) Set(key string, value []byte) {
 	lru.saveItem <- kvstore.NewKVStore([]byte(key), value)
 }
 
-func (lru *LRUCache) set(key string, value []byte) {
+func (lru *KVLruFileStore) set(key string, value []byte) {
 	var (
 		item    kvstore.KVStore = kvstore.NewKVStore([]byte(key), value)
 		element *list.Element
@@ -180,7 +182,7 @@ func (lru *LRUCache) set(key string, value []byte) {
 	}
 }
 
-func (lru *LRUCache) Delete(key string) (ok bool) {
+func (lru *KVLruFileStore) Delete(key string) (ok bool) {
 	// TODO 删除时, AOF没有删掉
 	lru.Lock()
 	defer lru.Unlock()
@@ -195,7 +197,7 @@ func (lru *LRUCache) Delete(key string) (ok bool) {
 	return
 }
 
-func (lru *LRUCache) updateInplace(element *list.Element, other kvstore.KVStore) {
+func (lru *KVLruFileStore) updateInplace(element *list.Element, other kvstore.KVStore) {
 	var item kvstore.KVStore = element.Value.(kvstore.KVStore)
 	element.Value = other
 	lru.size -= uint64(item.Size())
@@ -204,18 +206,18 @@ func (lru *LRUCache) updateInplace(element *list.Element, other kvstore.KVStore)
 	lru.checkCapacity()
 }
 
-func (lru *LRUCache) moveToFront(element *list.Element) {
+func (lru *KVLruFileStore) moveToFront(element *list.Element) {
 	lru.list.MoveToFront(element)
 }
 
-func (lru *LRUCache) addNew(key string, item kvstore.KVStore) {
+func (lru *KVLruFileStore) addNew(key string, item kvstore.KVStore) {
 	var element *list.Element = lru.list.PushFront(item)
 	lru.table[item.Key()] = element
 	lru.size += uint64(item.Size())
 	lru.checkCapacity()
 }
 
-func (lru *LRUCache) checkCapacity() {
+func (lru *KVLruFileStore) checkCapacity() {
 	var (
 		delElem  *list.Element
 		delValue interface{}
@@ -229,3 +231,4 @@ func (lru *LRUCache) checkCapacity() {
 		lru.size -= uint64(delValue.(kvstore.KVStore).Size())
 	}
 }
+
