@@ -139,6 +139,6 @@ type Handler interface {
 
 type QueueHandler interface {
 	NewConsumer(ctx context.Context, group string, topic string) (*Consumer, error)
-	NewProducer(ctx context.Context, topic string, msgBytes []byte, errHandles ...func(context.Context, string, string, error)) (*Producer, error)
+	NewProducer(ctx context.Context, topic string, errHandles ...func(context.Context, string, string, error)) (*Producer, error)
 	GetConfig() map[string]interface{}
 }

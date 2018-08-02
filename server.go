@@ -128,7 +128,7 @@ func (e *Engine) NewClassicServer(name string, requestTimeoutHandlers ...routing
 					fmt.Printf("request: read one proxy Config upstream error\n")
 					os.Exit(1)
 				}
-				proxyRules, ok := proxyMap["rule"].(map[string]interface{})
+				proxyRules, ok := proxyMap["rule"].([]interface{})
 				if !ok {
 					fmt.Printf("request: read proxy config rule error\n")
 					os.Exit(1)
@@ -158,7 +158,8 @@ func (e *Engine) NewServer(name string, port uint, gracefulStopTimeout time.Dura
 			routes: make([]*ServerRouterRoute, 0),
 			proxys: make([]*ServerRouterProxy, 0),
 		},
-		mutex: sync.RWMutex{},
+		RouteGroups: map[string]*ServerRouteGroup{},
+		mutex:       sync.RWMutex{},
 	}
 	modules := make([]module.ModuleInterface, 0)
 	for _, sortedModule := range e.Module.GetSortedModules() {

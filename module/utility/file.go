@@ -68,17 +68,20 @@ func (this *Instance) NewFile(filePath string, perm os.FileMode, payload io.Read
 	}
 	_, err = file.Seek(0, os.SEEK_SET)
 	if err != nil {
+		file.Close()
 		return nil, errors.New(errCreateTemporaryFile + ": " + err.Error())
 	}
 	if len(sizes) > 0 {
 		size := sizes[0]
 		_, err = io.CopyN(file, payload, size)
 		if err != nil {
+			file.Close()
 			return nil, errors.New(errCreateTemporaryFile + ": " + err.Error())
 		}
 	} else {
 		_, err = io.Copy(file, payload)
 		if err != nil {
+			file.Close()
 			return nil, errors.New(errCreateTemporaryFile + ": " + err.Error())
 		}
 	}
@@ -95,17 +98,20 @@ func (this *Instance) NewTemporaryFile(temporaryPath string, prefix string, payl
 	}
 	_, err = file.Seek(0, os.SEEK_SET)
 	if err != nil {
+		file.Close()
 		return nil, 0, errors.New(errCreateTemporaryFile + ": " + err.Error())
 	}
 	if len(sizes) > 0 {
 		size := sizes[0]
 		fileSize, err = io.CopyN(file, payload, size)
 		if err != nil {
+			file.Close()
 			return nil, 0, errors.New(errCreateTemporaryFile + ": " + err.Error())
 		}
 	} else {
 		fileSize, err = io.Copy(file, payload)
 		if err != nil {
+			file.Close()
 			return nil, 0, errors.New(errCreateTemporaryFile + ": " + err.Error())
 		}
 	}

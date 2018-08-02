@@ -98,6 +98,10 @@ func (this *Instance) registerModule(ctx context.Context, moduleName string, mod
 			return ctx, fmt.Errorf(errRegisterModule+": %s", canonicalModuleName, err.Error())
 		}
 	}
+	err = this.InjectModuleTo([]interface{}{module})
+	if err != nil {
+		return ctx, fmt.Errorf(errRegisterModule+": %s", canonicalModuleName, err.Error())
+	}
 	newCtx, err := module.Initiate(ctx)
 	if err != nil {
 		return ctx, fmt.Errorf(errRegisterModule+": %s", canonicalModuleName, err.Error())
@@ -115,10 +119,6 @@ func (this *Instance) unregisterModule(ctx context.Context, moduleNames ...strin
 			_, ok := this.Modules[canonicalModuleName]
 			if !ok {
 				return ctx, fmt.Errorf(errModuleNotExists, canonicalModuleName)
-			}
-			_, ok = this.Modules[canonicalModuleName].(ModuleInterface)
-			if !ok {
-				return ctx, fmt.Errorf(errModuleInvaildType, canonicalModuleName)
 			}
 			for index, sortedModuleName := range this.SortedModules {
 				if canonicalModuleName == sortedModuleName {
@@ -203,10 +203,6 @@ func (this *Instance) UseModule(ctx context.Context, moduleNames ...string) (con
 				return ctx, fmt.Errorf(errUseModule+": %s", err.Error())
 			}
 		}
-	}
-	err = this.InjectModule()
-	if err != nil {
-		return ctx, fmt.Errorf(errUseModule+": %s", err.Error())
 	}
 	return ctx, nil
 }
