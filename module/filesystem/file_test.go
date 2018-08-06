@@ -4,8 +4,8 @@ import (
 	"fmt"
 )
 
-func ExampleFileTemplateHandler() {
-	var handler TemplateHandler = NewFileTemplateHandler()
+func ExampleFileHandler() {
+	var handler Handler = NewFileHandler()
 	handler.Initiate(nil)
 	handler.SetContent("1", []byte{1, 2, 3})
 	fmt.Println(handler.GetContent("1"))

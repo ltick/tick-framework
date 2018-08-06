@@ -18,7 +18,7 @@ var (
 )
 
 var (
-	defaultProvider string = "fileTemplate"
+	defaultProvider string = "storage"
 )
 
 func NewInstance() *Instance {
@@ -30,7 +30,7 @@ func NewInstance() *Instance {
 type Instance struct {
 	Config      *config.Instance
 	handlerName string
-	handler     TemplateHandler
+	handler     Handler
 }
 
 func (this *Instance) Initiate(ctx context.Context) (newCtx context.Context, err error) {
@@ -39,19 +39,18 @@ func (this *Instance) Initiate(ctx context.Context) (newCtx context.Context, err
 		return
 	}
 	var configs map[string]config.Option = map[string]config.Option{
-		"FILESYSTEM_TEMPLATE_PROVIDER":        config.Option{Type: config.String, Default: defaultProvider, EnvironmentKey: "FILESYSTEM_TEMPLATE_PROVIDER"},
-		"FILESYSTEM_TEMPLATE_DEFRAG_INTERVAL": config.Option{Type: config.Duration, Default: 30 * time.Minute, EnvironmentKey: "FILESYSTEM_TEMPLATE_DEFRAG_INTERVAL"},
-		"FILESYSTEM_TEMPLATE_DEFRAG_LIFETIME": config.Option{Type: config.Duration, Default: 24 * time.Hour, EnvironmentKey: "FILESYSTEM_TEMPLATE_DEFRAG_LIFETIME"},
-		"LRU_PROVIDER":      config.Option{Type: config.String, Default: defaultProvider, EnvironmentKey: "LRU_PROVIDER"},
-		"LRU_CAPACITY":      config.Option{Type: config.Int64, Default: 32 * 1024 * 1024, EnvironmentKey: "LRU_CAPACITY"},
-		"LRU_DIR":           config.Option{Type: config.String, Default: "/tmp/lru", EnvironmentKey: "LRU_DIR"},
-		"LRU_SAVE_INTERVAL": config.Option{Type: config.Duration, Default: 5 * time.Minute, EnvironmentKey: "LRU_SAVE_INTERVAL"},
+		"FILESYSTEM_PROVIDER":        config.Option{Type: config.String, Default: defaultProvider, EnvironmentKey: "FILESYSTEM_PROVIDER"},
+		"FILESYSTEM_LRU_DEFRAG_INTERVAL": config.Option{Type: config.Duration, Default: 30 * time.Minute, EnvironmentKey: "FILESYSTEM_LRU_DEFRAG_INTERVAL"},
+		"FILESYSTEM_LRU_DEFRAG_LIFETIME": config.Option{Type: config.Duration, Default: 24 * time.Hour, EnvironmentKey: "FILESYSTEM_LRU_DEFRAG_LIFETIME"},
+		"FILESYSTEM_LRU_CAPACITY":      config.Option{Type: config.Int64, Default: 32 * 1024 * 1024, EnvironmentKey: "FILESYSTEM_LRU_CAPACITY"},
+		"FILESYSTEM_LRU_DIR":           config.Option{Type: config.String, Default: "/tmp/lru", EnvironmentKey: "FILESYSTEM_LRU_DIR"},
+		"FILESYSTEM_LRU_SAVE_INTERVAL": config.Option{Type: config.Duration, Default: 5 * time.Minute, EnvironmentKey: "FILESYSTEM_LRU_SAVE_INTERVAL"},
 	}
 	if newCtx, err = this.Config.SetOptions(ctx, configs); err != nil {
 		err = fmt.Errorf(errInitiate, err.Error())
 		return
 	}
-	if err = FileTemplateRegister(defaultProvider, NewFileTemplateHandler); err != nil {
+	if err = Register(defaultProvider, NewFileHandler); err != nil {
 		err = fmt.Errorf(errInitiate, err.Error())
 		return
 	}
@@ -59,7 +58,7 @@ func (this *Instance) Initiate(ctx context.Context) (newCtx context.Context, err
 }
 func (this *Instance) OnStartup(ctx context.Context) (newCtx context.Context, err error) {
 	newCtx = ctx
-	var provider string = this.Config.GetString("FILESYSTEM_TEMPLATE_PROVIDER")
+	var provider string = this.Config.GetString("FILESYSTEM_PROVIDER")
 	if provider == "" {
 		provider = defaultProvider
 	}
@@ -80,8 +79,8 @@ func (this *Instance) OnRequestShutdown(ctx context.Context, c *routing.Context)
 }
 
 func (this *Instance) Use(ctx context.Context, handlerName string) (err error) {
-	var handler fileTemplateHandler
-	if handler, err = FileTemplateUse(handlerName); err != nil {
+	var handler storageHandler
+	if handler, err = Use(handlerName); err != nil {
 		return
 	}
 	this.handlerName = handlerName
@@ -100,32 +99,32 @@ func (this *Instance) GetContent(key string) (content []byte, err error) {
 	return this.handler.GetContent(key)
 }
 
-type TemplateHandler interface {
+type Handler interface {
 	Initiate(ctx context.Context, conf *config.Instance) error
 	SetContent(key string, content []byte) (err error)
 	GetContent(key string) (content []byte, err error)
 }
 
-type fileTemplateHandler func() TemplateHandler
+type storageHandler func() Handler
 
-var fileTemplateHandlers map[string]fileTemplateHandler = make(map[string]fileTemplateHandler)
+var storageHandlers map[string]storageHandler = make(map[string]storageHandler)
 
-func FileTemplateRegister(name string, handler fileTemplateHandler) (err error) {
+func Register(name string, handler storageHandler) (err error) {
 	if handler == nil {
 		err = fmt.Errorf(errRegister)
 		return
 	}
 	var ok bool
-	if _, ok = fileTemplateHandlers[name]; ok {
+	if _, ok = storageHandlers[name]; ok {
 		return
 	}
-	fileTemplateHandlers[name] = handler
+	storageHandlers[name] = handler
 	return
 }
 
-func FileTemplateUse(name string) (handler fileTemplateHandler, err error) {
+func Use(name string) (handler storageHandler, err error) {
 	var ok bool
-	if handler, ok = fileTemplateHandlers[name]; !ok {
+	if handler, ok = storageHandlers[name]; !ok {
 		err = fmt.Errorf(errUse, name)
 		return
 	}

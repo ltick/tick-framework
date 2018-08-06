@@ -7,29 +7,26 @@ import (
 
 	"github.com/ltick/tick-framework/module/config"
 	"github.com/ltick/tick-framework/module/filesystem/block"
-	"github.com/ltick/tick-framework/module/lru"
 )
 
 var (
-	errNotExist error = fmt.Errorf("fileTemplate: lru key not exist")
+	errLruFileNotExist error = fmt.Errorf("filesystem file: lru key not exist")
 )
 
-type FileTemplateHandler struct {
+type LruFileHandler struct {
 	blockInstance *block.Instance
-	lruInstance   *lru.Instance
 }
 
-func NewFileTemplateHandler() TemplateHandler {
-	return &FileTemplateHandler{
+func NewLruFileHandler() Handler {
+	return &LruFileHandler{
 		blockInstance: block.NewInstance(),
-		lruInstance:   lru.NewInstance(),
 	}
 }
 
-func (this *FileTemplateHandler) Initiate(ctx context.Context, conf *config.Instance) (err error) {
+func (this *LruFileHandler) Initiate(ctx context.Context, conf *config.Instance) (err error) {
 	var (
-		defragInterval time.Duration = conf.GetDuration("FILESYSTEM_TEMPLATE_DEFRAG_INTERVAL")
-		defragLifetime time.Duration = conf.GetDuration("FILESYSTEM_TEMPLATE_DEFRAG_LIFETIME")
+		defragInterval time.Duration = conf.GetDuration("FILESYSTEM_LRU_DEFRAG_INTERVAL")
+		defragLifetime time.Duration = conf.GetDuration("FILESYSTEM_LRU_DEFRAG_LIFETIME")
 	)
 	if ctx, err = this.blockInstance.Initiate(ctx); err != nil {
 		return
@@ -37,18 +34,9 @@ func (this *FileTemplateHandler) Initiate(ctx context.Context, conf *config.Inst
 	if ctx, err = this.blockInstance.OnStartup(ctx); err != nil {
 		return
 	}
-	if ctx, err = this.lruInstance.Initiate(ctx); err != nil {
-		return
-	}
-	if ctx, err = this.lruInstance.OnStartup(ctx); err != nil {
-		return
-	}
 	go func() {
 		for range time.Tick(defragInterval) {
 			this.blockInstance.Defrag(defragLifetime, func(key string, index *block.Index) {
-				this.lruInstance.Lock()
-				defer this.lruInstance.Unlock()
-
 				var (
 					lruValue []byte
 					lruIndex *block.Index = new(block.Index)
@@ -81,7 +69,7 @@ func (this *FileTemplateHandler) Initiate(ctx context.Context, conf *config.Inst
 	return
 }
 
-func (this *FileTemplateHandler) SetContent(key string, content []byte) (err error) {
+func (this *LruFileHandler) SetContent(key string, content []byte) (err error) {
 	var (
 		index      *block.Index
 		indexValue []byte
@@ -96,7 +84,7 @@ func (this *FileTemplateHandler) SetContent(key string, content []byte) (err err
 	return
 }
 
-func (this *FileTemplateHandler) GetContent(key string) (content []byte, err error) {
+func (this *LruFileHandler) GetContent(key string) (content []byte, err error) {
 	var (
 		indexValue []byte
 		ok         bool
