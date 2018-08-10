@@ -58,9 +58,9 @@ type Instance struct {
 	handlerName string
 	handler     Handler
 
-	options         map[string]Option
+	options               map[string]Option
 	bindedEnvironmentKeys []string
-	pathPrefix      string
+	pathPrefix            string
 }
 
 func (this *Instance) Initiate(ctx context.Context) (context.Context, error) {
@@ -168,7 +168,7 @@ func (this *Instance) LoadFromConfigFile(configFile string) error {
 	}
 	return nil
 }
-func (this *Instance) BindedEnvironmentKeys() []string{
+func (this *Instance) BindedEnvironmentKeys() []string {
 	return this.bindedEnvironmentKeys
 }
 func (this *Instance) LoadFromEnv() error {
