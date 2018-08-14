@@ -123,12 +123,12 @@ func TestServerCallback(t *testing.T) {
 	rg := s.GetRouteGroup("/")
 	assert.NotNil(t, rg)
 	rg.WithCallback(&ServerGroupRequestInitFunc{})
-	rg.AddRoute("GET", "/test/<id>", func(ctx context.Context, c *routing.Context) (context.Context, error) {
+	rg.AddRoute("GET", "test/<id>", func(ctx context.Context, c *routing.Context) (context.Context, error) {
 		c.Response.Write([]byte(c.Param("id")))
 		return ctx, nil
 	})
-	rg.AddRoute("GET", "/Foo", func(ctx context.Context, c *routing.Context) (context.Context, error) {
-		c.Response.Write([]byte(ctx.Value("Foo").(string)))
+	rg.AddRoute("GET", "Foo", func(ctx context.Context, c *routing.Context) (context.Context, error) {
+		c.Response.Write([]byte(a.Context.Value("Foo").(string)))
 		return ctx, nil
 	})
 
