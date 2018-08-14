@@ -49,9 +49,11 @@ func (l Level) String() string {
 	}
 	return "Unknown"
 }
+
 type Logger struct {
 	*libLogger.Logger
 }
+
 func NewInstance() *Instance {
 	instance := &Instance{}
 	return instance

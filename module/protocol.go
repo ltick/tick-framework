@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"fmt"
+	"strings"
+
 	"github.com/ltick/tick-framework/module/cache"
 	"github.com/ltick/tick-framework/module/config"
 	"github.com/ltick/tick-framework/module/database"
@@ -11,7 +13,6 @@ import (
 	"github.com/ltick/tick-framework/module/queue"
 	"github.com/ltick/tick-framework/module/utility"
 	"github.com/ltick/tick-routing"
-	"strings"
 )
 
 var (
