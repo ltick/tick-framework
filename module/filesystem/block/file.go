@@ -149,9 +149,15 @@ func (w *fileBufferWriteSeeker) GetBuffered() *bytes.Buffer {
 	return w.buffer
 }
 
-func NewIndexWriter(filename string) (w *indexWriter, err error) {
-	var file *os.File
-	if file, err = os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_APPEND, os.FileMode(0644)); err != nil {
+func NewIndexWriter(filename string, trunc bool) (w *indexWriter, err error) {
+	var (
+		file *os.File
+		flag int = os.O_WRONLY | os.O_CREATE | os.O_APPEND
+	)
+	if trunc {
+		flag |= os.O_TRUNC
+	}
+	if file, err = os.OpenFile(filename, flag, os.FileMode(0644)); err != nil {
 		return
 	}
 	var fileBuffer *fileBufferWriteSeeker = newFileBufferWriteSeeker(file)

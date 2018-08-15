@@ -81,7 +81,7 @@ func (b *Block) Initiate(ctx context.Context, conf *config.Instance) (err error)
 		return
 	}
 	// 初始化 index句柄
-	if b.indexWriter, err = NewIndexWriter(filepath.Join(b.tempDir, FilenameBlockIndex)); err != nil {
+	if b.indexWriter, err = NewIndexWriter(filepath.Join(b.tempDir, FilenameBlockIndex), false); err != nil {
 		return
 	}
 	// 初始化 内存index
@@ -128,7 +128,7 @@ func (b *Block) dumpIndex() (err error) {
 		index       *Index
 		indexWriter *indexWriter
 	)
-	if indexWriter, err = NewIndexWriter(filepath.Join(b.tempDir, FilenameBlockIndexTemp)); err != nil {
+	if indexWriter, err = NewIndexWriter(filepath.Join(b.tempDir, FilenameBlockIndexTemp), true); err != nil {
 		return
 	}
 	for key, index = range indexTable {
