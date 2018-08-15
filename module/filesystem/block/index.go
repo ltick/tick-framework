@@ -49,7 +49,7 @@ func (idx *Index) Filename() string {
 	return string(idx.filenameContent)
 }
 
-func (idx Index) MarshalBinary() (data []byte, err error) {
+func (idx *Index) MarshalBinary() (data []byte, err error) {
 	var buf *bytes.Buffer = bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	buf.Reset()
