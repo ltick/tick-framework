@@ -39,10 +39,10 @@ func (this *Instance) Initiate(ctx context.Context) (newCtx context.Context, err
 		return
 	}
 	var configs map[string]config.Option = map[string]config.Option{
-		"FILESYSTEM_BLOCK_PROVIDER": config.Option{Type: config.String, Default: defaultProvider, EnvironmentKey: "FILESYSTEM_BLOCK_PROVIDER"},
-		"FILESYSTEM_BLOCK_DIR":      config.Option{Type: config.String, Default: "/tmp/block", EnvironmentKey: "FILESYSTEM_BLOCK_DIR"},
-		"FILESYSTEM_BLOCK_SIZE":     config.Option{Type: config.Int64, Default: 64 * 1024 * 1024, EnvironmentKey: "FILESYSTEM_BLOCK_SIZE"},
-		"FILESYSTEM_BLOCK_IDLE":     config.Option{Type: config.Int, Default: 32, EnvironmentKey: "FILESYSTEM_BLOCK_IDLE"},
+		"FILESYSTEM_BLOCK_PROVIDER":            config.Option{Type: config.String, Default: defaultProvider, EnvironmentKey: "FILESYSTEM_BLOCK_PROVIDER"},
+		"FILESYSTEM_BLOCK_DIR":                 config.Option{Type: config.String, Default: "/tmp/block", EnvironmentKey: "FILESYSTEM_BLOCK_DIR"},
+		"FILESYSTEM_BLOCK_CONTENT_SIZE":        config.Option{Type: config.Int64, Default: 64 * 1024 * 1024, EnvironmentKey: "FILESYSTEM_BLOCK_CONTENT_SIZE"},
+		"FILESYSTEM_BLOCK_INDEX_SAVE_INTERVAL": config.Option{Type: config.Duration, Default: 5 * time.Minute, EnvironmentKey: "FILESYSTEM_BLOCK_INDEX_SAVE_INTERVAL"},
 	}
 	if newCtx, err = this.Config.SetOptions(ctx, configs); err != nil {
 		err = fmt.Errorf(errInitiate, err.Error())
@@ -89,23 +89,33 @@ func (this *Instance) Use(ctx context.Context, handlerName string) (err error) {
 	return
 }
 
-func (this *Instance) Read(index *Index) (data []byte, err error) {
-	return this.handler.Read(index)
+func (this *Instance) Set(key string, value []byte) (err error) {
+	return this.handler.Set(key, value)
 }
 
-func (this *Instance) Write(key, value []byte) (index *Index, err error) {
-	return this.handler.Write(key, value)
+func (this *Instance) Get(key string) (value []byte, err error) {
+	return this.handler.Get(key)
 }
 
-func (this *Instance) Defrag(defragLifetime time.Duration, rebuildIndex func(key string, index *Index)) {
-	this.handler.Defrag(defragLifetime, rebuildIndex)
+func (this *Instance) Del(key string) (err error) {
+	return this.handler.Del(key)
+}
+
+func (this *Instance) DefragContent(defragDuration time.Duration) (err error) {
+	return this.handler.DefragContent(defragDuration)
+}
+
+func (this *Instance) Range(doFunc func(key string, exist bool)) (err error) {
+	return this.handler.Range(doFunc)
 }
 
 type BlockHandler interface {
 	Initiate(ctx context.Context, conf *config.Instance) error
-	Read(index *Index) (data []byte, err error)
-	Write(key, value []byte) (index *Index, err error)
-	Defrag(defragDuration time.Duration, rebuildIndex func(key string, index *Index))
+	Set(key string, value []byte) (err error)
+	Get(key string) (value []byte, err error)
+	Del(key string) (err error)
+	DefragContent(defragDuration time.Duration) (err error)
+	Range(doFunc func(key string, exist bool)) (err error)
 }
 
 type fileBlockHandler func() BlockHandler

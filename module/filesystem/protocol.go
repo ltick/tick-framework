@@ -18,7 +18,7 @@ var (
 )
 
 var (
-	defaultProvider string = "storage"
+	defaultProvider string = "file"
 )
 
 func NewInstance() *Instance {
@@ -39,18 +39,20 @@ func (this *Instance) Initiate(ctx context.Context) (newCtx context.Context, err
 		return
 	}
 	var configs map[string]config.Option = map[string]config.Option{
-		"FILESYSTEM_PROVIDER":        config.Option{Type: config.String, Default: defaultProvider, EnvironmentKey: "FILESYSTEM_PROVIDER"},
-		"FILESYSTEM_LRU_DEFRAG_INTERVAL": config.Option{Type: config.Duration, Default: 30 * time.Minute, EnvironmentKey: "FILESYSTEM_LRU_DEFRAG_INTERVAL"},
-		"FILESYSTEM_LRU_DEFRAG_LIFETIME": config.Option{Type: config.Duration, Default: 24 * time.Hour, EnvironmentKey: "FILESYSTEM_LRU_DEFRAG_LIFETIME"},
-		"FILESYSTEM_LRU_CAPACITY":      config.Option{Type: config.Int64, Default: 32 * 1024 * 1024, EnvironmentKey: "FILESYSTEM_LRU_CAPACITY"},
-		"FILESYSTEM_LRU_DIR":           config.Option{Type: config.String, Default: "/tmp/lru", EnvironmentKey: "FILESYSTEM_LRU_DIR"},
-		"FILESYSTEM_LRU_SAVE_INTERVAL": config.Option{Type: config.Duration, Default: 5 * time.Minute, EnvironmentKey: "FILESYSTEM_LRU_SAVE_INTERVAL"},
+		"FILESYSTEM_PROVIDER":                config.Option{Type: config.String, Default: defaultProvider, EnvironmentKey: "FILESYSTEM_PROVIDER"},
+		"FILESYSTEM_DEFRAG_CONTENT_INTERVAL": config.Option{Type: config.Duration, Default: 30 * time.Minute, EnvironmentKey: "FILESYSTEM_DEFRAG_CONTENT_INTERVAL"},
+		"FILESYSTEM_DEFRAG_CONTENT_LIFETIME": config.Option{Type: config.Duration, Default: 24 * time.Hour, EnvironmentKey: "FILESYSTEM_DEFRAG_CONTENT_LIFETIME"},
+		"FILESYSTEM_LRU_CAPACITY":            config.Option{Type: config.Int64, Default: 32 * 1024 * 1024, EnvironmentKey: "FILESYSTEM_LRU_CAPACITY"},
 	}
 	if newCtx, err = this.Config.SetOptions(ctx, configs); err != nil {
 		err = fmt.Errorf(errInitiate, err.Error())
 		return
 	}
 	if err = Register(defaultProvider, NewFileHandler); err != nil {
+		err = fmt.Errorf(errInitiate, err.Error())
+		return
+	}
+	if err = Register("lruFile", NewLRUFileHandler); err != nil {
 		err = fmt.Errorf(errInitiate, err.Error())
 		return
 	}
@@ -99,10 +101,15 @@ func (this *Instance) GetContent(key string) (content []byte, err error) {
 	return this.handler.GetContent(key)
 }
 
+func (this *Instance) DelContent(key string) (err error) {
+	return this.handler.DelContent(key)
+}
+
 type Handler interface {
 	Initiate(ctx context.Context, conf *config.Instance) error
 	SetContent(key string, content []byte) (err error)
 	GetContent(key string) (content []byte, err error)
+	DelContent(key string) (err error)
 }
 
 type storageHandler func() Handler
