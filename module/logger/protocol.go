@@ -49,9 +49,11 @@ func (l Level) String() string {
 	}
 	return "Unknown"
 }
+
 type Logger struct {
 	*libLogger.Logger
 }
+
 func NewInstance() *Instance {
 	instance := &Instance{}
 	return instance
@@ -79,11 +81,11 @@ func (this *Instance) OnStartup(ctx context.Context) (context.Context, error) {
 func (this *Instance) OnShutdown(ctx context.Context) (context.Context, error) {
 	return ctx, nil
 }
-func (this *Instance) OnRequestStartup(ctx context.Context, c *routing.Context) (context.Context, error) {
-	return ctx, nil
+func (this *Instance) OnRequestStartup(c *routing.Context) error {
+	return nil
 }
-func (this *Instance) OnRequestShutdown(ctx context.Context, c *routing.Context) (context.Context, error) {
-	return ctx, nil
+func (this *Instance) OnRequestShutdown(c *routing.Context) error {
+	return nil
 }
 func (this *Instance) HandlerName() string {
 	return this.handlerName

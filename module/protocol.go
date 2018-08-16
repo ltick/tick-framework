@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"fmt"
+	"strings"
+
 	"github.com/ltick/tick-framework/module/cache"
 	"github.com/ltick/tick-framework/module/config"
 	"github.com/ltick/tick-framework/module/database"
@@ -11,7 +13,6 @@ import (
 	"github.com/ltick/tick-framework/module/queue"
 	"github.com/ltick/tick-framework/module/utility"
 	"github.com/ltick/tick-routing"
-	"strings"
 )
 
 var (
@@ -60,8 +61,8 @@ type ModuleInterface interface {
 	Initiate(ctx context.Context) (context.Context, error)
 	OnStartup(ctx context.Context) (context.Context, error)
 	OnShutdown(ctx context.Context) (context.Context, error)
-	OnRequestStartup(ctx context.Context, c *routing.Context) (context.Context, error)
-	OnRequestShutdown(ctx context.Context, c *routing.Context) (context.Context, error)
+	OnRequestStartup(c *routing.Context) error
+	OnRequestShutdown(c *routing.Context) error
 }
 
 type Instance struct {
