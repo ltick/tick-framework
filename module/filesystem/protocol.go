@@ -18,7 +18,7 @@ var (
 )
 
 var (
-	defaultProvider string = "storage"
+	defaultProvider string = "file"
 )
 
 func NewInstance() *Instance {
@@ -49,6 +49,10 @@ func (this *Instance) Initiate(ctx context.Context) (newCtx context.Context, err
 		return
 	}
 	if err = Register(defaultProvider, NewFileHandler); err != nil {
+		err = fmt.Errorf(errInitiate, err.Error())
+		return
+	}
+	if err = Register("lruFile", NewLRUFileHandler); err != nil {
 		err = fmt.Errorf(errInitiate, err.Error())
 		return
 	}
