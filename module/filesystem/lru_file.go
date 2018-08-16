@@ -1,8 +1,10 @@
 package filesystem
 
 import (
+	"container/list"
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/ltick/tick-framework/module/config"
@@ -10,93 +12,108 @@ import (
 )
 
 var (
-	errLruFileNotExist error = fmt.Errorf("filesystem file: lru key not exist")
+	errLRUFileNotExist error = fmt.Errorf("filesystem lru file: key not exist")
 )
 
-type LruFileHandler struct {
+type LRUFileHandler struct {
 	blockInstance *block.Instance
+	lru           *lruInstance // 对key做lru, 限制内存中key的数量
 }
 
-func NewLruFileHandler() Handler {
-	return &LruFileHandler{
+func NewLRUFileHandler() Handler {
+	return &LRUFileHandler{
 		blockInstance: block.NewInstance(),
 	}
 }
 
-func (this *LruFileHandler) Initiate(ctx context.Context, conf *config.Instance) (err error) {
+func (this *LRUFileHandler) Initiate(ctx context.Context, conf *config.Instance) (err error) {
 	var (
-		defragInterval time.Duration = conf.GetDuration("FILESYSTEM_LRU_DEFRAG_INTERVAL")
-		defragLifetime time.Duration = conf.GetDuration("FILESYSTEM_LRU_DEFRAG_LIFETIME")
+		lruCapacity           int64         = conf.GetInt64("FILESYSTEM_LRU_CAPACITY")
+		defragContentInterval time.Duration = conf.GetDuration("FILESYSTEM_DEFRAG_CONTENT_INTERVAL")
+		defragContentLifetime time.Duration = conf.GetDuration("FILESYSTEM_DEFRAG_CONTENT_LIFETIME")
 	)
 	if ctx, err = this.blockInstance.Initiate(ctx); err != nil {
 		return
 	}
+	this.lru = newLRUInstance(uint64(lruCapacity), func(key string) {})
+	// 初始化LRU
+
 	if ctx, err = this.blockInstance.OnStartup(ctx); err != nil {
 		return
 	}
 	go func() {
-		for range time.Tick(defragInterval) {
-			this.blockInstance.Defrag(defragLifetime, func(key string, index *block.Index) {
-				var (
-					lruValue []byte
-					lruIndex *block.Index = new(block.Index)
-					ok       bool
-					data     []byte
-					err      error
-				)
-				if lruValue, ok = this.lruInstance.Peek(key); !ok {
-					return
-				}
-				if err = lruIndex.UnmarshalBinary(lruValue); err != nil {
-					return
-				}
-				if !lruIndex.Same(index) {
-					return
-				}
-				if data, err = this.blockInstance.Read(index); err != nil {
-					return
-				}
-				if lruIndex, err = this.blockInstance.Write([]byte(key), data); err != nil {
-					return
-				}
-				if lruValue, err = lruIndex.MarshalBinary(); err != nil {
-					return
-				}
-				this.lruInstance.Update(key, lruValue)
-			})
+		for range time.Tick(defragContentInterval) {
+			this.blockInstance.DefragContent(defragContentLifetime)
 		}
 	}()
 	return
 }
 
-func (this *LruFileHandler) SetContent(key string, content []byte) (err error) {
-	var (
-		index      *block.Index
-		indexValue []byte
-	)
-	if index, err = this.blockInstance.Write([]byte(key), content); err != nil {
+func (this *LRUFileHandler) SetContent(key string, content []byte) (err error) {
+	if err = this.blockInstance.Set(key, content); err != nil {
 		return
 	}
-	if indexValue, err = index.MarshalBinary(); err != nil {
-		return
-	}
-	this.lruInstance.Set(key, indexValue)
+	this.lru.Add(key)
 	return
 }
 
-func (this *LruFileHandler) GetContent(key string) (content []byte, err error) {
+func (this *LRUFileHandler) GetContent(key string) (content []byte, err error) {
+	if content, err = this.blockInstance.Get(key); err != nil {
+		return
+	}
+	this.lru.Add(key)
+	return
+}
+
+type lruInstance struct {
+	sync.Mutex
+	list     *list.List
+	table    map[string]*list.Element
+	size     uint64           // 当前key数量
+	capacity uint64           // 总容量
+	delFunc  func(key string) // lru删除时, 调用的函数
+}
+
+func newLRUInstance(capacity uint64, delFunc func(key string)) *lruInstance {
+	return &lruInstance{
+		list:     list.New(),
+		table:    make(map[string]*list.Element),
+		size:     0,
+		capacity: capacity,
+		delFunc:  delFunc,
+	}
+}
+
+func (lru *lruInstance) Add(key string) {
+	lru.Lock()
+	defer lru.Unlock()
+
 	var (
-		indexValue []byte
-		ok         bool
-		index      *block.Index = new(block.Index)
+		element *list.Element
+		ok      bool
 	)
-	if indexValue, ok = this.lruInstance.Get(key); !ok {
-		err = errNotExist
-		return
+	if element, ok = lru.table[key]; ok {
+		lru.list.MoveToFront(element)
+	} else {
+		element = lru.list.PushFront(key)
+		lru.table[key] = element
+		lru.size++
 	}
-	if err = index.UnmarshalBinary(indexValue); err != nil {
-		err = errNotExist
-		return
+	lru.checkCapacity()
+}
+
+func (lru *lruInstance) checkCapacity() {
+	var (
+		delElement *list.Element
+		delValue   interface{}
+	)
+	for lru.size > lru.capacity {
+		if delElement = lru.list.Back(); delElement == nil {
+			return
+		}
+		delValue = lru.list.Remove(delElement)
+		delete(lru.table, delValue.(string))
+		lru.delFunc(delValue.(string))
+		lru.size--
 	}
-	return this.blockInstance.Read(index)
 }

@@ -2,6 +2,7 @@ package filesystem
 
 import (
 	"context"
+	"time"
 
 	"github.com/ltick/tick-framework/module/config"
 	"github.com/ltick/tick-framework/module/filesystem/block"
@@ -18,12 +19,22 @@ func NewFileHandler() Handler {
 }
 
 func (this *FileHandler) Initiate(ctx context.Context, conf *config.Instance) (err error) {
+	var (
+		defragContentInterval time.Duration = conf.GetDuration("FILESYSTEM_DEFRAG_CONTENT_INTERVAL")
+		defragContentLifetime time.Duration = conf.GetDuration("FILESYSTEM_DEFRAG_CONTENT_LIFETIME")
+	)
 	if ctx, err = this.blockInstance.Initiate(ctx); err != nil {
 		return
 	}
 	if ctx, err = this.blockInstance.OnStartup(ctx); err != nil {
 		return
 	}
+	// 整理Content
+	go func() {
+		for range time.Tick(defragContentInterval) {
+			this.blockInstance.DefragContent(defragContentLifetime)
+		}
+	}()
 	return
 }
 

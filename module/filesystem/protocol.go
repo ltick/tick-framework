@@ -44,7 +44,6 @@ func (this *Instance) Initiate(ctx context.Context) (newCtx context.Context, err
 		"FILESYSTEM_LRU_DEFRAG_LIFETIME": config.Option{Type: config.Duration, Default: 24 * time.Hour, EnvironmentKey: "FILESYSTEM_LRU_DEFRAG_LIFETIME"},
 		"FILESYSTEM_LRU_CAPACITY":        config.Option{Type: config.Int64, Default: 32 * 1024 * 1024, EnvironmentKey: "FILESYSTEM_LRU_CAPACITY"},
 		"FILESYSTEM_LRU_DIR":             config.Option{Type: config.String, Default: "/tmp/lru", EnvironmentKey: "FILESYSTEM_LRU_DIR"},
-		"FILESYSTEM_LRU_SAVE_INTERVAL":   config.Option{Type: config.Duration, Default: 5 * time.Minute, EnvironmentKey: "FILESYSTEM_LRU_SAVE_INTERVAL"},
 	}
 	if newCtx, err = this.Config.SetOptions(ctx, configs); err != nil {
 		err = fmt.Errorf(errInitiate, err.Error())

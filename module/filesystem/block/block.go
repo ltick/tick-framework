@@ -3,6 +3,7 @@ package block
 import (
 	"context"
 	"fmt"
+	"io"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -42,8 +43,9 @@ func NewFileBlockHandler() BlockHandler {
 
 func (b *Block) Initiate(ctx context.Context, conf *config.Instance) (err error) {
 	var (
-		tempDir string = conf.GetString("FILESYSTEM_BLOCK_DIR")
-		maxSize int64  = conf.GetInt64("FILESYSTEM_BLOCK_SIZE")
+		tempDir      string        = conf.GetString("FILESYSTEM_BLOCK_DIR")
+		maxSize      int64         = conf.GetInt64("FILESYSTEM_BLOCK_CONTENT_SIZE")
+		dumpInterval time.Duration = conf.GetDuration("FILESYSTEM_BLOCK_INDEX_SAVE_INTERVAL")
 	)
 	if err = os.MkdirAll(tempDir, os.FileMode(0755)); err != nil {
 		return
@@ -52,7 +54,7 @@ func (b *Block) Initiate(ctx context.Context, conf *config.Instance) (err error)
 	b.maxSize = maxSize
 
 	// 初始化 将上次退出时的文件句柄传入
-	if err = filepath.Walk(tempDir, func(path string, f os.FileInfo, err error) error {
+	if err = filepath.Walk(b.tempDir, func(path string, f os.FileInfo, err error) error {
 		if f == nil {
 			return err
 		}
@@ -87,7 +89,7 @@ func (b *Block) Initiate(ctx context.Context, conf *config.Instance) (err error)
 	// 初始化 内存index
 	b.loadIndex()
 	go func() {
-		for range time.Tick(time.Second) {
+		for range time.Tick(dumpInterval) {
 			b.dumpIndex()
 		}
 	}()
@@ -230,51 +232,76 @@ func (b *Block) readContent(index *Index) (value []byte, err error) {
 	return r.Read(index.offset, index.length)
 }
 
-// vlog整理
-// set相同key的时候, 之前key的index会更新, 但是vlog还保留着value
-// lru过期时, vlog还保留着value
-func (b *Block) Defrag(defragDuration time.Duration, rebuildIndex func(key string, index *Index)) {
-	return
-	/*
-		var defragTimestamp time.Time = time.Now().Add(-defragDuration)
+// content整理
+// set相同key的时候, 之前key的index会更新, 但是旧content还保留着
+// 删除key时, content还保留着
+func (b *Block) DefragContent(defragDuration time.Duration) (err error) {
+	var defragTimestamp time.Time = time.Now().Add(-defragDuration)
+	if err = filepath.Walk(b.tempDir, func(path string, f os.FileInfo, err error) error {
+		if f == nil {
+			return err
+		}
+		if f.IsDir() {
+			return nil
+		}
+		if f.Name() == FilenameBlockIndex || f.Name() == FilenameBlockIndexTemp {
+			return nil
+		}
+		if f.Size() < b.maxSize {
+			return nil
+		}
+		if f.ModTime().After(defragTimestamp) { // 一段时间之内的vlog不整理
+			return nil
+		}
 
-		filepath.Walk(b.tempDir, func(path string, f os.FileInfo, err error) error {
-			if f == nil {
-				return err
-			}
-			if f.IsDir() {
-				return nil
-			}
-			if f.Size() < b.maxSize {
-				return nil
-			}
-			// N天之内的vlog不整理
-			if f.ModTime().After(defragTimestamp) {
-				return nil
-			}
+		// 开始整理文件
+		var (
+			filename      string = filepath.Join(b.tempDir, f.Name())
+			contentReader ContentReader
+		)
+		if contentReader, err = NewContentReader(filename); err != nil {
+			return nil
+		}
+	loop:
+		for {
 			var (
-				filename string = filepath.Join(b.tempDir, f.Name())
-				kvReader *kvstore.KVStoreReader
-				item     *kvstore.KVStore = new(kvstore.KVStore)
+				key   string
+				index *Index
+				err   error
 			)
-			if kvReader, err = kvstore.NewKVStoreReader(filename); err != nil {
-				return err
-			}
-			for { // 遍历Key, 判断是否重建索引
-				if err = kvReader.ReadOne(item); err != nil {
+			if key, index, err = contentReader.SequentialRead(); err != nil {
+				if err == io.EOF {
+					break loop
+				} else {
 					continue
 				}
-				// key还在使用, 重新写入vlog, 更新索引
-				rebuildIndex(item.Key(), NewIndex(
-					filename,
-					uint64(kvReader.Offset())+uint64(item.ValueOffset()),
-					item.ValueLength(),
-				))
 			}
-			kvReader.Close()
-			// 删除旧文件
-			os.Remove(filename)
-			return nil
-		})
-	*/
+			// 重建索引
+			b.rebuildIndex(key, index)
+		}
+		contentReader.Close()
+		os.Remove(filename)
+		return nil
+	}); err != nil {
+		return
+	}
+	return
+}
+
+func (b *Block) rebuildIndex(key string, index *Index) {
+	var (
+		latestIndex *Index
+		latestValue []byte
+		err         error
+	)
+	if latestIndex, err = b.readIndex(key); err != nil {
+		return
+	}
+	if !latestIndex.Same(index) {
+		return
+	}
+	if latestValue, err = b.readContent(index); err != nil {
+		return
+	}
+	b.Set(key, latestValue)
 }

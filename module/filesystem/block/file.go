@@ -65,12 +65,14 @@ func (w *contentWriter) Size() int64 {
 
 type ContentReader interface {
 	Read(offset uint64, length uint32) (value []byte, err error)
+	SequentialRead() (key string, index *Index, err error)
 	Close() error
 }
 
 type contentReader struct {
 	*kvstore.KVStore
-	file *os.File
+	file   *os.File
+	offset int64
 }
 
 func NewContentReader(filename string) (r ContentReader, err error) {
@@ -81,6 +83,7 @@ func NewContentReader(filename string) (r ContentReader, err error) {
 	r = &contentReader{
 		KVStore: kvstore.NewKVStore(file, kvstore.NopStore),
 		file:    file,
+		offset:  0,
 	}
 	return
 }
@@ -96,6 +99,17 @@ func (r *contentReader) Read(offset uint64, length uint32) (value []byte, err er
 	}
 	value = make([]byte, data.ValueLength())
 	copy(value, data.Value())
+	return
+}
+
+func (r *contentReader) SequentialRead() (key string, index *Index, err error) {
+	var data *kvstore.KVStoreData
+	if data, err = r.Get(r.offset); err != nil {
+		return
+	}
+	key = data.Key()
+	index = NewIndex(r.file.Name(), uint64(r.offset), data.Size())
+	r.offset += int64(data.Size())
 	return
 }
 
