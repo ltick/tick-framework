@@ -3,16 +3,11 @@ package filesystem
 import (
 	"container/list"
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
 	"github.com/ltick/tick-framework/module/config"
 	"github.com/ltick/tick-framework/module/filesystem/block"
-)
-
-var (
-	errLRUFileNotExist error = fmt.Errorf("filesystem lru file: key not exist")
 )
 
 type LRUFileHandler struct {
