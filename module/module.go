@@ -19,6 +19,16 @@ func (this *Instance) registerBuiltinModule(ctx context.Context, moduleName stri
 		return newCtx, errors.New(errRegisterBuiltinModule + ": " + err.Error())
 	}
 	canonicalModuleName := strings.ToUpper(moduleName[0:1]) + moduleName[1:]
+
+	err = this.InjectModuleTo([]interface{}{module})
+	if err != nil {
+		return ctx, fmt.Errorf(errRegisterModule+": %s", canonicalModuleName, err.Error())
+	}
+	_, err = module.Initiate(ctx)
+	if err != nil {
+		return ctx, fmt.Errorf(errRegisterModule+": %s", canonicalModuleName, err.Error())
+	}
+
 	this.BuiltinModules[canonicalModuleName] = module
 	this.SortedBuiltinModules = append(this.SortedBuiltinModules, canonicalModuleName)
 	return newCtx, nil
@@ -98,17 +108,11 @@ func (this *Instance) registerModule(ctx context.Context, moduleName string, mod
 			return ctx, fmt.Errorf(errRegisterModule+": %s", canonicalModuleName, err.Error())
 		}
 	}
-	err = this.InjectModuleTo([]interface{}{module})
-	if err != nil {
-		return ctx, fmt.Errorf(errRegisterModule+": %s", canonicalModuleName, err.Error())
-	}
-	newCtx, err := module.Initiate(ctx)
-	if err != nil {
-		return ctx, fmt.Errorf(errRegisterModule+": %s", canonicalModuleName, err.Error())
-	}
+
 	this.Modules[canonicalModuleName] = module
 	this.SortedModules = append(this.SortedModules, canonicalModuleName)
-	return newCtx, nil
+
+	return ctx, nil
 }
 
 // Unregister As Module
@@ -177,33 +181,46 @@ func (this *Instance) GetSortedModules(reverses ...bool) []interface{} {
 func (this *Instance) UseModule(ctx context.Context, moduleNames ...string) (context.Context, error) {
 	var err error
 	// 内置模块注册
+	moduleTargets := make(map[string]interface{})
+	moduleInterfaces := make([]ModuleInterface, 0)
+
 	for _, moduleName := range moduleNames {
 		canonicalModuleName := strings.ToUpper(moduleName[0:1]) + moduleName[1:]
-		moduleTargets := make([]interface{}, 0)
-		moduleInterfaces := make([]ModuleInterface, 0)
 		moduleExists := false
 		for _, module := range Modules {
 			canonicalExistsModuleName := strings.ToUpper(module.Name[0:1]) + module.Name[1:]
 			if canonicalModuleName == canonicalExistsModuleName {
 				moduleExists = true
-				moduleTargets = append(moduleTargets, module.Module)
+				moduleTargets[module.Name] = module.Module
 				moduleInterfaces = append(moduleInterfaces, module.Module)
 			}
 		}
 		if !moduleExists {
 			return ctx, fmt.Errorf(errModuleNotExists, canonicalModuleName)
 		}
-		err = this.InjectModuleTo(moduleTargets)
+	}
+
+	for name, module := range moduleTargets {
+		ctx, err = this.registerModule(ctx, strings.ToLower(name[0:1])+name[1:], module.(ModuleInterface), true)
 		if err != nil {
 			return ctx, fmt.Errorf(errUseModule+": %s", err.Error())
 		}
-		for _, moduleInterface := range moduleInterfaces {
-			ctx, err = this.registerModule(ctx, canonicalModuleName, moduleInterface, true)
-			if err != nil {
-				return ctx, fmt.Errorf(errUseModule+": %s", err.Error())
-			}
+	}
+
+	sortedModuleTargets := SortModules(moduleTargets)
+
+	for index, name := range sortedModuleTargets {
+		moduleInterface := moduleTargets[name].(ModuleInterface)
+		err = this.InjectModuleTo([]interface{}{moduleInterface})
+		if err != nil {
+			return ctx, fmt.Errorf(errRegisterModule+": %s", moduleNames[index], err.Error())
+		}
+		ctx, err = moduleInterface.Initiate(ctx)
+		if err != nil {
+			return ctx, fmt.Errorf(errRegisterModule+": %s", moduleNames[index], err.Error())
 		}
 	}
+
 	return ctx, nil
 }
 
@@ -230,7 +247,6 @@ func (this *Instance) RegisterUserModule(ctx context.Context, moduleName string,
 		return ctx, fmt.Errorf(errRegisterUserModule+": %s", err.Error())
 	}
 	this.UserModules[canonicalModuleName] = module
-	this.SortedUserModules = append(this.SortedUserModules, canonicalModuleName)
 	return newCtx, nil
 }
 
@@ -276,6 +292,11 @@ func (this *Instance) GetUserModules() map[string]interface{} {
 		modules[moduleName] = module
 	}
 	return modules
+}
+
+func (this *Instance) SetSortedUserModules() {
+	this.SortedUserModules = SortModules(this.UserModules)
+	this.SortedModules = append(this.SortedModules[:len(this.SortedModules)-len(this.SortedUserModules)], this.SortedUserModules...)
 }
 
 func (this *Instance) GetSortedUserModules(reverses ...bool) []interface{} {
@@ -425,9 +446,17 @@ func (this *Instance) GetValues() map[string]interface{} {
 
 func (this *Instance) InjectModule() error {
 	// Modules
-	modules := this.GetSortedModules()
+	modules := this.GetSortedUserModules()
 	injectTargets := make([]interface{}, len(modules))
 	for index, injectTarget := range modules {
+		err := this.InjectModuleTo([]interface{}{injectTarget})
+		if err != nil {
+			return fmt.Errorf(errRegisterModule+": %s", this.SortedModules[index], err.Error())
+		}
+		_, err = injectTarget.(ModuleInterface).Initiate(nil)
+		if err != nil {
+			return fmt.Errorf(errRegisterModule+": %s", this.SortedModules[index], err.Error())
+		}
 		injectTargets[index] = injectTarget
 	}
 	return this.InjectModuleTo(injectTargets)
@@ -490,4 +519,103 @@ func (this *Instance) InjectModuleTo(injectTargets []interface{}) error {
 		}
 	}
 	return nil
+}
+
+// ModuleNode - Module node.
+type ModuleNode struct {
+	Name  string
+	Nodes []ModuleNode
+}
+
+// SortModules - Sort user modules.
+func SortModules(modules map[string]interface{}) []string {
+	moduleDepend := make(map[string][]string)
+	for name := range modules {
+		moduleDepend[name] = []string{}
+	}
+	for key, value := range modules {
+		s := structs.New(value)
+		for _, f := range s.Fields() {
+			name := f.Name()
+			switch name {
+			case "DebugLog", "SystemLog":
+			default:
+				if f.Tag(INJECT_TAG) == "true" {
+					moduleDepend[name] = append(moduleDepend[name], key)
+				}
+			}
+		}
+	}
+
+	rootNodes := []ModuleNode{}
+	for name := range moduleDepend {
+		depending := false
+		for _, ms := range moduleDepend {
+			for _, m := range ms {
+				if m == name {
+					depending = true
+					goto finish
+				}
+			}
+		}
+	finish:
+		if !depending {
+			node := &ModuleNode{}
+			node.Name = name
+			rootNodes = append(rootNodes, *node)
+		}
+	}
+
+	root := &ModuleNode{}
+	root.Nodes = rootNodes
+	root.NodesMap(moduleDepend)
+
+	allNodes := make(map[int][]string)
+	root.NodesWithLabel(allNodes, 0)
+
+	ns := []string{}
+	for i := 0; i < len(allNodes); i++ {
+		for _, node := range allNodes[i] {
+			for k, n := range ns {
+				if node == n {
+					ns = append(ns[:k], ns[k+1:]...)
+				}
+			}
+			ns = append(ns, node)
+		}
+	}
+
+	return ns
+}
+
+// NodesMap - Map nodes.
+func (node *ModuleNode) NodesMap(modules map[string][]string) {
+	for k, n := range node.Nodes {
+		if len(modules[n.Name]) == 0 {
+			continue
+		}
+		children := []ModuleNode{}
+		for _, v := range modules[n.Name] {
+			childNode := &ModuleNode{
+				Name: v,
+			}
+			children = append(children, *childNode)
+		}
+		node.Nodes[k].Nodes = children
+		node.Nodes[k].NodesMap(modules)
+	}
+}
+
+// NodesWithLabel - Return nodes with lable.
+func (node *ModuleNode) NodesWithLabel(m map[int][]string, label int) {
+	nodes := []string{}
+	for _, n := range node.Nodes {
+		nodes = append(nodes, n.Name)
+		n.NodesWithLabel(m, label+1)
+	}
+	if _, ok := m[label]; ok {
+		m[label] = append(m[label], nodes...)
+	} else {
+		m[label] = nodes
+	}
 }
