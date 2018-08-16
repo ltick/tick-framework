@@ -140,8 +140,11 @@ func (b *Block) dumpIndex() (err error) {
 	}
 	// buff写回, 重命名, 再切换句柄
 	b.indexMutex.Lock()
+	if _, err = b.indexWriter.BufferWriteTo(indexWriter); err != nil {
+		b.indexMutex.Unlock()
+		return
+	}
 	b.indexWriter.Close()
-	b.indexWriter.BufferWriteTo(indexWriter)
 	os.Rename(filepath.Join(b.tempDir, FilenameBlockIndexTemp), filepath.Join(b.tempDir, FilenameBlockIndex))
 	b.indexWriter = indexWriter
 	b.indexMutex.Unlock()
