@@ -280,3 +280,28 @@ func LoadIndexFromFile(filename string) (indexTable map[string]*Index, err error
 	}
 	return
 }
+
+func RangeIndexFromFile(filename string, doFunc func(key string, index *Index)) (err error) {
+	var indexReader IndexReader
+	if indexReader, err = NewIndexReader(filename); err != nil {
+		if os.IsNotExist(err) {
+			err = nil
+		}
+		return
+	}
+	defer indexReader.Close()
+	for {
+		var (
+			key   string
+			index *Index
+		)
+		if key, index, err = indexReader.SequentialRead(); err != nil {
+			if err == io.EOF {
+				err = nil
+			}
+			return
+		}
+		doFunc(key, index)
+	}
+	return
+}

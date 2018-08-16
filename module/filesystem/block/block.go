@@ -316,3 +316,9 @@ func (b *Block) rebuildIndex(key string, index *Index) {
 	}
 	b.Set(key, latestValue)
 }
+
+func (b *Block) Range(doFunc func(key string, exist bool)) (err error) {
+	return RangeIndexFromFile(filepath.Join(b.tempDir, FilenameBlockIndex), func(key string, index *Index) {
+		doFunc(key, !index.IsDel())
+	})
+}

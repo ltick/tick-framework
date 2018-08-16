@@ -51,3 +51,10 @@ func (this *FileHandler) GetContent(key string) (content []byte, err error) {
 	}
 	return
 }
+
+func (this *FileHandler) DelContent(key string) (err error) {
+	if err = this.blockInstance.Del(key); err != nil {
+		return
+	}
+	return
+}

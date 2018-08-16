@@ -105,12 +105,17 @@ func (this *Instance) DefragContent(defragDuration time.Duration) (err error) {
 	return this.handler.DefragContent(defragDuration)
 }
 
+func (this *Instance) Range(doFunc func(key string, exist bool)) (err error) {
+	return this.handler.Range(doFunc)
+}
+
 type BlockHandler interface {
 	Initiate(ctx context.Context, conf *config.Instance) error
 	Set(key string, value []byte) (err error)
 	Get(key string) (value []byte, err error)
 	Del(key string) (err error)
 	DefragContent(defragDuration time.Duration) (err error)
+	Range(doFunc func(key string, exist bool)) (err error)
 }
 
 type fileBlockHandler func() BlockHandler

@@ -28,19 +28,26 @@ func NewLRUFileHandler() Handler {
 
 func (this *LRUFileHandler) Initiate(ctx context.Context, conf *config.Instance) (err error) {
 	var (
-		lruCapacity           int64         = conf.GetInt64("FILESYSTEM_LRU_CAPACITY")
 		defragContentInterval time.Duration = conf.GetDuration("FILESYSTEM_DEFRAG_CONTENT_INTERVAL")
 		defragContentLifetime time.Duration = conf.GetDuration("FILESYSTEM_DEFRAG_CONTENT_LIFETIME")
+		lruCapacity           int64         = conf.GetInt64("FILESYSTEM_LRU_CAPACITY")
 	)
 	if ctx, err = this.blockInstance.Initiate(ctx); err != nil {
 		return
 	}
-	this.lru = newLRUInstance(uint64(lruCapacity), func(key string) {})
-	// 初始化LRU
-
 	if ctx, err = this.blockInstance.OnStartup(ctx); err != nil {
 		return
 	}
+	this.lru = newLRUInstance(uint64(lruCapacity), func(key string) { this.blockInstance.Del(key) })
+	// 初始化LRU
+	// 遍历block中所有的key做lru
+	this.blockInstance.Range(func(key string, exist bool) {
+		if exist {
+			this.lru.Add(key)
+		} else {
+			this.lru.Del(key)
+		}
+	})
 	go func() {
 		for range time.Tick(defragContentInterval) {
 			this.blockInstance.DefragContent(defragContentLifetime)
@@ -62,6 +69,14 @@ func (this *LRUFileHandler) GetContent(key string) (content []byte, err error) {
 		return
 	}
 	this.lru.Add(key)
+	return
+}
+
+func (this *LRUFileHandler) DelContent(key string) (err error) {
+	if err = this.blockInstance.Del(key); err != nil {
+		return
+	}
+	this.lru.Del(key)
 	return
 }
 
@@ -100,6 +115,22 @@ func (lru *lruInstance) Add(key string) {
 		lru.size++
 	}
 	lru.checkCapacity()
+}
+
+func (lru *lruInstance) Del(key string) {
+	lru.Lock()
+	defer lru.Unlock()
+
+	var (
+		element *list.Element
+		ok      bool
+	)
+	if element, ok = lru.table[key]; !ok {
+		return
+	}
+	lru.list.Remove(element)
+	delete(lru.table, key)
+	lru.size--
 }
 
 func (lru *lruInstance) checkCapacity() {
