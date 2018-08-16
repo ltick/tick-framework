@@ -65,7 +65,7 @@ func (b *Block) Initiate(ctx context.Context, conf *config.Instance) (err error)
 			return nil
 		}
 		var blockWriter ContentWriter
-		if blockWriter, err = NewContentWriter(filepath.Join(tempDir, f.Name())); err != nil {
+		if blockWriter, err = NewContentWriter(filepath.Join(b.tempDir, f.Name()), b.tempDir); err != nil {
 			return err
 		}
 		if b.maxSize > 0 && blockWriter.Size() >= b.maxSize {
@@ -163,7 +163,7 @@ func (b *Block) updateContentWriter() (err error) {
 	return
 update:
 	var filename string = filepath.Join(b.tempDir, fmt.Sprintf("%s.%d", time.Now().Format(FilenameSuffixInSecond), rand.Uint64()))
-	if b.contentWriter, err = NewContentWriter(filename); err != nil {
+	if b.contentWriter, err = NewContentWriter(filename, b.tempDir); err != nil {
 		return
 	}
 	return
@@ -228,7 +228,7 @@ func (b *Block) readIndex(key string) (index *Index, err error) {
 
 func (b *Block) readContent(index *Index) (value []byte, err error) {
 	var r ContentReader
-	if r, err = NewContentReader(index.Filename()); err != nil {
+	if r, err = NewContentReader(filepath.Join(b.tempDir, index.Filename()), b.tempDir); err != nil {
 		return
 	}
 	defer r.Close()
@@ -273,7 +273,7 @@ func (b *Block) DefragContent(defragDuration time.Duration) (err error) {
 			filename      string = filepath.Join(b.tempDir, f.Name())
 			contentReader ContentReader
 		)
-		if contentReader, err = NewContentReader(filename); err != nil {
+		if contentReader, err = NewContentReader(filename, b.tempDir); err != nil {
 			return nil
 		}
 	loop:

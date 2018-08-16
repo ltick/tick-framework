@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/ltick/tick-framework/module/utility/kvstore"
 )
@@ -21,11 +22,12 @@ type ContentWriter interface {
 
 type contentWriter struct {
 	*kvstore.KVStore
-	file *os.File
-	size int64
+	file     *os.File
+	basepath string
+	size     int64
 }
 
-func NewContentWriter(filename string) (w ContentWriter, err error) {
+func NewContentWriter(filename, basepath string) (w ContentWriter, err error) {
 	var (
 		file   *os.File
 		offset int64
@@ -37,9 +39,10 @@ func NewContentWriter(filename string) (w ContentWriter, err error) {
 		return
 	}
 	w = &contentWriter{
-		KVStore: kvstore.NewKVStore(kvstore.NopStore, file),
-		file:    file,
-		size:    offset,
+		KVStore:  kvstore.NewKVStore(kvstore.NopStore, file),
+		file:     file,
+		basepath: basepath,
+		size:     offset,
 	}
 	return
 }
@@ -50,7 +53,7 @@ func (w *contentWriter) Write(key []byte, value []byte) (index *Index, err error
 		return
 	}
 	// index信息定义为 文件名 StoreData的offset，StoreData的length
-	index = NewIndex(w.file.Name(), uint64(w.size), data.Size())
+	index = NewIndex(strings.TrimPrefix(w.file.Name(), w.basepath), uint64(w.size), data.Size())
 	w.size += int64(data.Size())
 	return
 }
@@ -71,19 +74,21 @@ type ContentReader interface {
 
 type contentReader struct {
 	*kvstore.KVStore
-	file   *os.File
-	offset int64
+	file     *os.File
+	basepath string
+	offset   int64
 }
 
-func NewContentReader(filename string) (r ContentReader, err error) {
+func NewContentReader(filename, basepath string) (r ContentReader, err error) {
 	var file *os.File
 	if file, err = os.OpenFile(filename, os.O_RDONLY, os.FileMode(0644)); err != nil {
 		return
 	}
 	r = &contentReader{
-		KVStore: kvstore.NewKVStore(file, kvstore.NopStore),
-		file:    file,
-		offset:  0,
+		KVStore:  kvstore.NewKVStore(file, kvstore.NopStore),
+		file:     file,
+		basepath: basepath,
+		offset:   0,
 	}
 	return
 }
@@ -108,7 +113,7 @@ func (r *contentReader) SequentialRead() (key string, index *Index, err error) {
 		return
 	}
 	key = data.Key()
-	index = NewIndex(r.file.Name(), uint64(r.offset), data.Size())
+	index = NewIndex(strings.TrimPrefix(r.file.Name(), r.basepath), uint64(r.offset), data.Size())
 	r.offset += int64(data.Size())
 	return
 }
