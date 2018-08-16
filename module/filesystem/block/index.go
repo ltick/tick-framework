@@ -45,6 +45,14 @@ func NewIndex(filename string, offset uint64, length uint32) (idx *Index) {
 	}
 }
 
+func NewDelIndex() (idx *Index) { // 文件名为空, 表示删除
+	return NewIndex("", 0, 0)
+}
+
+func (idx *Index) IsDel() bool {
+	return idx.filenameLength == 0
+}
+
 func (idx *Index) Filename() string {
 	return string(idx.filenameContent)
 }

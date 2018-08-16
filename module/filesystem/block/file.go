@@ -272,7 +272,11 @@ func LoadIndexFromFile(filename string) (indexTable map[string]*Index, err error
 			}
 			return
 		}
-		indexTable[key] = index
+		if index.IsDel() {
+			delete(indexTable, key)
+		} else {
+			indexTable[key] = index
+		}
 	}
 	return
 }

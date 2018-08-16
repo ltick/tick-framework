@@ -232,6 +232,17 @@ func (b *Block) readContent(index *Index) (value []byte, err error) {
 	return r.Read(index.offset, index.length)
 }
 
+func (b *Block) Del(key string) (err error) {
+	b.indexMutex.Lock()
+	defer b.indexMutex.Unlock()
+
+	if err = b.indexWriter.Write(key, NewDelIndex()); err != nil {
+		return
+	}
+	delete(b.indexTable, key)
+	return
+}
+
 // content整理
 // set相同key的时候, 之前key的index会更新, 但是旧content还保留着
 // 删除key时, content还保留着

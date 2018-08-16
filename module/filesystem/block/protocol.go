@@ -97,6 +97,10 @@ func (this *Instance) Get(key string) (value []byte, err error) {
 	return this.handler.Get(key)
 }
 
+func (this *Instance) Del(key string) (err error) {
+	return this.handler.Del(key)
+}
+
 func (this *Instance) DefragContent(defragDuration time.Duration) (err error) {
 	return this.handler.DefragContent(defragDuration)
 }
@@ -105,6 +109,7 @@ type BlockHandler interface {
 	Initiate(ctx context.Context, conf *config.Instance) error
 	Set(key string, value []byte) (err error)
 	Get(key string) (value []byte, err error)
+	Del(key string) (err error)
 	DefragContent(defragDuration time.Duration) (err error)
 }
 
