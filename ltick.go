@@ -460,6 +460,9 @@ func (e *Engine) Startup() (err error) {
 	e.SystemLog("ltick: Engine start.")
 	e.SystemLog("ltick: Execute file \"" + e.executeFile + "\"")
 	e.SystemLog("ltick: Startup")
+
+	e.LoadSystemConfig(e.option.PathPrefix+"/etc/"+defaultConfigName, e.option.EnvPrefix, e.option.PathPrefix+"/.env")
+
 	if e.callback != nil {
 		err = e.Module.InjectModuleTo([]interface{}{e.callback})
 		if err != nil {
