@@ -460,6 +460,9 @@ func (e *Engine) Startup() (err error) {
 	e.SystemLog("ltick: Engine start.")
 	e.SystemLog("ltick: Execute file \"" + e.executeFile + "\"")
 	e.SystemLog("ltick: Startup")
+
+	e.LoadSystemConfig(e.option.PathPrefix+"/etc/"+defaultConfigName, e.option.EnvPrefix, e.option.PathPrefix+"/.env")
+
 	if e.callback != nil {
 		err = e.Module.InjectModuleTo([]interface{}{e.callback})
 		if err != nil {
@@ -478,11 +481,11 @@ func (e *Engine) Startup() (err error) {
 		}
 		// proxy
 		if server.Router.proxys != nil && len(server.Router.proxys) > 0 {
-			server.addRoute("ANY", "/", func(ctx context.Context, c *routing.Context) (context.Context, error) {
+			server.addRoute("ANY", "/", func(c *routing.Context) error {
 				for _, proxy := range server.Router.proxys {
 					upstreamURL, err := proxy.MatchProxy(c.Request)
 					if err != nil {
-						return ctx, routing.NewHTTPError(http.StatusInternalServerError, err.Error())
+						return routing.NewHTTPError(http.StatusInternalServerError, err.Error())
 					}
 					if upstreamURL != nil {
 						director := func(req *http.Request) {
@@ -494,10 +497,10 @@ func (e *Engine) Startup() (err error) {
 						proxy := &httputil.ReverseProxy{Director: director}
 						proxy.ServeHTTP(c.Response, c.Request)
 						c.Abort()
-						return ctx, nil
+						return nil
 					}
 				}
-				return ctx, nil
+				return nil
 			})
 		}
 		if server.RouteGroups != nil {

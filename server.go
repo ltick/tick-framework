@@ -1,7 +1,6 @@
 package ltick
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -53,8 +52,8 @@ type (
 		callback RouterCallback
 	}
 	RouterCallback interface {
-		OnRequestStartup(context.Context, *routing.Context) (context.Context, error)
-		OnRequestShutdown(context.Context, *routing.Context) (context.Context, error)
+		OnRequestStartup(*routing.Context) error
+		OnRequestShutdown(*routing.Context) error
 	}
 )
 
@@ -332,7 +331,7 @@ func (s *Server) GetRouter() *ServerRouter {
 	return s.Router
 }
 func (s *Server) GetRouteGroup(name string) *ServerRouteGroup {
-	if _, ok := s.RouteGroups[name]; ok {
+	if _, ok := s.RouteGroups[name]; !ok {
 		return nil
 	}
 	return s.RouteGroups[name]
