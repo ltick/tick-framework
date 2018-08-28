@@ -112,23 +112,43 @@ func (this *Instance) Use(ctx context.Context, handlerName string) error {
 	}
 	return nil
 }
-func (this *Instance) NewDatabase(ctx context.Context, name string) (DatabaseHandler, error) {
+func (this *Instance) NewDatabase(ctx context.Context, name string, config map[string]interface{}) (DatabaseHandler, error) {
 	database, err := this.GetDatabase(name)
 	if err == nil {
 		return database, nil
 	}
-	config := map[string]interface{}{
-		"DATABASE_MYSQL_HOST":           this.Config.GetString("DATABASE_MYSQL_HOST"),
-		"DATABASE_MYSQL_PORT":           this.Config.GetString("DATABASE_MYSQL_PORT"),
-		"DATABASE_MYSQL_USER":           this.Config.GetString("DATABASE_MYSQL_USER"),
-		"DATABASE_MYSQL_PASSWORD":       this.Config.GetString("DATABASE_MYSQL_PASSWORD"),
-		"DATABASE_MYSQL_DATABASE":       this.Config.GetString("DATABASE_MYSQL_DATABASE"),
-		"DATABASE_MYSQL_TIMEZONE":       this.Config.GetString("DATABASE_MYSQL_TIMEZONE"),
-		"DATABASE_MYSQL_TIMEOUT":        this.Config.GetString("DATABASE_MYSQL_TIMEOUT"),
-		"DATABASE_MYSQL_WRITE_TIMEOUT":  this.Config.GetString("DATABASE_MYSQL_WRITE_TIMEOUT"),
-		"DATABASE_MYSQL_READ_TIMEOUT":   this.Config.GetString("DATABASE_MYSQL_READ_TIMEOUT"),
-		"DATABASE_MYSQL_MAX_OPEN_CONNS": this.Config.GetInt("DATABASE_MYSQL_MAX_OPEN_CONNS"),
-		"DATABASE_MYSQL_MAX_IDLE_CONNS": this.Config.GetInt("DATABASE_MYSQL_MAX_IDLE_CONNS"),
+	if _, ok := config["DATABASE_MYSQL_HOST"]; !ok {
+		config["DATABASE_MYSQL_HOST"] = this.Config.GetString("DATABASE_MYSQL_HOST")
+	}
+	if _, ok := config["DATABASE_MYSQL_PORT"]; !ok {
+		config["DATABASE_MYSQL_PORT"] = this.Config.GetString("DATABASE_MYSQL_PORT")
+	}
+	if _, ok := config["DATABASE_MYSQL_USER"]; !ok {
+		config["DATABASE_MYSQL_USER"] = this.Config.GetString("DATABASE_MYSQL_USER")
+	}
+	if _, ok := config["DATABASE_MYSQL_PASSWORD"]; !ok {
+		config["DATABASE_MYSQL_PASSWORD"] = this.Config.GetString("DATABASE_MYSQL_PASSWORD")
+	}
+	if _, ok := config["DATABASE_MYSQL_DATABASE"]; !ok {
+		config["DATABASE_MYSQL_DATABASE"] = this.Config.GetString("DATABASE_MYSQL_DATABASE")
+	}
+	if _, ok := config["DATABASE_MYSQL_TIMEZONE"]; !ok {
+		config["DATABASE_MYSQL_TIMEZONE"] = this.Config.GetString("DATABASE_MYSQL_TIMEZONE")
+	}
+	if _, ok := config["DATABASE_MYSQL_TIMEOUT"]; !ok {
+		config["DATABASE_MYSQL_TIMEOUT"] = this.Config.GetString("DATABASE_MYSQL_TIMEOUT")
+	}
+	if _, ok := config["DATABASE_MYSQL_WRITE_TIMEOUT"]; !ok {
+		config["DATABASE_MYSQL_WRITE_TIMEOUT"] = this.Config.GetString("DATABASE_MYSQL_WRITE_TIMEOUT")
+	}
+	if _, ok := config["DATABASE_MYSQL_READ_TIMEOUT"]; !ok {
+		config["DATABASE_MYSQL_READ_TIMEOUT"] = this.Config.GetString("DATABASE_MYSQL_READ_TIMEOUT")
+	}
+	if _, ok := config["DATABASE_MYSQL_MAX_OPEN_CONNS"]; !ok {
+		config["DATABASE_MYSQL_MAX_OPEN_CONNS"] = this.Config.GetInt("DATABASE_MYSQL_MAX_OPEN_CONNS")
+	}
+	if _, ok := config["DATABASE_MYSQL_MAX_IDLE_CONNS"]; !ok {
+		config["DATABASE_MYSQL_MAX_IDLE_CONNS"] = this.Config.GetInt("DATABASE_MYSQL_MAX_IDLE_CONNS")
 	}
 	database, err = this.handler.NewDatabase(ctx, name, config)
 	if err != nil {
@@ -137,7 +157,6 @@ func (this *Instance) NewDatabase(ctx context.Context, name string) (DatabaseHan
 	if database == nil {
 		return nil, errors.New(fmt.Sprintf(errNewDatabase+": empty database", name))
 	}
-
 	return database, nil
 }
 func (this *Instance) GetDatabase(name string) (DatabaseHandler, error) {
@@ -262,19 +281,31 @@ func (this *Instance) NosqlUse(ctx context.Context, handlerName string) error {
 	}
 	return nil
 }
-func (this *Instance) NewNosqlDatabase(ctx context.Context, name string) (NosqlDatabaseHandler, error) {
+func (this *Instance) NewNosqlDatabase(ctx context.Context, name string, config map[string]interface{}) (NosqlDatabaseHandler, error) {
 	database, err := this.GetNosqlDatabase(name)
 	if err == nil {
 		return database, nil
 	}
-	config := map[string]interface{}{
-		"DATABASE_HBASE_HOST":       this.Config.GetString("DATABASE_HBASE_HOST"),
-		"DATABASE_HBASE_PORT":       this.Config.GetString("DATABASE_HBASE_PORT"),
-		"DATABASE_HBASE_USER":       this.Config.GetString("DATABASE_HBASE_USER"),
-		"DATABASE_HBASE_PASSWORD":   this.Config.GetString("DATABASE_HBASE_PASSWORD"),
-		"DATABASE_HBASE_DATABASE":   this.Config.GetString("DATABASE_HBASE_DATABASE"),
-		"DATABASE_HBASE_TIMEOUT":    this.Config.GetString("DATABASE_HBASE_TIMEOUT"),
-		"DATABASE_HBASE_MAX_ACTIVE": this.Config.GetInt("DATABASE_HBASE_MAX_ACTIVE"),
+	if _, ok := config["DATABASE_HBASE_HOST"]; !ok {
+		config["DATABASE_HBASE_HOST"] = this.Config.GetString("DATABASE_HBASE_HOST")
+	}
+	if _, ok := config["DATABASE_HBASE_PORT"]; !ok {
+		config["DATABASE_HBASE_PORT"] = this.Config.GetString("DATABASE_HBASE_PORT")
+	}
+	if _, ok := config["DATABASE_HBASE_USER"]; !ok {
+		config["DATABASE_HBASE_USER"] = this.Config.GetString("DATABASE_HBASE_USER")
+	}
+	if _, ok := config["DATABASE_HBASE_PASSWORD"]; !ok {
+		config["DATABASE_HBASE_PASSWORD"] = this.Config.GetString("DATABASE_HBASE_PASSWORD")
+	}
+	if _, ok := config["DATABASE_HBASE_DATABASE"]; !ok {
+		config["DATABASE_HBASE_DATABASE"] = this.Config.GetString("DATABASE_HBASE_DATABASE")
+	}
+	if _, ok := config["DATABASE_HBASE_TIMEOUT"]; !ok {
+		config["DATABASE_HBASE_TIMEOUT"] = this.Config.GetString("DATABASE_HBASE_TIMEOUT")
+	}
+	if _, ok := config["DATABASE_HBASE_MAX_ACTIVE"]; !ok {
+		config["DATABASE_HBASE_MAX_ACTIVE"] = this.Config.GetInt("DATABASE_HBASE_MAX_ACTIVE")
 	}
 	database, err = this.nosqlHandler.NewDatabase(ctx, name, config)
 	if err != nil {
