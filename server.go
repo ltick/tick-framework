@@ -53,8 +53,8 @@ type (
 		callback RouterCallback
 	}
 	RouterCallback interface {
-		OnRequestStartup(context.Context, *routing.Context) (context.Context, error)
-		OnRequestShutdown(context.Context, *routing.Context) (context.Context, error)
+		OnRequestStartup(*routing.Context) error
+		OnRequestShutdown(*routing.Context) error
 	}
 )
 
