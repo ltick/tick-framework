@@ -133,13 +133,20 @@ type CacheHandler interface {
 	Get(key interface{}) (interface{}, error)
 	Keys(key interface{}) (interface{}, error)
 	Expire(key interface{}, expire int64) error
+	Hmset(key interface{}, value ...interface{}) error
+	Hmget(key interface{}, value ...interface{}) (interface{}, error)
 	Del(key interface{}) (interface{}, error)
 	Hset(key interface{}, field interface{}, value interface{}) error
 	Hget(key interface{}, field interface{}) (interface{}, error)
+	Hdel(key interface{}, field interface{}) (interface{}, error)
 	Hgetall(key interface{}) (interface{}, error)
 	Exists(key interface{}) (bool, error)
 	ScanStruct(src []interface{}, dest interface{}) error
 	Sadd(key interface{}, value interface{}) error
+	Zadd(key interface{}, value ...interface{}) error
+	Zrange(key interface{}) (interface{}, error)
+	Zscore(key interface{}, field interface{}) (interface{}, error)
+	Zrem(key interface{}, field interface{}) (interface{}, error)
 }
 
 type cacheHandler func() Handler

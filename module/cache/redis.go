@@ -221,12 +221,15 @@ func (this *RedisPool) Hmset(key interface{}, args ...interface{}) error {
 	if err != nil {
 		return err
 	}
+
 	redisArgs := redis.Args{}
+	redisArgs = redisArgs.Add(sKey)
 	for i := 0; i < len(args); i = i + 2 {
-		redisArgs.Add(args[i])
-		redisArgs.AddFlat(args[i+1])
+		redisArgs = redisArgs.Add(args[i])
+		redisArgs = redisArgs.AddFlat(args[i+1])
 	}
-	_, err = c.Do("HMSET", sKey, redisArgs)
+
+	_, err = c.Do("HMSET", redisArgs...)
 	return err
 }
 func (this *RedisPool) Hmget(key interface{}, args ...interface{}) (interface{}, error) {
@@ -237,10 +240,11 @@ func (this *RedisPool) Hmget(key interface{}, args ...interface{}) (interface{},
 		return nil, err
 	}
 	redisArgs := redis.Args{}
+	redisArgs = redisArgs.Add(sKey)
 	for i := 0; i < len(args); i = i + 1 {
-		redisArgs.Add(args[i])
+		redisArgs = redisArgs.Add(args[i])
 	}
-	values, err := c.Do("HMGET", sKey, redisArgs)
+	values, err := c.Do("HMGET", redisArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -268,6 +272,19 @@ func (this *RedisPool) Hget(key interface{}, field interface{}) (interface{}, er
 		return nil, err
 	}
 	return value, nil
+}
+func (this *RedisPool) Hdel(key interface{}, field interface{}) (interface{}, error) {
+	c := this.Pool.Get()
+	defer c.Close()
+	sKey, err := this.generateKey(key)
+	if err != nil {
+		return nil, err
+	}
+	reply, err := c.Do("HDEL", sKey, field)
+	if err != nil {
+		return nil, err
+	}
+	return reply, nil
 }
 func (this *RedisPool) Hgetall(key interface{}) (interface{}, error) {
 	c := this.Pool.Get()
@@ -312,6 +329,73 @@ func (this *RedisPool) Sadd(key interface{}, value interface{}) error {
 	}
 	_, err = c.Do("SADD", sKey, value)
 	return err
+}
+func (this *RedisPool) Zadd(key interface{}, value ...interface{}) error {
+	c := this.Pool.Get()
+	defer c.Close()
+
+	sKey, err := this.generateKey(key)
+	if err != nil {
+		return err
+	}
+
+	var valueLen int
+	for _, v := range value {
+		if v == nil {
+			continue
+		}
+		valueLen++
+	}
+
+	var inputs []interface{}
+	if valueLen > 0 {
+		inputs = append(inputs, sKey)
+		inputs = append(inputs, value...)
+
+		_, err = c.Do("ZADD", inputs...)
+		return err
+	}
+
+	return nil
+}
+func (this *RedisPool) Zscore(key interface{}, field interface{}) (interface{}, error) {
+	c := this.Pool.Get()
+	defer c.Close()
+	sKey, err := this.generateKey(key)
+	if err != nil {
+		return nil, err
+	}
+	value, err := c.Do("ZSCORE", sKey, field)
+	if err != nil {
+		return nil, err
+	}
+	return value, nil
+}
+func (this *RedisPool) Zrange(key interface{}) (interface{}, error) {
+	c := this.Pool.Get()
+	defer c.Close()
+	sKey, err := this.generateKey(key)
+	if err != nil {
+		return nil, err
+	}
+	value, err := c.Do("ZREVRANGEBYSCORE", sKey, "+inf", "-inf", "WITHSCORES")
+	if err != nil {
+		return nil, err
+	}
+	return value, nil
+}
+func (this *RedisPool) Zrem(key interface{}, field interface{}) (interface{}, error) {
+	c := this.Pool.Get()
+	defer c.Close()
+	sKey, err := this.generateKey(key)
+	if err != nil {
+		return nil, err
+	}
+	res, err := c.Do("ZREM", sKey, field)
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 func (this *RedisPool) generateKey(key interface{}) (rKey string, err error) {
 	switch key.(type) {
