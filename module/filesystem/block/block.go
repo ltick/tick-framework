@@ -41,7 +41,7 @@ func NewFileBlockHandler() BlockHandler {
 	}
 }
 
-func (b *Block) Initiate(ctx context.Context, conf *config.Instance) (err error) {
+func (b *Block) Initiate(ctx context.Context, conf *config.Config) (err error) {
 	var (
 		tempDir      string        = conf.GetString("FILESYSTEM_BLOCK_DIR")
 		maxSize      int64         = conf.GetInt64("FILESYSTEM_BLOCK_CONTENT_SIZE")

@@ -22,7 +22,7 @@ import (
 	libCache "github.com/ltick/tick-framework/module/cache"
 	"github.com/ltick/tick-framework/module/config"
 	libDatabase "github.com/ltick/tick-framework/module/database"
-	libUtility "github.com/ltick/tick-framework/module/utility"
+	libUtility "github.com/ltick/tick-framework/utility"
 	"github.com/ltick/tick-routing"
 )
 
@@ -54,12 +54,11 @@ var (
 var debugLog libUtility.LogFunc
 var systemLog libUtility.LogFunc
 
-type Instance struct {
-	Database *libDatabase.Instance `inject:"true"`
-	Cache    *libCache.Instance    `inject:"true"`
+type Session struct {
+	Database *libDatabase.Database `inject:"true"`
+	Cache    *libCache.Cache    `inject:"true"`
 
-	Config      *config.Instance
-	Utility     *libUtility.Instance
+	Config      *config.Config
 	DebugLog    libUtility.LogFunc `inject:"true"`
 	SystemLog   libUtility.LogFunc `inject:"true"`
 	handlerName string
@@ -84,11 +83,11 @@ type Instance struct {
 	EnableSidInUrlQuery     bool
 }
 
-func NewInstance() *Instance {
-	return &Instance{}
+func NewSession() *Session {
+	return &Session{}
 }
 
-func (this *Instance) Initiate(ctx context.Context) (newCtx context.Context, err error) {
+func (s *Session) Initiate(ctx context.Context) (newCtx context.Context, err error) {
 	gob.Register([]interface{}{})
 	gob.Register(map[int]interface{}{})
 	gob.Register(map[string]interface{}{})
@@ -105,94 +104,94 @@ func (this *Instance) Initiate(ctx context.Context) (newCtx context.Context, err
 		"MEDIA_SESSION_MAX_AGE":          config.Option{Type: config.Int64, EnvironmentKey: "MEDIA_SESSION_MAX_AGE"},
 		"MEDIA_SESSION_MYSQL_DATABASE":   config.Option{Type: config.Int64, EnvironmentKey: "MEDIA_SESSION_MYSQL_DATABASE"},
 	}
-	newCtx, err = this.Config.SetOptions(ctx, configs)
+	newCtx, err = s.Config.SetOptions(ctx, configs)
 	if err != nil {
 		return newCtx, fmt.Errorf(errInitiate+": %s", err.Error())
 	}
 	err = Register("mysql", NewMysqlHandler)
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), this.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), s.handlerName))
 	}
 	err = Register("redis", NewRedisHandler)
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), this.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), s.handlerName))
 	}
 	return ctx, nil
 }
 
-func (this *Instance) OnStartup(ctx context.Context) (context.Context, error) {
-	if this.DebugLog != nil {
-		debugLog = this.DebugLog
+func (s *Session) OnStartup(ctx context.Context) (context.Context, error) {
+	if s.DebugLog != nil {
+		debugLog = s.DebugLog
 	} else {
-		debugLog = this.Utility.DefaultLogFunc
+		debugLog = libUtility.DefaultLogFunc
 	}
-	if this.SystemLog != nil {
-		systemLog = this.SystemLog
+	if s.SystemLog != nil {
+		systemLog = s.SystemLog
 	} else {
-		systemLog = this.Utility.DefaultLogFunc
+		systemLog = libUtility.DefaultLogFunc
 	}
-	if this.Cache == nil {
+	if s.Cache == nil {
 		return ctx, errors.New(errMissCache)
 	}
-	if this.Database == nil {
+	if s.Database == nil {
 		return ctx, errors.New(errMissDatabase)
 	}
-	this.provider = this.Config.GetString("MEDIA_SESSION_PROVIDER")
-	this.sessionKeyPrefix = this.Config.GetString("MEDIA_SESSION_REDIS_KEY_PREFIX")
-	this.sessionCookieId = this.Config.GetString("MEDIA_SESSION_COOKIE_ID")
-	this.sessionMaxAge = this.Config.GetInt64("MEDIA_SESSION_MAX_AGE")
+	s.provider = s.Config.GetString("MEDIA_SESSION_PROVIDER")
+	s.sessionKeyPrefix = s.Config.GetString("MEDIA_SESSION_REDIS_KEY_PREFIX")
+	s.sessionCookieId = s.Config.GetString("MEDIA_SESSION_COOKIE_ID")
+	s.sessionMaxAge = s.Config.GetInt64("MEDIA_SESSION_MAX_AGE")
 	var err error
-	if this.provider != "" {
-		err = this.Use(ctx, this.provider)
+	if s.provider != "" {
+		err = s.Use(ctx, s.provider)
 	} else {
-		err = this.Use(ctx, "mysql")
+		err = s.Use(ctx, "mysql")
 	}
 	return ctx, err
 }
-func (this *Instance) OnShutdown(ctx context.Context) (context.Context, error) {
+func (s *Session) OnShutdown(ctx context.Context) (context.Context, error) {
 	return ctx, nil
 }
-func (this *Instance) OnRequestStartup(c *routing.Context) error {
+func (s *Session) OnRequestStartup(c *routing.Context) error {
 	return nil
 }
-func (this *Instance) OnRequestShutdown(c *routing.Context) error {
+func (s *Session) OnRequestShutdown(c *routing.Context) error {
 	return  nil
 }
 
-func (this *Instance) HandlerName() string {
-	return this.handlerName
+func (s *Session) HandlerName() string {
+	return s.handlerName
 }
-func (this *Instance) Use(ctx context.Context, handlerName string) error {
+func (s *Session) Use(ctx context.Context, handlerName string) error {
 	handler, err := Use(handlerName)
 	if err != nil {
 		return err
 	}
-	this.handlerName = handlerName
-	this.handler = handler()
-	switch this.provider {
+	s.handlerName = handlerName
+	s.handler = handler()
+	switch s.provider {
 	case "redis":
-		err = this.handler.Initiate(ctx, this.sessionMaxAge, map[string]interface{}{
-			"CACHE_INSTANCE":         this.Cache,
-			"CACHE_REDIS_DATABASE":   this.Config.GetString("SESSION_REDIS_DATABASE"),
-			"CACHE_REDIS_KEY_PREFIX": this.sessionKeyPrefix,
+		err = s.handler.Initiate(ctx, s.sessionMaxAge, map[string]interface{}{
+			"CACHE_INSTANCE":         s.Cache,
+			"CACHE_REDIS_DATABASE":   s.Config.GetString("SESSION_REDIS_DATABASE"),
+			"CACHE_REDIS_KEY_PREFIX": s.sessionKeyPrefix,
 		})
 		if err != nil {
-			return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), this.handlerName))
+			return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), s.handlerName))
 		}
 	case "mysql":
-		err = this.handler.Initiate(ctx, this.sessionMaxAge, map[string]interface{}{
-			"DATABASE_INSTANCE":             this.Database,
-			"DATABASE_MYSQL_HOST":           this.Config.GetString("DATABASE_MYSQL_HOST"),
-			"DATABASE_MYSQL_PORT":           this.Config.GetString("DATABASE_MYSQL_PORT"),
-			"DATABASE_MYSQL_USER":           this.Config.GetString("DATABASE_MYSQL_USER"),
-			"DATABASE_MYSQL_PASSWORD":       this.Config.GetString("DATABASE_MYSQL_PASSWORD"),
-			"DATABASE_MYSQL_DATABASE":       this.Config.GetString("SESSION_MYSQL_DATABASE"),
-			"DATABASE_MYSQL_TIMEOUT":        this.Config.GetInt64("DATABASE_MYSQL_TIMEOUT"),
-			"DATABASE_MYSQL_MAX_OPEN_CONNS": this.Config.GetString("DATABASE_MYSQL_MAX_OPEN_CONNS"),
-			"DATABASE_MYSQL_MAX_IDLE_CONNS": this.Config.GetString("DATABASE_MYSQL_MAX_IDLE_CONNS"),
+		err = s.handler.Initiate(ctx, s.sessionMaxAge, map[string]interface{}{
+			"DATABASE_INSTANCE":             s.Database,
+			"DATABASE_MYSQL_HOST":           s.Config.GetString("DATABASE_MYSQL_HOST"),
+			"DATABASE_MYSQL_PORT":           s.Config.GetString("DATABASE_MYSQL_PORT"),
+			"DATABASE_MYSQL_USER":           s.Config.GetString("DATABASE_MYSQL_USER"),
+			"DATABASE_MYSQL_PASSWORD":       s.Config.GetString("DATABASE_MYSQL_PASSWORD"),
+			"DATABASE_MYSQL_DATABASE":       s.Config.GetString("SESSION_MYSQL_DATABASE"),
+			"DATABASE_MYSQL_TIMEOUT":        s.Config.GetInt64("DATABASE_MYSQL_TIMEOUT"),
+			"DATABASE_MYSQL_MAX_OPEN_CONNS": s.Config.GetString("DATABASE_MYSQL_MAX_OPEN_CONNS"),
+			"DATABASE_MYSQL_MAX_IDLE_CONNS": s.Config.GetString("DATABASE_MYSQL_MAX_IDLE_CONNS"),
 		})
 		if err != nil {
-			return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), this.handlerName))
+			return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), s.handlerName))
 		}
 	}
 
@@ -246,21 +245,21 @@ type Handler interface {
 // error is not nil when there is anything wrong.
 // sid is empty when need to generate a new session id
 // otherwise return an valid session id.
-func (this *Instance) getSid(r *http.Request) (string, error) {
-	cookie, err := r.Cookie(this.CookieName)
+func (s *Session) getSid(r *http.Request) (string, error) {
+	cookie, err := r.Cookie(s.CookieName)
 	if err != nil || cookie.Value == "" {
 		var sid string
-		if this.EnableSidInUrlQuery {
+		if s.EnableSidInUrlQuery {
 			// err := r.ParseForm()
 			// if err != nil {
 			// 	return "", err
 			// }
-			sid = r.FormValue(this.CookieName)
+			sid = r.FormValue(s.CookieName)
 		}
 
 		// if not found in Cookie / param, then read it from request headers
-		if this.EnableSidInHttpHeader && sid == "" {
-			sids, isFound := r.Header[this.SessionNameInHttpHeader]
+		if s.EnableSidInHttpHeader && sid == "" {
+			sids, isFound := r.Header[s.SessionNameInHttpHeader]
 			if isFound && len(sids) != 0 {
 				return sids[0], nil
 			}
@@ -275,71 +274,71 @@ func (this *Instance) getSid(r *http.Request) (string, error) {
 
 // SessionStart generate or read the session id from http request.
 // if session id exists, return SessionStore with this id.
-func (this *Instance) SessionStart(ctx context.Context, w http.ResponseWriter, r *http.Request) (session Store, err error) {
-	sid, err := this.getSid(r)
+func (s *Session) SessionStart(ctx context.Context, w http.ResponseWriter, r *http.Request) (session Store, err error) {
+	sid, err := s.getSid(r)
 	if err != nil {
 		return nil, err
 	}
-	exist, err := this.handler.SessionExist(ctx, sid)
+	exist, err := s.handler.SessionExist(ctx, sid)
 	if err != nil {
 		return nil, err
 	}
 	if sid != "" && exist {
-		return this.handler.SessionRead(ctx, sid)
+		return s.handler.SessionRead(ctx, sid)
 	}
 
 	// Generate a new session
-	sid, err = this.sessionID()
+	sid, err = s.sessionID()
 	if err != nil {
 		return nil, err
 	}
 
-	session, err = this.handler.SessionRead(ctx, sid)
+	session, err = s.handler.SessionRead(ctx, sid)
 	if err != nil {
 		return nil, err
 	}
 	cookie := &http.Cookie{
-		Name:     this.CookieName,
+		Name:     s.CookieName,
 		Value:    url.QueryEscape(sid),
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   this.isSecure(r),
-		Domain:   this.Domain,
+		Secure:   s.isSecure(r),
+		Domain:   s.Domain,
 	}
-	if this.CookieLifeTime > 0 {
-		cookie.MaxAge = this.CookieLifeTime
-		cookie.Expires = time.Now().Add(time.Duration(this.CookieLifeTime) * time.Second)
+	if s.CookieLifeTime > 0 {
+		cookie.MaxAge = s.CookieLifeTime
+		cookie.Expires = time.Now().Add(time.Duration(s.CookieLifeTime) * time.Second)
 	}
-	if this.EnableSetCookie {
+	if s.EnableSetCookie {
 		http.SetCookie(w, cookie)
 	}
 	r.AddCookie(cookie)
 
-	if this.EnableSidInHttpHeader {
-		r.Header.Set(this.SessionNameInHttpHeader, sid)
-		w.Header().Set(this.SessionNameInHttpHeader, sid)
+	if s.EnableSidInHttpHeader {
+		r.Header.Set(s.SessionNameInHttpHeader, sid)
+		w.Header().Set(s.SessionNameInHttpHeader, sid)
 	}
 
 	return
 }
 
 // SessionDestroy Destroy session by its id in http request cookie.
-func (this *Instance) SessionDestroy(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	if this.EnableSidInHttpHeader {
-		r.Header.Del(this.SessionNameInHttpHeader)
-		w.Header().Del(this.SessionNameInHttpHeader)
+func (s *Session) SessionDestroy(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	if s.EnableSidInHttpHeader {
+		r.Header.Del(s.SessionNameInHttpHeader)
+		w.Header().Del(s.SessionNameInHttpHeader)
 	}
 
-	cookie, err := r.Cookie(this.CookieName)
+	cookie, err := r.Cookie(s.CookieName)
 	if err != nil || cookie.Value == "" {
 		return
 	}
 
 	sid, _ := url.QueryUnescape(cookie.Value)
-	this.handler.SessionDestroy(ctx, sid)
-	if this.EnableSetCookie {
+	s.handler.SessionDestroy(ctx, sid)
+	if s.EnableSetCookie {
 		expiration := time.Now()
-		cookie = &http.Cookie{Name: this.CookieName,
+		cookie = &http.Cookie{Name: s.CookieName,
 			Path:     "/",
 			HttpOnly: true,
 			Expires:  expiration,
@@ -352,86 +351,86 @@ func (this *Instance) SessionDestroy(ctx context.Context, w http.ResponseWriter,
 var errNotExist = errors.New("The session ID does not exist")
 
 // GetSessionStore if session id exists, return SessionStore.
-func (this *Instance) GetSessionStore(ctx context.Context, w http.ResponseWriter, r *http.Request) (Store, error) {
-	sid, err := this.getSid(r)
+func (s *Session) GetSessionStore(ctx context.Context, w http.ResponseWriter, r *http.Request) (Store, error) {
+	sid, err := s.getSid(r)
 	if err != nil {
 		return nil, err
 	}
-	exist, err := this.handler.SessionExist(ctx, sid)
+	exist, err := s.handler.SessionExist(ctx, sid)
 	if err != nil {
 		return nil, err
 	}
 	if sid != "" && exist {
-		return this.handler.SessionRead(ctx, sid)
+		return s.handler.SessionRead(ctx, sid)
 	}
 	return nil, errNotExist
 }
 
 // GetSessionStore Get SessionStore by its id.
-func (this *Instance) GetSessionStoreById(ctx context.Context, sid string) (Store, error) {
-	return this.handler.SessionRead(ctx, sid)
+func (s *Session) GetSessionStoreById(ctx context.Context, sid string) (Store, error) {
+	return s.handler.SessionRead(ctx, sid)
 }
 
 // GC Start session gc process.
 // it can do gc in times after gc lifetime.
-func (this *Instance) GC(ctx context.Context) {
-	this.handler.SessionGC(ctx)
-	time.AfterFunc(time.Duration(this.Gclifetime)*time.Second, func() { this.GC(ctx) })
+func (s *Session) GC(ctx context.Context) {
+	s.handler.SessionGC(ctx)
+	time.AfterFunc(time.Duration(s.Gclifetime)*time.Second, func() { s.GC(ctx) })
 }
 
 // SessionRegenerateID Regenerate a session id for this SessionStore who's id is saving in http request.
-func (this *Instance) SessionRegenerateID(ctx context.Context, w http.ResponseWriter, r *http.Request) (session Store) {
-	sid, err := this.sessionID()
+func (s *Session) SessionRegenerateID(ctx context.Context, w http.ResponseWriter, r *http.Request) (session Store) {
+	sid, err := s.sessionID()
 	if err != nil {
 		return
 	}
-	cookie, err := r.Cookie(this.CookieName)
+	cookie, err := r.Cookie(s.CookieName)
 	if err != nil || cookie.Value == "" {
 		//delete old cookie
-		session, _ = this.handler.SessionRead(ctx, sid)
-		cookie = &http.Cookie{Name: this.CookieName,
+		session, _ = s.handler.SessionRead(ctx, sid)
+		cookie = &http.Cookie{Name: s.CookieName,
 			Value:    url.QueryEscape(sid),
 			Path:     "/",
 			HttpOnly: true,
-			Secure:   this.isSecure(r),
-			Domain:   this.Domain,
+			Secure:   s.isSecure(r),
+			Domain:   s.Domain,
 		}
 	} else {
 		oldsid, _ := url.QueryUnescape(cookie.Value)
-		session, _ = this.handler.SessionRegenerate(ctx, oldsid, sid)
+		session, _ = s.handler.SessionRegenerate(ctx, oldsid, sid)
 		cookie.Value = url.QueryEscape(sid)
 		cookie.HttpOnly = true
 		cookie.Path = "/"
 	}
-	if this.CookieLifeTime > 0 {
-		cookie.MaxAge = this.CookieLifeTime
-		cookie.Expires = time.Now().Add(time.Duration(this.CookieLifeTime) * time.Second)
+	if s.CookieLifeTime > 0 {
+		cookie.MaxAge = s.CookieLifeTime
+		cookie.Expires = time.Now().Add(time.Duration(s.CookieLifeTime) * time.Second)
 	}
-	if this.EnableSetCookie {
+	if s.EnableSetCookie {
 		http.SetCookie(w, cookie)
 	}
 	r.AddCookie(cookie)
 
-	if this.EnableSidInHttpHeader {
-		r.Header.Set(this.SessionNameInHttpHeader, sid)
-		w.Header().Set(this.SessionNameInHttpHeader, sid)
+	if s.EnableSidInHttpHeader {
+		r.Header.Set(s.SessionNameInHttpHeader, sid)
+		w.Header().Set(s.SessionNameInHttpHeader, sid)
 	}
 
 	return
 }
 
 // GetActiveSession Get all active sessions count number.
-func (this *Instance) GetActiveSession(ctx context.Context) (int, error) {
-	return this.handler.SessionAll(ctx)
+func (s *Session) GetActiveSession(ctx context.Context) (int, error) {
+	return s.handler.SessionAll(ctx)
 }
 
 // SetSecure Set cookie with https.
-func (this *Instance) SetSecure(secure bool) {
-	this.Secure = secure
+func (s *Session) SetSecure(secure bool) {
+	s.Secure = secure
 }
 
-func (this *Instance) sessionID() (string, error) {
-	b := make([]byte, this.SessionIDLength)
+func (s *Session) sessionID() (string, error) {
+	b := make([]byte, s.SessionIDLength)
 	n, err := rand.Read(b)
 	if n != len(b) || err != nil {
 		return "", fmt.Errorf("Could not successfully read from the system CSPRNG.")
@@ -440,8 +439,8 @@ func (this *Instance) sessionID() (string, error) {
 }
 
 // Set cookie with https.
-func (this *Instance) isSecure(req *http.Request) bool {
-	if !this.Secure {
+func (s *Session) isSecure(req *http.Request) bool {
+	if !s.Secure {
 		return false
 	}
 	if req.URL.Scheme != "" {
@@ -453,12 +452,12 @@ func (this *Instance) isSecure(req *http.Request) bool {
 	return true
 }
 
-func (this *Instance) SetCookieSessionId(ctx context.Context, sessionId string, rw http.ResponseWriter) {
+func (s *Session) SetCookieSessionId(ctx context.Context, sessionId string, rw http.ResponseWriter) {
 	cookie := &http.Cookie{
-		Name:     this.sessionCookieId,
+		Name:     s.sessionCookieId,
 		Value:    sessionId,
 		HttpOnly: false,
-		MaxAge:   int(this.sessionMaxAge),
+		MaxAge:   int(s.sessionMaxAge),
 	}
 	http.SetCookie(rw, cookie)
 }

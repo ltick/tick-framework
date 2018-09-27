@@ -49,158 +49,147 @@ func (l Level) String() string {
 	}
 	return "Unknown"
 }
+func NewLogger() *Logger {
+	logger := &Logger{}
+	return logger
+}
 
 type Logger struct {
-	*libLogger.Logger
-}
-
-func NewInstance() *Instance {
-	instance := &Instance{}
-	return instance
-}
-
-type Instance struct {
 	handlerName string
 	handler     Handler
 }
 
-func (this *Instance) Initiate(ctx context.Context) (context.Context, error) {
+func (l *Logger) Initiate(ctx context.Context) (context.Context, error) {
 	err := Register("tick", NewTickHandler)
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), this.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), l.handlerName))
 	}
-	err = this.Use(ctx, "tick")
+	err = l.Use(ctx, "tick")
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), this.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), l.handlerName))
 	}
 	return ctx, nil
 }
-func (this *Instance) OnStartup(ctx context.Context) (context.Context, error) {
+func (l *Logger) OnStartup(ctx context.Context) (context.Context, error) {
 	return ctx, nil
 }
-func (this *Instance) OnShutdown(ctx context.Context) (context.Context, error) {
+func (l *Logger) OnShutdown(ctx context.Context) (context.Context, error) {
 	return ctx, nil
 }
-func (this *Instance) OnRequestStartup(c *routing.Context) error {
-	return nil
+func (l *Logger) HandlerName() string {
+	return l.handlerName
 }
-func (this *Instance) OnRequestShutdown(c *routing.Context) error {
-	return nil
-}
-func (this *Instance) HandlerName() string {
-	return this.handlerName
-}
-func (this *Instance) Use(ctx context.Context, handlerName string) error {
+func (l *Logger) Use(ctx context.Context, handlerName string) error {
 	handler, err := Use(handlerName)
 	if err != nil {
 		return err
 	}
-	this.handlerName = handlerName
-	this.handler = handler()
-	err = this.handler.Initiate(ctx)
+	l.handlerName = handlerName
+	l.handler = handler()
+	err = l.handler.Initiate(ctx)
 	if err != nil {
-		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), this.handlerName))
+		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), l.handlerName))
 	}
 	return nil
 }
 
-func (this *Instance) LoadModuleFileConfig(configFile string, configProviders map[string]interface{}, configTag ...string) (err error) {
+func (l *Logger) LoadModuleFileConfig(configFile string, configProviders map[string]interface{}, configTag ...string) (err error) {
 	c := config.New()
 	err = c.Load(configFile)
 	if err != nil {
-		return errors.New(fmt.Sprintf("logger: handler '%s' load config file '%s' error '%s'", this.handlerName, configFile, err.Error()))
+		return errors.New(fmt.Sprintf("logger: handler '%s' load config file '%s' error '%s'", l.handlerName, configFile, err.Error()))
 	}
 	if len(configProviders) > 0 {
 		for configProviderName, configProvider := range configProviders {
 			err = c.Register(configProviderName, configProvider)
 			if err != nil {
-				return errors.New(fmt.Sprintf("logger: handler '%s' register config provider '%s' error '%s'", this.handlerName, configProviderName, err.Error()))
+				return errors.New(fmt.Sprintf("logger: handler '%s' register config provider '%s' error '%s'", l.handlerName, configProviderName, err.Error()))
 			}
 		}
 	}
-	err = c.Configure(this.handler, configTag...)
+	err = c.Configure(l.handler, configTag...)
 	if err != nil {
-		return errors.New(fmt.Sprintf("logger: handler '%s' configure error '%s'", this.handlerName, err.Error()))
+		return errors.New(fmt.Sprintf("logger: handler '%s' configure error '%s'", l.handlerName, err.Error()))
 	}
 	return nil
 }
 
-func (this *Instance) LoadModuleJsonConfig(configData []byte, configProviders map[string]interface{}, configTag ...string) (err error) {
+func (l *Logger) LoadModuleJsonConfig(configData []byte, configProviders map[string]interface{}, configTag ...string) (err error) {
 	c := config.New()
 	err = c.LoadJSON(configData)
 	if err != nil {
-		return errors.New(fmt.Sprintf("application: handler '%s' load config '%s' error '%s'", this.handlerName, configData, err.Error()))
+		return errors.New(fmt.Sprintf("application: handler '%s' load config '%s' error '%s'", l.handlerName, configData, err.Error()))
 	}
 	if len(configProviders) > 0 {
 		for configProviderName, configProvider := range configProviders {
 			err = c.Register(configProviderName, configProvider)
 			if err != nil {
-				return errors.New(fmt.Sprintf("application: handler '%s' register config provider '%s' error '%s'", this.handlerName, configProviderName, err.Error()))
+				return errors.New(fmt.Sprintf("application: handler '%s' register config provider '%s' error '%s'", l.handlerName, configProviderName, err.Error()))
 			}
 		}
 	}
-	err = c.Configure(this.handler, configTag...)
+	err = c.Configure(l.handler, configTag...)
 	if err != nil {
-		return errors.New(fmt.Sprintf("application: handler '%s' configure error '%s'", this.handlerName, err.Error()))
+		return errors.New(fmt.Sprintf("application: handler '%s' configure error '%s'", l.handlerName, err.Error()))
 	}
 	return nil
 }
 
-func (this *Instance) NewLogger(name string) *libLogger.Logger {
-	return this.handler.NewLogger(name)
+func (l *Logger) NewLogger(name string) *libLogger.Logger {
+	return l.handler.NewLogger(name)
 }
-func (this *Instance) GetLogger(name string) (*libLogger.Logger, error) {
-	return this.handler.GetLogger(name)
+func (l *Logger) GetLogger(name string) (*libLogger.Logger, error) {
+	return l.handler.GetLogger(name)
 }
-func (this *Instance) GetLoggerTarget(name string) (libLogger.Target, error) {
-	return this.handler.GetLoggerTarget(name)
+func (l *Logger) GetLoggerTarget(name string) (libLogger.Target, error) {
+	return l.handler.GetLoggerTarget(name)
 }
-func (this *Instance) RegisterLoggerTarget(name string, targetType string, targetConfig string) error {
-	return this.handler.RegisterLoggerTarget(name, targetType, targetConfig)
+func (l *Logger) RegisterLoggerTarget(name string, targetType string, targetConfig string) error {
+	return l.handler.RegisterLoggerTarget(name, targetType, targetConfig)
 }
-func (this *Instance) SetLoggerTarget(name string, targetName string) error {
-	return this.handler.SetLoggerTarget(name, targetName)
+func (l *Logger) SetLoggerTarget(name string, targetName string) error {
+	return l.handler.SetLoggerTarget(name, targetName)
 }
-func (this *Instance) SetLoggerMaxLevel(name string, level Level) error {
+func (l *Logger) SetLoggerMaxLevel(name string, level Level) error {
 	switch level {
 	case LevelEmergency:
-		return this.handler.SetLoggerMaxLevel(name, libLogger.LevelEmergency)
+		return l.handler.SetLoggerMaxLevel(name, libLogger.LevelEmergency)
 	case LevelAlert:
-		return this.handler.SetLoggerMaxLevel(name, libLogger.LevelAlert)
+		return l.handler.SetLoggerMaxLevel(name, libLogger.LevelAlert)
 	case LevelCritical:
-		return this.handler.SetLoggerMaxLevel(name, libLogger.LevelCritical)
+		return l.handler.SetLoggerMaxLevel(name, libLogger.LevelCritical)
 	case LevelError:
-		return this.handler.SetLoggerMaxLevel(name, libLogger.LevelError)
+		return l.handler.SetLoggerMaxLevel(name, libLogger.LevelError)
 	case LevelWarning:
-		return this.handler.SetLoggerMaxLevel(name, libLogger.LevelWarning)
+		return l.handler.SetLoggerMaxLevel(name, libLogger.LevelWarning)
 	case LevelNotice:
-		return this.handler.SetLoggerMaxLevel(name, libLogger.LevelNotice)
+		return l.handler.SetLoggerMaxLevel(name, libLogger.LevelNotice)
 	case LevelInfo:
-		return this.handler.SetLoggerMaxLevel(name, libLogger.LevelInfo)
+		return l.handler.SetLoggerMaxLevel(name, libLogger.LevelInfo)
 	case LevelDebug:
-		return this.handler.SetLoggerMaxLevel(name, libLogger.LevelDebug)
+		return l.handler.SetLoggerMaxLevel(name, libLogger.LevelDebug)
 	default:
-		return this.handler.SetLoggerMaxLevel(name, libLogger.LevelDebug)
+		return l.handler.SetLoggerMaxLevel(name, libLogger.LevelDebug)
 	}
 	return nil
 }
-func (this *Instance) SetLoggerCallStackDepth(name string, d int) error {
-	return this.handler.SetLoggerCallStackDepth(name, d)
+func (l *Logger) SetLoggerCallStackDepth(name string, d int) error {
+	return l.handler.SetLoggerCallStackDepth(name, d)
 }
-func (this *Instance) SetLoggerCallStackFilter(name string, f string) error {
-	return this.handler.SetLoggerCallStackFilter(name, f)
+func (l *Logger) SetLoggerCallStackFilter(name string, f string) error {
+	return l.handler.SetLoggerCallStackFilter(name, f)
 }
-func (this *Instance) SetLoggerFormatter(name string, f libLogger.Formatter) error {
-	return this.handler.SetLoggerFormatter(name, f)
+func (l *Logger) SetLoggerFormatter(name string, f libLogger.Formatter) error {
+	return l.handler.SetLoggerFormatter(name, f)
 }
-func (this *Instance) SetLoggerBufferSize(name string, b int) error {
-	return this.handler.SetLoggerBufferSize(name, b)
+func (l *Logger) SetLoggerBufferSize(name string, b int) error {
+	return l.handler.SetLoggerBufferSize(name, b)
 }
-func (this *Instance) OpenLogger(name string) error {
-	return this.handler.OpenLogger(name)
+func (l *Logger) OpenLogger(name string) error {
+	return l.handler.OpenLogger(name)
 }
-func (this *Instance) CloseLogger(name string) error {
-	return this.handler.CloseLogger(name)
+func (l *Logger) CloseLogger(name string) error {
+	return l.handler.CloseLogger(name)
 }
 
 func DefaultLogFormatter() libLogger.Formatter {

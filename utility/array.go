@@ -3,7 +3,7 @@ package utility
 import "strings"
 
 // inArray 判断字符串是否存在数组中
-func (this *Instance) InArrayString(needle string, haystack []string, caseSensitives ...bool) bool {
+func InArrayString(needle string, haystack []string, caseSensitives ...bool) bool {
 	caseSensitive := true
 	if len(caseSensitives) > 0 {
 		caseSensitive = caseSensitives[0]
@@ -22,7 +22,7 @@ func (this *Instance) InArrayString(needle string, haystack []string, caseSensit
 	return false
 }
 
-func (this *Instance) InMapString(needle string, haystack map[string]string) bool {
+func InMapString(needle string, haystack map[string]string) bool {
 	for _, value := range haystack {
 		if needle == value {
 			return true

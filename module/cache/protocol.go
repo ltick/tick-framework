@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/ltick/tick-framework/module/config"
-	"github.com/ltick/tick-framework/module/utility"
 	"github.com/ltick/tick-routing"
 )
 
@@ -17,21 +16,19 @@ var (
 	errGetCache = "cache: get '%s' cache error"
 )
 
-func NewInstance() *Instance {
-	instance := &Instance{
-		Utility: &utility.Instance{},
+func NewCache() *Cache {
+	instance := &Cache{
 	}
 	return instance
 }
 
-type Instance struct {
-	Config      *config.Instance
-	Utility     *utility.Instance
+type Cache struct {
+	Config      *config.Config
 	handlerName string
 	handler     Handler
 }
 
-func (this *Instance) Initiate(ctx context.Context) (newCtx context.Context, err error) {
+func (c *Cache) Initiate(ctx context.Context) (newCtx context.Context, err error) {
 	var configs map[string]config.Option = map[string]config.Option{
 		"CACHE_PROVIDER":         config.Option{Type: config.String, EnvironmentKey: "CACHE_PROVIDER"},
 		"CACHE_REDIS_HOST":       config.Option{Type: config.String, EnvironmentKey: "CACHE_REDIS_HOST"},
@@ -42,81 +39,81 @@ func (this *Instance) Initiate(ctx context.Context) (newCtx context.Context, err
 		"CACHE_REDIS_MAX_ACTIVE": config.Option{Type: config.Int, EnvironmentKey: "CACHE_REDIS_MAX_ACTIVE"},
 		"CACHE_REDIS_KEY_PREFIX": config.Option{Type: config.String, EnvironmentKey: "CACHE_REDIS_KEY_PREFIX"},
 	}
-	newCtx, err = this.Config.SetOptions(ctx, configs)
+	newCtx, err = c.Config.SetOptions(ctx, configs)
 	if err != nil {
 		return newCtx, fmt.Errorf(errInitiate+": %s", err.Error())
 	}
 	return newCtx, nil
 }
-func (this *Instance) OnStartup(ctx context.Context) (context.Context, error) {
+func (c *Cache) OnStartup(ctx context.Context) (context.Context, error) {
 	var err error
 	err = Register("redis", NewRedisHandler)
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), this.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), c.handlerName))
 	}
-	cacheProvider := this.Config.GetString("CACHE_PROVIDER")
+	cacheProvider := c.Config.GetString("CACHE_PROVIDER")
 	if cacheProvider != "" {
-		err = this.Use(ctx, cacheProvider)
+		err = c.Use(ctx, cacheProvider)
 	} else {
-		err = this.Use(ctx, "redis")
+		err = c.Use(ctx, "redis")
 	}
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), this.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), c.handlerName))
 	}
 	return ctx, nil
 }
-func (this *Instance) OnShutdown(ctx context.Context) (context.Context, error) {
+func (c *Cache) OnShutdown(ctx context.Context) (context.Context, error) {
 	return ctx, nil
 }
-func (this *Instance) OnRequestStartup(c *routing.Context) error {
+func (c *Cache) OnRequestStartup(ctx *routing.Context) error {
 	return nil
 }
-func (this *Instance) OnRequestShutdown(c *routing.Context) error {
+func (c *Cache) OnRequestShutdown(ctx *routing.Context) error {
 	return nil
 }
-func (this *Instance) HandlerName() string {
-	return this.handlerName
+func (c *Cache) HandlerName() string {
+	return c.handlerName
 }
-func (this *Instance) Use(ctx context.Context, handlerName string) error {
+func (c *Cache) Use(ctx context.Context, handlerName string) error {
 	handler, err := Use(handlerName)
 	if err != nil {
 		return err
 	}
-	this.handlerName = handlerName
-	this.handler = handler()
-	err = this.handler.Initiate(ctx)
+	c.handlerName = handlerName
+	c.handler = handler()
+	err = c.handler.Initiate(ctx)
 	if err != nil {
-		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), this.handlerName))
+		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), c.handlerName))
 	}
 	return nil
 }
-func (this *Instance) NewCache(ctx context.Context, name string, config map[string]interface{}) (CacheHandler, error) {
-	cacheHandler, err := this.GetCache(name)
+func (c *Cache) NewCache(ctx context.Context, name string, config map[string]interface{}) (CacheHandler, error) {
+	cacheHandler, err := c.GetCache(name)
 	if err == nil {
 		return cacheHandler, nil
 	}
 	if _, ok := config["CACHE_REDIS_HOST"]; !ok {
-		config["CACHE_REDIS_HOST"] = this.Config.GetString("CACHE_REDIS_HOST")
+		config["CACHE_REDIS_HOST"] = c.Config.GetString("CACHE_REDIS_HOST")
 	}
 	if _, ok := config["CACHE_REDIS_PORT"]; !ok {
-		config["CACHE_REDIS_PORT"] = this.Config.GetString("CACHE_REDIS_PORT")
+		config["CACHE_REDIS_PORT"] = c.Config.GetString("CACHE_REDIS_PORT")
 	}
 	if _, ok := config["CACHE_REDIS_PASSWORD"]; !ok {
-		config["CACHE_REDIS_PASSWORD"] = this.Config.GetString("CACHE_REDIS_PASSWORD")
+		config["CACHE_REDIS_PASSWORD"] = c.Config.GetString("CACHE_REDIS_PASSWORD")
 	}
 	if _, ok := config["CACHE_REDIS_DATABASE"]; !ok {
-		config["CACHE_REDIS_DATABASE"] = this.Config.GetInt("CACHE_REDIS_DATABASE")
+		config["CACHE_REDIS_DATABASE"] = c.Config.GetInt("CACHE_REDIS_DATABASE")
 	}
 	if _, ok := config["CACHE_REDIS_KEY_PREFIX"]; !ok {
-		config["CACHE_REDIS_KEY_PREFIX"] = this.Config.GetString("CACHE_REDIS_KEY_PREFIX")
+		config["CACHE_REDIS_KEY_PREFIX"] = c.Config.GetString("CACHE_REDIS_KEY_PREFIX")
 	}
 	if _, ok := config["CACHE_REDIS_MAX_ACTIVE"]; !ok {
-		config["CACHE_REDIS_MAX_ACTIVE"] = this.Config.GetInt("CACHE_REDIS_MAX_ACTIVE")
+		config["CACHE_REDIS_MAX_ACTIVE"] = c.Config.GetInt("CACHE_REDIS_MAX_ACTIVE")
 	}
 	if _, ok := config["CACHE_REDIS_MAX_IDLE"]; !ok {
-		config["CACHE_REDIS_MAX_IDLE"] = this.Config.GetInt("CACHE_REDIS_MAX_IDLE")
+		config["CACHE_REDIS_MAX_IDLE"] = c.Config.GetInt("CACHE_REDIS_MAX_IDLE")
 	}
-	cacheHandler, err = this.handler.NewCache(ctx, name, config)
+	cacheHandler, err = c.handler.NewCache(ctx, name, config)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf(errNewCache+": "+err.Error(), name))
 	}
@@ -125,8 +122,8 @@ func (this *Instance) NewCache(ctx context.Context, name string, config map[stri
 	}
 	return cacheHandler, nil
 }
-func (this *Instance) GetCache(name string) (CacheHandler, error) {
-	cacheHandler, err := this.handler.GetCache(name)
+func (c *Cache) GetCache(name string) (CacheHandler, error) {
+	cacheHandler, err := c.handler.GetCache(name)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf(errGetCache+": "+err.Error(), name))
 	}

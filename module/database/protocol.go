@@ -8,7 +8,6 @@ import (
 
 	"github.com/jinzhu/gorm"
 	"github.com/ltick/tick-framework/module/config"
-	"github.com/ltick/tick-framework/module/utility"
 	"github.com/ltick/tick-routing"
 	"github.com/tsuna/gohbase/hrpc"
 )
@@ -20,23 +19,21 @@ var (
 	errGetDatabase = "database: get '%s' database error"
 )
 
-func NewInstance() *Instance {
-	instance := &Instance{
-		Utility: &utility.Instance{},
+func NewDatabase() *Database {
+	instance := &Database{
 	}
 	return instance
 }
 
-type Instance struct {
-	Config           *config.Instance
-	Utility          *utility.Instance
+type Database struct {
+	Config           *config.Config
 	handlerName      string
 	handler          Handler
 	nosqlHandlerName string
 	nosqlHandler     NosqlHandler
 }
 
-func (this *Instance) Initiate(ctx context.Context) (newCtx context.Context, err error) {
+func (d *Database) Initiate(ctx context.Context) (newCtx context.Context, err error) {
 	var configs map[string]config.Option = map[string]config.Option{
 		"DATABASE_PROVIDER":             config.Option{Type: config.String, EnvironmentKey: "DATABASE_PROVIDER"},
 		"DATABASE_MYSQL_HOST":           config.Option{Type: config.String, EnvironmentKey: "DATABASE_MYSQL_HOST"},
@@ -52,105 +49,105 @@ func (this *Instance) Initiate(ctx context.Context) (newCtx context.Context, err
 		"DATABASE_HBASE_TIMEOUT":    config.Option{Type: config.String, EnvironmentKey: "DATABASE_HBASE_TIMEOUT"},
 		"DATABASE_HBASE_MAX_ACTIVE": config.Option{Type: config.Int, EnvironmentKey: "DATABASE_HBASE_MAX_ACTIVE"},
 	}
-	newCtx, err = this.Config.SetOptions(ctx, configs)
+	newCtx, err = d.Config.SetOptions(ctx, configs)
 	if err != nil {
 		return newCtx, fmt.Errorf(errInitiate+": %s", err.Error())
 	}
 	err = Register("mysql", NewMysqlHandler)
 	if err != nil {
-		return newCtx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), this.handlerName))
+		return newCtx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.handlerName))
 	}
-	err = this.Use(newCtx, "mysql")
+	err = d.Use(newCtx, "mysql")
 	if err != nil {
-		return newCtx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), this.handlerName))
+		return newCtx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.handlerName))
 	}
 	err = NosqlRegister("hbase", NewHbaseHandler)
 	if err != nil {
-		return newCtx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), this.handlerName))
+		return newCtx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.handlerName))
 	}
-	err = this.NosqlUse(newCtx, "hbase")
+	err = d.NosqlUse(newCtx, "hbase")
 	if err != nil {
-		return newCtx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), this.handlerName))
+		return newCtx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.handlerName))
 	}
 	return newCtx, nil
 }
-func (this *Instance) OnStartup(ctx context.Context) (context.Context, error) {
+func (d *Database) OnStartup(ctx context.Context) (context.Context, error) {
 	var err error
-	databaseProvider := this.Config.GetString("DATABASE_PROVIDER")
+	databaseProvider := d.Config.GetString("DATABASE_PROVIDER")
 	if databaseProvider != "" {
-		err = this.Use(ctx, databaseProvider)
+		err = d.Use(ctx, databaseProvider)
 	} else {
-		err = this.Use(ctx, "mysql")
+		err = d.Use(ctx, "mysql")
 	}
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), this.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), d.handlerName))
 	}
 	return ctx, nil
 }
-func (this *Instance) OnShutdown(ctx context.Context) (context.Context, error) {
+func (d *Database) OnShutdown(ctx context.Context) (context.Context, error) {
 	return ctx, nil
 }
-func (this *Instance) OnRequestStartup(c *routing.Context) error {
+func (d *Database) OnRequestStartup(c *routing.Context) error {
 	return nil
 }
-func (this *Instance) OnRequestShutdown(c *routing.Context) error {
+func (d *Database) OnRequestShutdown(c *routing.Context) error {
 	return nil
 }
-func (this *Instance) HandlerName() string {
-	return this.handlerName
+func (d *Database) HandlerName() string {
+	return d.handlerName
 }
-func (this *Instance) Use(ctx context.Context, handlerName string) error {
+func (d *Database) Use(ctx context.Context, handlerName string) error {
 	handler, err := Use(handlerName)
 	if err != nil {
 		return err
 	}
-	this.handlerName = handlerName
-	this.handler = handler()
-	err = this.handler.Initiate(ctx)
+	d.handlerName = handlerName
+	d.handler = handler()
+	err = d.handler.Initiate(ctx)
 	if err != nil {
-		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), this.handlerName))
+		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.handlerName))
 	}
 	return nil
 }
-func (this *Instance) NewDatabase(ctx context.Context, name string, config map[string]interface{}) (DatabaseHandler, error) {
-	database, err := this.GetDatabase(name)
+func (d *Database) NewDatabase(ctx context.Context, name string, config map[string]interface{}) (DatabaseHandler, error) {
+	database, err := d.GetDatabase(name)
 	if err == nil {
 		return database, nil
 	}
 	if _, ok := config["DATABASE_MYSQL_HOST"]; !ok {
-		config["DATABASE_MYSQL_HOST"] = this.Config.GetString("DATABASE_MYSQL_HOST")
+		config["DATABASE_MYSQL_HOST"] = d.Config.GetString("DATABASE_MYSQL_HOST")
 	}
 	if _, ok := config["DATABASE_MYSQL_PORT"]; !ok {
-		config["DATABASE_MYSQL_PORT"] = this.Config.GetString("DATABASE_MYSQL_PORT")
+		config["DATABASE_MYSQL_PORT"] = d.Config.GetString("DATABASE_MYSQL_PORT")
 	}
 	if _, ok := config["DATABASE_MYSQL_USER"]; !ok {
-		config["DATABASE_MYSQL_USER"] = this.Config.GetString("DATABASE_MYSQL_USER")
+		config["DATABASE_MYSQL_USER"] = d.Config.GetString("DATABASE_MYSQL_USER")
 	}
 	if _, ok := config["DATABASE_MYSQL_PASSWORD"]; !ok {
-		config["DATABASE_MYSQL_PASSWORD"] = this.Config.GetString("DATABASE_MYSQL_PASSWORD")
+		config["DATABASE_MYSQL_PASSWORD"] = d.Config.GetString("DATABASE_MYSQL_PASSWORD")
 	}
 	if _, ok := config["DATABASE_MYSQL_DATABASE"]; !ok {
-		config["DATABASE_MYSQL_DATABASE"] = this.Config.GetString("DATABASE_MYSQL_DATABASE")
+		config["DATABASE_MYSQL_DATABASE"] = d.Config.GetString("DATABASE_MYSQL_DATABASE")
 	}
 	if _, ok := config["DATABASE_MYSQL_TIMEZONE"]; !ok {
-		config["DATABASE_MYSQL_TIMEZONE"] = this.Config.GetString("DATABASE_MYSQL_TIMEZONE")
+		config["DATABASE_MYSQL_TIMEZONE"] = d.Config.GetString("DATABASE_MYSQL_TIMEZONE")
 	}
 	if _, ok := config["DATABASE_MYSQL_TIMEOUT"]; !ok {
-		config["DATABASE_MYSQL_TIMEOUT"] = this.Config.GetString("DATABASE_MYSQL_TIMEOUT")
+		config["DATABASE_MYSQL_TIMEOUT"] = d.Config.GetString("DATABASE_MYSQL_TIMEOUT")
 	}
 	if _, ok := config["DATABASE_MYSQL_WRITE_TIMEOUT"]; !ok {
-		config["DATABASE_MYSQL_WRITE_TIMEOUT"] = this.Config.GetString("DATABASE_MYSQL_WRITE_TIMEOUT")
+		config["DATABASE_MYSQL_WRITE_TIMEOUT"] = d.Config.GetString("DATABASE_MYSQL_WRITE_TIMEOUT")
 	}
 	if _, ok := config["DATABASE_MYSQL_READ_TIMEOUT"]; !ok {
-		config["DATABASE_MYSQL_READ_TIMEOUT"] = this.Config.GetString("DATABASE_MYSQL_READ_TIMEOUT")
+		config["DATABASE_MYSQL_READ_TIMEOUT"] = d.Config.GetString("DATABASE_MYSQL_READ_TIMEOUT")
 	}
 	if _, ok := config["DATABASE_MYSQL_MAX_OPEN_CONNS"]; !ok {
-		config["DATABASE_MYSQL_MAX_OPEN_CONNS"] = this.Config.GetInt("DATABASE_MYSQL_MAX_OPEN_CONNS")
+		config["DATABASE_MYSQL_MAX_OPEN_CONNS"] = d.Config.GetInt("DATABASE_MYSQL_MAX_OPEN_CONNS")
 	}
 	if _, ok := config["DATABASE_MYSQL_MAX_IDLE_CONNS"]; !ok {
-		config["DATABASE_MYSQL_MAX_IDLE_CONNS"] = this.Config.GetInt("DATABASE_MYSQL_MAX_IDLE_CONNS")
+		config["DATABASE_MYSQL_MAX_IDLE_CONNS"] = d.Config.GetInt("DATABASE_MYSQL_MAX_IDLE_CONNS")
 	}
-	database, err = this.handler.NewDatabase(ctx, name, config)
+	database, err = d.handler.NewDatabase(ctx, name, config)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf(errNewDatabase+": "+err.Error(), name))
 	}
@@ -159,8 +156,8 @@ func (this *Instance) NewDatabase(ctx context.Context, name string, config map[s
 	}
 	return database, nil
 }
-func (this *Instance) GetDatabase(name string) (DatabaseHandler, error) {
-	handlerDatabase, err := this.handler.GetDatabase(name)
+func (d *Database) GetDatabase(name string) (DatabaseHandler, error) {
+	handlerDatabase, err := d.handler.GetDatabase(name)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf(errGetDatabase+": "+err.Error(), name))
 	}
@@ -268,46 +265,46 @@ func Use(name string) (databaseHandler, error) {
 }
 
 /****************** Nosql ******************/
-func (this *Instance) NosqlUse(ctx context.Context, handlerName string) error {
+func (d *Database) NosqlUse(ctx context.Context, handlerName string) error {
 	nosqlHandler, err := NosqlUse(handlerName)
 	if err != nil {
 		return err
 	}
-	this.nosqlHandlerName = handlerName
-	this.nosqlHandler = nosqlHandler()
-	err = this.nosqlHandler.Initiate(ctx)
+	d.nosqlHandlerName = handlerName
+	d.nosqlHandler = nosqlHandler()
+	err = d.nosqlHandler.Initiate(ctx)
 	if err != nil {
-		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), this.handlerName))
+		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.handlerName))
 	}
 	return nil
 }
-func (this *Instance) NewNosqlDatabase(ctx context.Context, name string, config map[string]interface{}) (NosqlDatabaseHandler, error) {
-	database, err := this.GetNosqlDatabase(name)
+func (d *Database) NewNosqlDatabase(ctx context.Context, name string, config map[string]interface{}) (NosqlDatabaseHandler, error) {
+	database, err := d.GetNosqlDatabase(name)
 	if err == nil {
 		return database, nil
 	}
 	if _, ok := config["DATABASE_HBASE_HOST"]; !ok {
-		config["DATABASE_HBASE_HOST"] = this.Config.GetString("DATABASE_HBASE_HOST")
+		config["DATABASE_HBASE_HOST"] = d.Config.GetString("DATABASE_HBASE_HOST")
 	}
 	if _, ok := config["DATABASE_HBASE_PORT"]; !ok {
-		config["DATABASE_HBASE_PORT"] = this.Config.GetString("DATABASE_HBASE_PORT")
+		config["DATABASE_HBASE_PORT"] = d.Config.GetString("DATABASE_HBASE_PORT")
 	}
 	if _, ok := config["DATABASE_HBASE_USER"]; !ok {
-		config["DATABASE_HBASE_USER"] = this.Config.GetString("DATABASE_HBASE_USER")
+		config["DATABASE_HBASE_USER"] = d.Config.GetString("DATABASE_HBASE_USER")
 	}
 	if _, ok := config["DATABASE_HBASE_PASSWORD"]; !ok {
-		config["DATABASE_HBASE_PASSWORD"] = this.Config.GetString("DATABASE_HBASE_PASSWORD")
+		config["DATABASE_HBASE_PASSWORD"] = d.Config.GetString("DATABASE_HBASE_PASSWORD")
 	}
 	if _, ok := config["DATABASE_HBASE_DATABASE"]; !ok {
-		config["DATABASE_HBASE_DATABASE"] = this.Config.GetString("DATABASE_HBASE_DATABASE")
+		config["DATABASE_HBASE_DATABASE"] = d.Config.GetString("DATABASE_HBASE_DATABASE")
 	}
 	if _, ok := config["DATABASE_HBASE_TIMEOUT"]; !ok {
-		config["DATABASE_HBASE_TIMEOUT"] = this.Config.GetString("DATABASE_HBASE_TIMEOUT")
+		config["DATABASE_HBASE_TIMEOUT"] = d.Config.GetString("DATABASE_HBASE_TIMEOUT")
 	}
 	if _, ok := config["DATABASE_HBASE_MAX_ACTIVE"]; !ok {
-		config["DATABASE_HBASE_MAX_ACTIVE"] = this.Config.GetInt("DATABASE_HBASE_MAX_ACTIVE")
+		config["DATABASE_HBASE_MAX_ACTIVE"] = d.Config.GetInt("DATABASE_HBASE_MAX_ACTIVE")
 	}
-	database, err = this.nosqlHandler.NewDatabase(ctx, name, config)
+	database, err = d.nosqlHandler.NewDatabase(ctx, name, config)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf(errNewDatabase+": "+err.Error(), name))
 	}
@@ -316,8 +313,8 @@ func (this *Instance) NewNosqlDatabase(ctx context.Context, name string, config 
 	}
 	return database, nil
 }
-func (this *Instance) GetNosqlDatabase(name string) (NosqlDatabaseHandler, error) {
-	handlerDatabase, err := this.nosqlHandler.GetDatabase(name)
+func (d *Database) GetNosqlDatabase(name string) (NosqlDatabaseHandler, error) {
+	handlerDatabase, err := d.nosqlHandler.GetDatabase(name)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf(errGetDatabase+": "+err.Error(), name))
 	}

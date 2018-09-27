@@ -2,7 +2,6 @@ package module
 
 import (
 	"context"
-
 	"fmt"
 	"strings"
 
@@ -11,7 +10,6 @@ import (
 	"github.com/ltick/tick-framework/module/database"
 	"github.com/ltick/tick-framework/module/logger"
 	"github.com/ltick/tick-framework/module/queue"
-	"github.com/ltick/tick-framework/module/utility"
 	"github.com/ltick/tick-routing"
 )
 
@@ -41,9 +39,8 @@ var (
 const INJECT_TAG = "inject"
 
 var BuiltinModules = []*Module{
-	&Module{Name: "Utility", Module: &utility.Instance{}},
-	&Module{Name: "Logger", Module: &logger.Instance{}},
-	&Module{Name: "Config", Module: &config.Instance{}},
+	&Module{Name: "Logger", Module: &logger.Logger{}},
+	&Module{Name: "Config", Module: &config.Config{}},
 }
 
 type Module struct {
@@ -52,9 +49,9 @@ type Module struct {
 }
 
 var Modules = []*Module{
-	&Module{Name: "Database", Module: &database.Instance{}},
-	&Module{Name: "Cache", Module: &cache.Instance{}},
-	&Module{Name: "Queue", Module: &queue.Instance{}},
+	&Module{Name: "Database", Module: &database.Database{}},
+	&Module{Name: "Cache", Module: &cache.Cache{}},
+	&Module{Name: "Queue", Module: &queue.Queue{}},
 }
 
 type ModuleInterface interface {

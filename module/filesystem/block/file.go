@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ltick/tick-framework/module/utility/kvstore"
+	"github.com/ltick/tick-framework/utility/kvstore"
 )
 
 var (

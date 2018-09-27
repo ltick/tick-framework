@@ -15,7 +15,7 @@ import (
 
 	"github.com/ltick/tick-framework/module/session"
 	libSession "github.com/ltick/tick-framework/module/session"
-	libUtility "github.com/ltick/tick-framework/module/utility"
+	libUtility "github.com/ltick/tick-framework/utility"
 	"github.com/ltick/tick-routing"
 )
 
@@ -117,15 +117,13 @@ const (
 )
 
 type (
-	// Map is just a conversion for a map[string]interface{}
-	// should not be used inside Render when PongoEngine is used.
-	Map map[string]interface{}
-
-	// Context is resetting every time a ruest is coming to the server
+	// Context is resetting every time a request is coming to the server
 	// it is not good practice to use this object in goroutines, for these cases use the .Clone()
 	Context struct {
 		routing.Context
 
+		Response *Response
+		apiParams     ApiParams // The parameter values on the URL path
 		Session       *libSession.Instance
 		sessionStore  session.Store
 		enableSession bool // Note: Never reset!
@@ -141,7 +139,7 @@ func (ctx *Context) startSession() (session.Store, error) {
 		return nil, errNotEnableSession
 	}
 	var err error
-	ctx.sessionStore, err = ctx.Session.SessionStart(ctx, ctx.Response, ctx.Request)
+	ctx.sessionStore, err = ctx.Session.SessionStart(ctx, ctx.ResponseWriter, ctx.Request)
 	return ctx.sessionStore, err
 }
 
@@ -154,7 +152,7 @@ func (ctx *Context) getSessionStore() (session.Store, error) {
 		return nil, errNotEnableSession
 	}
 	var err error
-	ctx.sessionStore, err = ctx.Session.GetSessionStore(ctx, ctx.Response, ctx.Request)
+	ctx.sessionStore, err = ctx.Session.GetSessionStore(ctx, ctx.ResponseWriter, ctx.Request)
 	return ctx.sessionStore, err
 }
 
@@ -188,8 +186,8 @@ func (ctx *Context) SessionRegenerateID() {
 	if _, err := ctx.getSessionStore(); err != nil {
 		return
 	}
-	ctx.sessionStore.SessionRelease(ctx.Response)
-	ctx.sessionStore = ctx.Session.SessionRegenerateID(ctx, ctx.Response, ctx.Request)
+	ctx.sessionStore.SessionRelease(ctx.ResponseWriter)
+	ctx.sessionStore = ctx.Session.SessionRegenerateID(ctx, ctx.ResponseWriter, ctx.Request)
 }
 
 // DestroySession cleans session data and session cookie.
@@ -199,7 +197,7 @@ func (ctx *Context) DestroySession() {
 	}
 	ctx.sessionStore.Flush()
 	ctx.sessionStore = nil
-	ctx.Session.SessionDestroy(ctx, ctx.Response, ctx.Request)
+	ctx.Session.SessionDestroy(ctx, ctx.ResponseWriter, ctx.Request)
 }
 
 // Redirect replies to the request with a redirect to url,
@@ -211,7 +209,7 @@ func (ctx *Context) Redirect(status int, urlStr string) error {
 	if status < http.StatusMultipleChoices || status > http.StatusPermanentRedirect {
 		return fmt.Errorf("The provided status code should be in the 3xx range and is usually 301, 302 or 303, yours: %d", status)
 	}
-	http.Redirect(ctx.Response, ctx.Request, urlStr, status)
+	http.Redirect(ctx.ResponseWriter, ctx.Request, urlStr, status)
 	return nil
 }
 
@@ -223,8 +221,8 @@ var proxyList = &struct {
 }
 
 // ReverseProxy routes URLs to the scheme, host, and base path provided in targetUrlBase.
-// If pathAppend is "true" and the targetUrlBase's path is "/base" and the incoming ruest was for "/dir",
-// the target ruest will be for /base/dir.
+// If pathAppend is "true" and the targetUrlBase's path is "/base" and the incoming request was for "/dir",
+// the target request will be for /base/dir.
 func (ctx *Context) ReverseProxy(targetUrlBase string, pathAppend bool) error {
 	proxyList.RLock()
 	var rp = proxyList.m[targetUrlBase]
@@ -259,14 +257,14 @@ func (ctx *Context) ReverseProxy(targetUrlBase string, pathAppend bool) error {
 	if !pathAppend {
 		ctx.Request.URL.Path = ""
 	}
-	rp.ServeHTTP(ctx.Response, ctx.Request)
+	rp.ServeHTTP(ctx.ResponseWriter, ctx.Request)
 	return nil
 }
 
 func (ctx *Context) beforeWriteHeader() {
 	if ctx.enableSession {
 		if ctx.sessionStore != nil {
-			ctx.sessionStore.SessionRelease(ctx.Response)
+			ctx.sessionStore.SessionRelease(ctx.ResponseWriter)
 			ctx.sessionStore = nil
 		}
 	}

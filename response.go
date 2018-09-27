@@ -89,37 +89,37 @@ func (rw *ResponseWriter) SetHeader(w http.ResponseWriter) {
 
 }
 
-func (rw *ResponseWriter) Write(w http.ResponseWriter, data interface{}) (err error) {
+func (rw *ResponseWriter) Write(w http.ResponseWriter, data interface{}) (size int, err error) {
 	switch data.(type) {
 	case []byte:
 		byte := data.([]byte)
-		_, err = w.Write(byte)
+		size, err = w.Write(byte)
 	case string:
 		byte := []byte(data.(string))
-		_, err = w.Write(byte)
+		size, err = w.Write(byte)
 	case *writer.ErrorData:
 		errorData, ok := data.(*writer.ErrorData)
 		if !ok {
-			return routing.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("get audio: data type error"))
+			return 0, routing.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("get audio: data type error"))
 		}
 		errorDataBody, err := json.Marshal(errorData)
 		if err != nil {
-			return routing.NewHTTPError(errorData.StatusCode(), errorData.ErrorCode()+":"+errorData.Error())
+			return 0, routing.NewHTTPError(errorData.StatusCode(), errorData.ErrorCode()+":"+errorData.Error())
 		}
 		rw.SetHeader(w)
-		return routing.NewHTTPError(errorData.StatusCode(), string(errorDataBody))
+		return 0, routing.NewHTTPError(errorData.StatusCode(), string(errorDataBody))
 	default:
 		if data != nil {
-			_, err = fmt.Fprint(w, data)
+			size, err = fmt.Fprint(w, data)
 		}
 	}
 	if err != nil {
 		if ConnectionResetByPeer(err) || Timeout(err) || NetworkUnreachable(err) {
-			return  routing.NewHTTPError(499, "Response write error: "+err.Error())
+			return 0, routing.NewHTTPError(499, "Response write error: "+err.Error())
 		}
-		return  routing.NewHTTPError(http.StatusGatewayTimeout, "Response write error: "+err.Error())
+		return 0, routing.NewHTTPError(http.StatusGatewayTimeout, "Response write error: "+err.Error())
 	}
-	return err
+	return size, err
 }
 
 type Response struct {
@@ -349,7 +349,6 @@ func (r *Response) wroteCallback() {
 			stack = stack[:end]
 		}
 		stack = bytes.TrimRight(stack, "\n")
-		Log().Warningf("multiple response.WriteHeader calls\n[TRACE]\n%s\n", stack)
 	}
 }
 

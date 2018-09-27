@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/ltick/tick-framework/module/config"
-	"github.com/ltick/tick-framework/module/utility"
 	"github.com/ltick/tick-routing"
 )
 
@@ -17,75 +16,72 @@ var (
 	errGetQueue = "queue: get '%s' queue error"
 )
 
-func NewInstance() *Instance {
-	util := &utility.Instance{}
-	instance := &Instance{
-		Utility: util,
+func NewQueue() *Queue {
+	instance := &Queue{
 	}
 	return instance
 }
 
-type Instance struct {
-	Config      *config.Instance
-	Utility     *utility.Instance
+type Queue struct {
+	Config      *config.Config
 	handlerName string
 	handler     Handler
 }
 
-func (this *Instance) Initiate(ctx context.Context) (newCtx context.Context, err error) {
+func (q *Queue) Initiate(ctx context.Context) (newCtx context.Context, err error) {
 	var configs map[string]config.Option = map[string]config.Option{
 		"QUEUE_PROVIDER":          config.Option{Type: config.String, Default: "kafka", EnvironmentKey: "QUEUE_PROVIDER"},
 		"QUEUE_KAFKA_BROKERS":     config.Option{Type: config.String, EnvironmentKey: "QUEUE_KAFKA_BROKERS"},
 		"QUEUE_KAFKA_EVENT_GROUP": config.Option{Type: config.String, EnvironmentKey: "QUEUE_KAFKA_EVENT_GROUP"},
 		"QUEUE_KAFKA_EVENT_TOPIC": config.Option{Type: config.String, EnvironmentKey: "QUEUE_KAFKA_EVENT_TOPIC"},
 	}
-	newCtx, err = this.Config.SetOptions(ctx, configs)
+	newCtx, err = q.Config.SetOptions(ctx, configs)
 	if err != nil {
 		return newCtx, fmt.Errorf(errInitiate+": %s", err.Error())
 	}
 	err = Register("kafka", NewKafkaHandler)
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), this.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), q.handlerName))
 	}
 
 	return ctx, nil
 }
-func (this *Instance) OnStartup(ctx context.Context) (context.Context, error) {
+func (q *Queue) OnStartup(ctx context.Context) (context.Context, error) {
 	var err error
-	queueProvider := this.Config.GetString("QUEUE_PROVIDER")
+	queueProvider := q.Config.GetString("QUEUE_PROVIDER")
 	if queueProvider != "" {
-		err = this.Use(ctx, queueProvider)
+		err = q.Use(ctx, queueProvider)
 	} else {
-		err = this.Use(ctx, "kafka")
+		err = q.Use(ctx, "kafka")
 	}
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), this.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), q.handlerName))
 	}
-	err = this.handler.Initiate(ctx)
+	err = q.handler.Initiate(ctx)
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), this.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), q.handlerName))
 	}
 	return ctx, nil
 }
-func (this *Instance) OnShutdown(ctx context.Context) (context.Context, error) {
+func (q *Queue) OnShutdown(ctx context.Context) (context.Context, error) {
 	return ctx, nil
 }
-func (this *Instance) OnRequestStartup(c *routing.Context) error {
+func (q *Queue) OnRequestStartup(c *routing.Context) error {
 	return nil
 }
-func (this *Instance) OnRequestShutdown(c *routing.Context) error {
+func (q *Queue) OnRequestShutdown(c *routing.Context) error {
 	return nil
 }
-func (this *Instance) HandlerName() string {
-	return this.handlerName
+func (q *Queue) HandlerName() string {
+	return q.handlerName
 }
-func (this *Instance) Use(ctx context.Context, handlerName string) error {
+func (q *Queue) Use(ctx context.Context, handlerName string) error {
 	handler, err := Use(handlerName)
 	if err != nil {
 		return err
 	}
-	this.handlerName = handlerName
-	this.handler = handler()
+	q.handlerName = handlerName
+	q.handler = handler()
 	return nil
 }
 
@@ -109,12 +105,12 @@ func Use(name string) (queueHandler, error) {
 	return queueHandlers[name], nil
 }
 
-func (this *Instance) NewQueue(ctx context.Context, name string, config map[string]interface{}) (QueueHandler, error) {
-	queueHandler, err := this.GetQueue(name)
+func (q *Queue) NewQueue(ctx context.Context, name string, config map[string]interface{}) (QueueHandler, error) {
+	queueHandler, err := q.GetQueue(name)
 	if err == nil {
 		return queueHandler, nil
 	}
-	queueHandler, err = this.handler.NewQueue(ctx, name, config)
+	queueHandler, err = q.handler.NewQueue(ctx, name, config)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf(errNewQueue+": "+err.Error(), name))
 	}
@@ -123,8 +119,8 @@ func (this *Instance) NewQueue(ctx context.Context, name string, config map[stri
 	}
 	return queueHandler, nil
 }
-func (this *Instance) GetQueue(name string) (QueueHandler, error) {
-	queueHandler, err := this.handler.GetQueue(name)
+func (q *Queue) GetQueue(name string) (QueueHandler, error) {
+	queueHandler, err := q.handler.GetQueue(name)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf(errGetQueue+": "+err.Error(), name))
 	}

@@ -1,15 +1,15 @@
 package utility
 
 import (
+	"errors"
 	"net"
 	"net/http"
-	"errors"
 	"strings"
 )
 
 var errGetServerAddress = "ltick utility: get server address"
 
-func (this *Instance) GetClientIP(req *http.Request) string {
+func GetClientIP(req *http.Request) string {
 	ip := req.Header.Get("X-Real-IP")
 	if ip == "" {
 		ip = req.Header.Get("X-Forwarded-For")
@@ -22,7 +22,7 @@ func (this *Instance) GetClientIP(req *http.Request) string {
 	}
 	return ip
 }
-func (this *Instance) GetServerAddress() (ip string, err error) {
+func GetServerAddress() (ip string, err error) {
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return "", errors.New(errGetServerAddress + ": " + err.Error())
