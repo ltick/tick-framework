@@ -1,7 +1,6 @@
 package ltick
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"net/http"

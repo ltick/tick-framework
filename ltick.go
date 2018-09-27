@@ -21,7 +21,7 @@ import (
 	"github.com/ltick/tick-framework/module"
 	libConfig "github.com/ltick/tick-framework/module/config"
 	libLogger "github.com/ltick/tick-framework/module/logger"
-	libUtility "github.com/ltick/tick-framework/module/utility"
+	libUtility "github.com/ltick/tick-framework/utility"
 	"github.com/ltick/tick-graceful"
 	"github.com/ltick/tick-routing"
 )
@@ -238,7 +238,7 @@ func New(executeFile string, pathPrefix string, configName string, envPrefix str
 	return engine
 }
 func (e *Engine) LoadSystemConfig(configFilePath string, envPrefix string, dotEnvFile string) *Engine {
-	configCachedFile, err := e.Utility.GetCachedFile(configFilePath)
+	configCachedFile, err := libUtility.GetCachedFile(configFilePath)
 	if err != nil {
 		fmt.Printf(errLoadSystemConfig+": %s\r\n", err.Error())
 	}
@@ -457,7 +457,6 @@ func (e *Engine) Startup() (err error) {
 	if e.state != STATE_INITIATE {
 		return nil
 	}
-	e.SystemLog("ltick: Engine start.")
 	e.SystemLog("ltick: Execute file \"" + e.executeFile + "\"")
 	e.SystemLog("ltick: Startup")
 	if e.callback != nil {

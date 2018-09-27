@@ -28,7 +28,7 @@ type MysqlStoreData struct {
 }
 
 type MysqlHandler struct {
-	Database *libDatabase.Instance
+	Database *libDatabase.Database
 
 	sessionDatabaseProvider libDatabase.DatabaseHandler
 	sessionMaxAge           int64
@@ -54,7 +54,7 @@ func (m *MysqlHandler) Initiate(ctx context.Context, maxAge int64, config map[st
 	if !ok {
 		return errors.New(errMysqlInitiate + ": empty database instance")
 	}
-	m.Database, ok = databaseInstance.(*libDatabase.Instance)
+	m.Database, ok = databaseInstance.(*libDatabase.Database)
 	if !ok {
 		return errors.New(errMysqlInitiate + ": invaild database instance")
 	}

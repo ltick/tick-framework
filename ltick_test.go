@@ -63,24 +63,6 @@ func (this *testModule1) Initiate(ctx context.Context) (newCtx context.Context, 
 	}
 	return ctx, nil
 }
-func (f *testModule1) OnRegister(ctx context.Context) (context.Context, error) {
-	if ctx.Value("output") != nil {
-		output := ctx.Value("output").(string)
-		output = output + "testModule1-Register|"
-		ctx = context.WithValue(ctx, "output", output)
-	}
-	f.Foo = "Foo"
-	f.Foo1 = "Bar2"
-	return ctx, nil
-}
-func (f *testModule1) OnUnregister(ctx context.Context) (context.Context, error) {
-	if ctx.Value("output") != nil {
-		output := ctx.Value("output").(string)
-		output = output + "|testModule1-Unregister"
-		ctx = context.WithValue(ctx, "output", output)
-	}
-	return ctx, nil
-}
 func (f *testModule1) OnStartup(ctx context.Context) (context.Context, error) {
 	if ctx.Value("output") != nil {
 		output := ctx.Value("output").(string)
@@ -97,27 +79,27 @@ func (f *testModule1) OnShutdown(ctx context.Context) (context.Context, error) {
 	}
 	return ctx, nil
 }
-func (f *testModule1) OnRequestStartup(ctx context.Context, c *routing.Context) (context.Context, error) {
-	if ctx.Value("output") != nil {
-		output := ctx.Value("output").(string)
+func (f *testModule1) OnRequestStartup(c *routing.Context) error {
+	if c.Context.Value("output") != nil {
+		output := c.Context.Value("output").(string)
 		output = output + "testModule1-RequestStartup|"
-		ctx = context.WithValue(ctx, "output", output)
+		c.Context = context.WithValue(c.Context, "output", output)
 	}
 	if c.Get("Foo") == nil {
 		c.Set("Foo", "Bar1")
 	}
-	return ctx, nil
+	return nil
 }
-func (f *testModule1) OnRequestShutdown(ctx context.Context, c *routing.Context) (context.Context, error) {
-	if ctx.Value("output") != nil {
-		output := ctx.Value("output").(string)
+func (f *testModule1) OnRequestShutdown(c *routing.Context) error {
+	if c.Context.Value("output") != nil {
+		output := c.Context.Value("output").(string)
 		output = output + "|testModule1-RequestShutdown"
-		ctx = context.WithValue(ctx, "output", output)
+		c.Context = context.WithValue(c.Context, "output", output)
 	}
 	if c.Get("Foo") == nil {
 		c.Set("Foo", "Bar2")
 	}
-	return ctx, nil
+	return nil
 }
 
 type testModule2 struct {
@@ -130,22 +112,6 @@ func (this *testModule2) Initiate(ctx context.Context) (newCtx context.Context, 
 	newCtx, err = this.Config.SetOptions(ctx, options)
 	if err != nil {
 		return newCtx, err
-	}
-	return ctx, nil
-}
-func (f *testModule2) OnRegister(ctx context.Context) (context.Context, error) {
-	if ctx.Value("output") != nil {
-		output := ctx.Value("output").(string)
-		output = output + "testModule2-Register|"
-		ctx = context.WithValue(ctx, "output", output)
-	}
-	return ctx, nil
-}
-func (f *testModule2) OnUnregister(ctx context.Context) (context.Context, error) {
-	if ctx.Value("output") != nil {
-		output := ctx.Value("output").(string)
-		output = output + "|testModule2-Unregister"
-		ctx = context.WithValue(ctx, "output", output)
 	}
 	return ctx, nil
 }
@@ -166,24 +132,24 @@ func (f *testModule2) OnShutdown(ctx context.Context) (context.Context, error) {
 	}
 	return ctx, nil
 }
-func (f *testModule2) OnRequestStartup(ctx context.Context, c *routing.Context) (context.Context, error) {
-	if ctx.Value("output") != nil {
-		output := ctx.Value("output").(string)
+func (f *testModule2) OnRequestStartup(c *routing.Context) error {
+	if c.Context.Value("output") != nil {
+		output := c.Context.Value("output").(string)
 		output = output + "testModule2-RequestStartup|"
-		ctx = context.WithValue(ctx, "output", output)
+		c.Context = context.WithValue(c.Context, "output", output)
 	}
 	if c.Get("Foo") == nil {
 		c.Set("Foo", "Bar1")
 	}
-	return ctx, nil
+	return  nil
 }
-func (f *testModule2) OnRequestShutdown(ctx context.Context, c *routing.Context) (context.Context, error) {
-	if ctx.Value("output") != nil {
-		output := ctx.Value("output").(string)
+func (f *testModule2) OnRequestShutdown(c *routing.Context) error {
+	if c.Context.Value("output") != nil {
+		output := c.Context.Value("output").(string)
 		output = output + "|testModule2-RequestShutdown"
-		ctx = context.WithValue(ctx, "output", output)
+		c.Context = context.WithValue(c.Context, "output", output)
 	}
-	return ctx, nil
+	return nil
 }
 
 func TestModule(t *testing.T) {
@@ -224,10 +190,10 @@ func TestModule(t *testing.T) {
 	assert.Equal(t, "Bar1", module.Foo)
 	srv := a.NewServer("test", 8080, 30*time.Second, 3*time.Second)
 	rg := srv.GetRouteGroup("/")
-	assert.NotNil(t,  rg)
-	rg.AddRoute("GET", "/test", func(ctx context.Context, c *routing.Context) (context.Context, error) {
-		c.Response.Write([]byte(c.Get("Foo").(string)))
-		return ctx, nil
+	assert.NotNil(t, rg)
+	rg.AddRoute("GET", "/test", func(c *routing.Context) error {
+		c.ResponseWriter.Write([]byte(c.Get("Foo").(string)))
+		return  nil
 	})
 	res := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/test", nil)

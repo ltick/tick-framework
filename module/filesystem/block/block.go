@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/ltick/tick-framework/module/utility/kvstore"
-	"github.com/ltick/tick-framework/module/utility/pooling"
+	"github.com/ltick/tick-framework/utility/kvstore"
+	"github.com/ltick/tick-framework/utility/pooling"
 	"github.com/ltick/tick-framework/module/config"
 )
 

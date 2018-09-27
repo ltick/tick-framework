@@ -17,7 +17,7 @@ type RedisStore struct {
 	sessionData             map[interface{}]interface{}
 }
 type RedisHandler struct {
-	Cache *libCache.Instance
+	Cache *libCache.Cache
 
 	sessionCacheProvider libCache.CacheHandler
 	sessionMaxAge        int64
@@ -43,7 +43,7 @@ func (m *RedisHandler) Initiate(ctx context.Context, maxAge int64, config map[st
 	if !ok {
 		return errors.New(errMysqlInitiate + ": empty cache instance")
 	}
-	m.Cache, ok = cacheInstance.(*libCache.Instance)
+	m.Cache, ok = cacheInstance.(*libCache.Cache)
 	if !ok {
 		return errors.New(errMysqlInitiate + ": invaild cache instance")
 	}

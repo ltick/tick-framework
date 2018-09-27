@@ -21,7 +21,7 @@ var (
 	errCreateTemporaryFile  = "ltick utility: create temporary file error"
 )
 
-func (this *Instance) Md5File(f *os.File) (string, error) {
+func Md5File(f *os.File) (string, error) {
 	md5hash := md5.New()
 	if _, err := io.Copy(md5hash, f); err != nil {
 		return "", err
@@ -30,19 +30,19 @@ func (this *Instance) Md5File(f *os.File) (string, error) {
 }
 
 //获取给定byte的MD5
-func (this *Instance) Md5Byte(text []byte) string {
+func Md5Byte(text []byte) string {
 	hasher := md5.New()
 	hasher.Write(text)
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
-func (this *Instance) GetCachedFile(filePath string) (file *os.File, err error) {
+func GetCachedFile(filePath string) (file *os.File, err error) {
 	fileExtension := path.Ext(filePath)
 	cachedFilePath := strings.Replace(filePath, fileExtension, "", -1) + ".cached" + fileExtension
 	_, err = os.Stat(cachedFilePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			file, err = this.NewFile(cachedFilePath, 0644, bytes.NewReader([]byte{}), 0)
+			file, err = NewFile(cachedFilePath, 0644, bytes.NewReader([]byte{}), 0)
 			if err != nil {
 				return nil, errors.New(errGetCachedFile + ": " + err.Error())
 			}
@@ -57,7 +57,7 @@ func (this *Instance) GetCachedFile(filePath string) (file *os.File, err error) 
 	}
 	return file, err
 }
-func (this *Instance) NewFile(filePath string, perm os.FileMode, payload io.Reader, sizes ...int64) (file *os.File, err error) {
+func NewFile(filePath string, perm os.FileMode, payload io.Reader, sizes ...int64) (file *os.File, err error) {
 	fileDir := filepath.Dir(filePath)
 	if _, err = os.Stat(fileDir); os.IsNotExist(err) {
 		os.MkdirAll(fileDir, 0775)
@@ -88,7 +88,7 @@ func (this *Instance) NewFile(filePath string, perm os.FileMode, payload io.Read
 	return file, nil
 }
 
-func (this *Instance) NewTemporaryFile(temporaryPath string, prefix string, payload io.Reader, sizes ...int64) (file *os.File, fileSize int64, err error) {
+func NewTemporaryFile(temporaryPath string, prefix string, payload io.Reader, sizes ...int64) (file *os.File, fileSize int64, err error) {
 	if _, err = os.Stat(temporaryPath); os.IsNotExist(err) {
 		os.MkdirAll(temporaryPath, 0775)
 	}
@@ -118,6 +118,6 @@ func (this *Instance) NewTemporaryFile(temporaryPath string, prefix string, payl
 	return file, fileSize, nil
 }
 
-func (this *Instance) Checksum(data []byte) uint32 {
+func Checksum(data []byte) uint32 {
 	return crc32.ChecksumIEEE(data)
 }

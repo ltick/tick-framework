@@ -1,7 +1,6 @@
 package ltick
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -15,7 +14,7 @@ import (
 	"github.com/ltick/tick-framework/module"
 	libConfig "github.com/ltick/tick-framework/module/config"
 	"github.com/ltick/tick-framework/module/logger"
-	"github.com/ltick/tick-framework/module/utility"
+	"github.com/ltick/tick-framework/utility"
 	"github.com/ltick/tick-log"
 	"github.com/ltick/tick-routing"
 	"github.com/ltick/tick-routing/access"
@@ -55,30 +54,30 @@ func (f *ServerAppInitFunc) OnShutdown(e *Engine) error {
 
 type ServerRequestInitFunc struct{}
 
-func (f *ServerRequestInitFunc) OnRequestStartup(ctx context.Context, c *routing.Context) (context.Context, error) {
-	testlogger := ctx.Value("testlogger").(*log.Logger)
+func (f *ServerRequestInitFunc) OnRequestStartup(c *routing.Context) error {
+	testlogger := c.Context.Value("testlogger").(*log.Logger)
 	testlogger.Info("OnRequestStartup")
-	return ctx, nil
+	return nil
 }
 
-func (f *ServerRequestInitFunc) OnRequestShutdown(ctx context.Context, c *routing.Context) (context.Context, error) {
-	testlogger := ctx.Value("testlogger").(*log.Logger)
+func (f *ServerRequestInitFunc) OnRequestShutdown(c *routing.Context) error {
+	testlogger := c.Context.Value("testlogger").(*log.Logger)
 	testlogger.Info("OnRequestStartup")
-	return ctx, nil
+	return nil
 }
 
 type ServerGroupRequestInitFunc struct{}
 
-func (f *ServerGroupRequestInitFunc) OnRequestStartup(ctx context.Context, c *routing.Context) (context.Context, error) {
-	testlogger := ctx.Value("testlogger").(*log.Logger)
+func (f *ServerGroupRequestInitFunc) OnRequestStartup(c *routing.Context) error {
+	testlogger := c.Context.Value("testlogger").(*log.Logger)
 	testlogger.Info("GroupOnRequestStartup")
-	return ctx, nil
+	return nil
 }
 
-func (f *ServerGroupRequestInitFunc) OnRequestShutdown(ctx context.Context, c *routing.Context) (context.Context, error) {
-	testlogger := ctx.Value("testlogger").(*log.Logger)
+func (f *ServerGroupRequestInitFunc) OnRequestShutdown(c *routing.Context) error {
+	testlogger := c.Context.Value("testlogger").(*log.Logger)
 	testlogger.Info("GroupOnRequestStartup")
-	return ctx, nil
+	return nil
 }
 
 func TestServerCallback(t *testing.T) {
@@ -94,15 +93,14 @@ func TestServerCallback(t *testing.T) {
 	utilityModule, err := a.GetBuiltinModule("utility")
 	assert.Nil(t, err)
 	a.SetContextValue("utility", utilityModule)
-	accessLogFunc := func(ctx context.Context, c *routing.Context, rw *access.LogResponseWriter, elapsed float64) {
-		testlogger := ctx.Value("testlogger").(*log.Logger)
-		utility := ctx.Value("utility").(*utility.Instance)
+	accessLogFunc := func(c *routing.Context, rw *access.LogResponseWriter, elapsed float64) {
+		testlogger := c.Context.Value("testlogger").(*log.Logger)
 		clientIP := utility.GetClientIP(c.Request)
 		requestLine := fmt.Sprintf("%s %s %s", c.Request.Method, c.Request.URL.String(), c.Request.Proto)
 		testlogger.Info(`%s - %s [%s] "%s" %d %d %d %.3f "%s" "%s" %s "-" "-"`, clientIP, c.Request.Host, time.Now().Format("2/Jan/2006:15:04:05 -0700"), requestLine, c.Request.ContentLength, rw.Status, rw.BytesWritten, elapsed/1e3, c.Request.Header.Get("Referer"), c.Request.Header.Get("User-Agent"), c.Request.RemoteAddr)
 	}
-	errorLogHandler := func(ctx context.Context, c *routing.Context, err error) error {
-		testlogger := ctx.Value("testlogger").(*log.Logger)
+	errorLogHandler := func(c *routing.Context, err error) error {
+		testlogger := c.Context.Value("testlogger").(*log.Logger)
 		testlogger.Info(`%s|%s|%s|%s|%s|%s`, time.Now().Format("2016-04-20T17:40:12+08:00"), log.LevelError, "", c.Get("c.RequestuestId"), err.Error(), c.Get("errorStack"))
 		return nil
 	}
@@ -123,13 +121,13 @@ func TestServerCallback(t *testing.T) {
 	rg := s.GetRouteGroup("/")
 	assert.NotNil(t, rg)
 	rg.WithCallback(&ServerGroupRequestInitFunc{})
-	rg.AddRoute("GET", "/test/<id>", func(ctx context.Context, c *routing.Context) (context.Context, error) {
-		c.Response.Write([]byte(c.Param("id")))
-		return ctx, nil
+	rg.AddRoute("GET", "/test/<id>", func(c *routing.Context) error {
+		c.ResponseWriter.Write([]byte(c.Param("id")))
+		return nil
 	})
-	rg.AddRoute("GET", "/Foo", func(ctx context.Context, c *routing.Context) (context.Context, error) {
-		c.Response.Write([]byte(ctx.Value("Foo").(string)))
-		return ctx, nil
+	rg.AddRoute("GET", "/Foo", func(c *routing.Context) error {
+		c.ResponseWriter.Write([]byte(c.Context.Value("Foo").(string)))
+		return nil
 	})
 
 	a.SetSystemLogWriter(ioutil.Discard)
