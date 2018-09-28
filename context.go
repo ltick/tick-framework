@@ -124,7 +124,7 @@ type (
 
 		Response *Response
 		apiParams     ApiParams // The parameter values on the URL path
-		Session       *libSession.Instance
+		Session       *libSession.Session
 		sessionStore  session.Store
 		enableSession bool // Note: Never reset!
 	}
