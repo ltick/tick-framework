@@ -61,9 +61,8 @@ type (
 		callback        Callback
 		option          *Option
 		modules         []*module.Module
-		Config          *libConfig.Instance
-		Utility         *libUtility.Instance
-		Logger          *libLogger.Instance
+		Config          *libConfig.Config
+		Logger          *libLogger.Logger
 
 		Module  *module.Instance
 		Context context.Context
@@ -197,19 +196,9 @@ func New(executeFile string, pathPrefix string, configName string, envPrefix str
 		fmt.Printf(errNew+": %s\r\n", err.Error())
 		os.Exit(1)
 	}
-	config, ok := configModule.(*libConfig.Instance)
+	config, ok := configModule.(*libConfig.Config)
 	if !ok {
 		fmt.Printf(errNew+": %s\r\n", "invalid 'Config' module type")
-		os.Exit(1)
-	}
-	utilityModule, err := module.GetBuiltinModule("Utility")
-	if err != nil {
-		fmt.Printf(errNew+": %s\r\n", err.Error())
-		os.Exit(1)
-	}
-	utility, ok := utilityModule.(*libUtility.Instance)
-	if !ok {
-		fmt.Printf(errNew+": %s\r\n", "invalid 'Utility' module type")
 		os.Exit(1)
 	}
 	loggerModule, err := module.GetBuiltinModule("logger")
@@ -217,7 +206,7 @@ func New(executeFile string, pathPrefix string, configName string, envPrefix str
 		fmt.Printf(errNew+": %s\r\n", err.Error())
 		os.Exit(1)
 	}
-	logger, ok := loggerModule.(*libLogger.Instance)
+	logger, ok := loggerModule.(*libLogger.Logger)
 	if !ok {
 		fmt.Printf(errNew+": %s\r\n", "invalid 'Logger' module type")
 		os.Exit(1)
@@ -226,7 +215,6 @@ func New(executeFile string, pathPrefix string, configName string, envPrefix str
 	engine.Context = ctx
 	engine.Module = module
 	engine.Config = config
-	engine.Utility = utility
 	engine.Logger = logger
 	engine.SetPathPrefix(pathPrefix)
 	engine.Context, err = engine.Config.SetOptions(engine.Context, configOptions)
@@ -367,11 +355,11 @@ func (e *Engine) WithCallback(callback Callback) *Engine {
 	return e
 }
 func (e *Engine) GetLogger(name string) (*libLogger.Logger, error) {
-	logger, err := e.Logger.GetLogger(name)
+	logger, err := e.GetLogger(name)
 	if err != nil {
 		return nil, errors.New(errGetLogger + ": " + err.Error())
 	}
-	return &libLogger.Logger{logger}, nil
+	return logger, nil
 }
 func (e *Engine) WithLoggers(handlers []*LogHanlder) *Engine {
 	var logProviders map[string]interface{} = make(map[string]interface{})
@@ -494,7 +482,7 @@ func (e *Engine) Startup() (err error) {
 							req.RequestURI = upstreamURL.RequestURI()
 						}
 						proxy := &httputil.ReverseProxy{Director: director}
-						proxy.ServeHTTP(c.Response, c.Request)
+						proxy.ServeHTTP(c.ResponseWriter, c.Request)
 						c.Abort()
 						return nil
 					}

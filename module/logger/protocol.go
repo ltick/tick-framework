@@ -49,6 +49,7 @@ func (l Level) String() string {
 	}
 	return "Unknown"
 }
+
 func NewLogger() *Logger {
 	logger := &Logger{}
 	return logger
