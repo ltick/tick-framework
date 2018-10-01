@@ -66,12 +66,6 @@ func (q *Queue) OnStartup(ctx context.Context) (context.Context, error) {
 func (q *Queue) OnShutdown(ctx context.Context) (context.Context, error) {
 	return ctx, nil
 }
-func (q *Queue) OnRequestStartup(c *routing.Context) error {
-	return nil
-}
-func (q *Queue) OnRequestShutdown(c *routing.Context) error {
-	return nil
-}
 func (q *Queue) HandlerName() string {
 	return q.handlerName
 }

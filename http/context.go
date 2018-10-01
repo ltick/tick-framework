@@ -1,4 +1,4 @@
-package ltick
+package http
 
 import (
 	"crypto/hmac"
@@ -122,8 +122,9 @@ type (
 	Context struct {
 		routing.Context
 
-		Response *Response
-		apiParams     ApiParams // The parameter values on the URL path
+		requestParams RequestParams // The parameter values on the URL path
+		Response  *Response
+
 		Session       *libSession.Session
 		sessionStore  session.Store
 		enableSession bool // Note: Never reset!
@@ -219,7 +220,9 @@ var proxyList = &struct {
 }{
 	m: map[string]*httputil.ReverseProxy{},
 }
-
+func (ctx *Context) GetParam(key string) (string, bool) {
+	return ctx.requestParams.Get(key)
+}
 // ReverseProxy routes URLs to the scheme, host, and base path provided in targetUrlBase.
 // If pathAppend is "true" and the targetUrlBase's path is "/base" and the incoming request was for "/dir",
 // the target request will be for /base/dir.
@@ -290,7 +293,7 @@ func (ctx *Context) SecureCookieParam(secret, key string) (string, bool) {
 	h := hmac.New(sha1.New, []byte(secret))
 	fmt.Fprintf(h, "%s%s", vs, timestamp)
 
-	if fmt.Sprintf("x", h.Sum(nil)) != sig {
+	if fmt.Sprintf("%x", h.Sum(nil)) != sig {
 		return "", false
 	}
 	res, _ := base64.URLEncoding.DecodeString(vs)

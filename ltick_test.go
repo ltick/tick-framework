@@ -50,7 +50,7 @@ func TestAppCallback(t *testing.T) {
 }
 
 type testModule1 struct {
-	Config *libConfig.Instance
+	Config *libConfig.Config
 	Foo    string
 	Foo1   string
 }
@@ -103,7 +103,7 @@ func (f *testModule1) OnRequestShutdown(c *routing.Context) error {
 }
 
 type testModule2 struct {
-	Config *libConfig.Instance
+	Config *libConfig.Config
 	Test   *testModule1 `inject:"true"`
 }
 

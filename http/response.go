@@ -1,4 +1,4 @@
-package ltick
+package http
 
 import (
 	"bufio"
@@ -11,10 +11,10 @@ import (
 	"strings"
 	"syscall"
 
+	"encoding/json"
+	"fmt"
 	"github.com/ltick/tick-framework/writer"
 	"github.com/ltick/tick-routing"
-	"fmt"
-	"encoding/json"
 )
 
 var responseOptions = map[string]map[string]interface{}{
@@ -67,12 +67,13 @@ var responseOptions = map[string]map[string]interface{}{
 		"message": http.StatusText(http.StatusRequestedRangeNotSatisfiable),
 	},
 }
-func (e *Engine) NewResponseWriter(c *routing.Context, w routing.DataWriter)  (r *Response) {
+
+func NewResponseWriter(c *routing.Context, w routing.DataWriter) (r *Response) {
 	r = &Response{}
 	r.SetDataWriter(w)
 	return r
 }
-func (e *Engine) NewResponse(c *routing.Context, w routing.DataWriter)  (r *Response) {
+func NewResponse(c *routing.Context, w routing.DataWriter) (r *Response) {
 	r = &Response{}
 	r.SetDataWriter(&ResponseWriter{})
 	return r
@@ -82,7 +83,6 @@ func (e *Engine) NewResponse(c *routing.Context, w routing.DataWriter)  (r *Resp
 // by an HTTP handler to construct an HTTP response.
 // See [http.ResponseWriter](https://golang.org/pkg/net/http/#ResponseWriter)
 type ResponseWriter struct {
-
 }
 
 func (rw *ResponseWriter) SetHeader(w http.ResponseWriter) {
@@ -124,9 +124,9 @@ func (rw *ResponseWriter) Write(w http.ResponseWriter, data interface{}) (size i
 
 type Response struct {
 	httpResponseWriter http.ResponseWriter
-	responseWriter routing.DataWriter
-	status int
-	wrote  bool
+	responseWriter     routing.DataWriter
+	status             int
+	wrote              bool
 }
 
 func (r *Response) reset(w http.ResponseWriter) {
@@ -234,6 +234,7 @@ func (r *Response) NewErrorResponseData(c *routing.Context, code string, message
 		Data: r.NewResponseData(c, code, nil, messages...),
 	}
 }
+
 // AddCookie adds a Set-Cookie header.
 // The provided cookie must have a valid Name. Invalid cookies may be
 // silently dropped.

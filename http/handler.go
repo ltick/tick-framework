@@ -1,4 +1,4 @@
-package ltick
+package http
 
 import (
 	"errors"
@@ -38,20 +38,20 @@ type (
 	APIDoc interface {
 		Doc() Doc
 	}
-	// RequestParam is the request parameter information
-	RequestParam struct {
+	// APIParam is the request parameter information
+	APIParam struct {
 		Name     string      // Parameter name
 		In       string      // The position of the parameter
 		Required bool        // Is a required parameter
 		Model    interface{} // A parameter value that is used to infer a value type and as a default value
 		Desc     string      // Description
 	}
-	// Doc api information
+	// Doc request information
 	Doc struct {
 		Note   string      `json:"note" xml:"note"`
 		Return interface{} `json:"return,omitempty" xml:"return,omitempty"`
 		// MoreParams extra added parameters definition
-		MoreParams []RequestParam `json:"more_params,omitempty" xml:"more_params,omitempty"`
+		MoreParams []APIParam `json:"more_params,omitempty" xml:"more_params,omitempty"`
 	}
 	// Notes implementation notes of a response
 	Notes struct {
@@ -61,11 +61,11 @@ type (
 	// JSONMsg is commonly used to return JSON format response.
 	JSONMsg struct {
 		Code int         `json:"code" xml:"code"`                     // the status code of the business process (required)
-		Info interface{} `json:"info,omitempty" xml:"info,omitempty"` // response's apiMap and example value (optional)
+		Info interface{} `json:"info,omitempty" xml:"info,omitempty"` // response's requestMap and example value (optional)
 	}
-	// apiHandler is an intelligent Handler of binding parameters.
-	apiHandler struct {
-		api *Api
+	// requestHandler is an intelligent Handler of binding parameters.
+	requestHandler struct {
+		request *Request
 	}
 	// HandlerFunc type is an adapter to allow the use of
 	// ordinary functions as HTTP handlers.  If f is a function
@@ -79,7 +79,7 @@ type (
 	// writes are done to ctx.
 	// The error message should be plain text.
 	ErrorFunc func(ctx *Context, errStr string, status int)
-	// BinderrorFunc is called when binding or validation apiHandler parameters are wrong.
+	// BinderrorFunc is called when binding or validation requestHandler parameters are wrong.
 	BinderrorFunc func(ctx *Context, err error)
 	// Bodydecoder decodes params from request body.
 	Bodydecoder func(dest interface{}, body []byte) error
@@ -104,10 +104,10 @@ var (
 	}
 )
 
-var _ APIDoc = new(apiHandler)
+var _ APIDoc = new(requestHandler)
 
-// ToAPIHandler tries converts it to an *apiHandler.
-func ToAPIHandler(handler Handler, noDefaultParams bool) (*apiHandler, error) {
+// ToAPIHandler tries converts it to an *requestHandler.
+func ToAPIHandler(handler Handler, noDefaultParams bool) (*requestHandler, error) {
 	v := reflect.Indirect(reflect.ValueOf(handler))
 	if v.Kind() != reflect.Struct {
 		return nil, ErrNotStructPtr
@@ -119,17 +119,17 @@ func ToAPIHandler(handler Handler, noDefaultParams bool) (*apiHandler, error) {
 		bodydecoder = h.Decode
 	}
 
-	api, err := NewApi(structPointer, defaultParamNameMapper, bodydecoder, !noDefaultParams)
+	request, err := NewRequest(structPointer, defaultParamNameMapper, bodydecoder, !noDefaultParams)
 	if err != nil {
 		return nil, err
 	}
-	if api.Number() == 0 {
+	if request.Number() == 0 {
 		return nil, ErrNoParamHandler
 	}
 
 	// Reduce the creation of unnecessary field paramValues.
-	return &apiHandler{
-		api: api,
+	return &requestHandler{
+		request: request,
 	}, nil
 }
 
@@ -139,11 +139,11 @@ func IsHandlerWithoutPath(handler Handler, noDefaultParams bool) bool {
 	if v.Kind() != reflect.Struct {
 		return true
 	}
-	api, err := NewApi(v.Addr().Interface(), nil, nil, !noDefaultParams)
+	request, err := NewRequest(v.Addr().Interface(), nil, nil, !noDefaultParams)
 	if err != nil {
 		return true
 	}
-	for _, param := range api.Params() {
+	for _, param := range request.Params() {
 		if param.In() == "path" {
 			return false
 		}
@@ -152,11 +152,11 @@ func IsHandlerWithoutPath(handler Handler, noDefaultParams bool) bool {
 }
 
 // Serve implements the APIHandler.
-// creates a new `*apiHandler`;
-// binds the request path params to `apiHandler.handler`;
+// creates a new `*requestHandler`;
+// binds the request path params to `requestHandler.handler`;
 // calls Handler.Serve() method.
-func (h *apiHandler) Serve(ctx *Context) error {
-	obj, err := h.api.BindNew(ctx.Request, ctx.apiParams)
+func (h *requestHandler) Serve(ctx *Context) error {
+	obj, err := h.request.BindNew(ctx.Request, ctx.requestParams)
 	if err != nil {
 		defaultBinderrorFunc(ctx, err)
 		ctx.Abort()
@@ -166,14 +166,14 @@ func (h *apiHandler) Serve(ctx *Context) error {
 }
 
 // Doc returns the API's note, result or parameters information.
-func (h *apiHandler) Doc() Doc {
+func (h *requestHandler) Doc() Doc {
 	var doc Doc
-	if d, ok := h.api.Raw().(APIDoc); ok {
+	if d, ok := h.request.Raw().(APIDoc); ok {
 		doc = d.Doc()
 	}
-	for _, param := range h.api.Params() {
+	for _, param := range h.request.Params() {
 		var had bool
-		var info = RequestParam{
+		var info = APIParam{
 			Name:     param.Name(),
 			In:       param.In(),
 			Required: param.IsRequired(),
