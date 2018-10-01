@@ -1,4 +1,4 @@
-package ltick
+package http
 
 import (
 	"bytes"
@@ -21,8 +21,8 @@ import (
 )
 
 type (
-	// Api defines a parameter model for an web api.
-	Api struct {
+	// Request defines a parameter model for an web api.
+	Request struct {
 		name   string
 		params []*Param
 		//used to create a new struct (non-pointer)
@@ -38,24 +38,24 @@ type (
 		//when request Content-Type is multipart/form-data, the max memory for body.
 		maxMemory int64
 	}
-	// ApiMap is a collection of Api
-	ApiMap struct {
-		Map map[string]*Api
+	// RequestMap is a collection of Request
+	RequestMap struct {
+		Map map[string]*Request
 		sync.RWMutex
 	}
 
 	ParamsKVStore interface {
 		Get(k string) (v string, found bool)
 	}
-	// ApiParam is a single URL parameter, consisting of a key and a value.
-	ApiParam struct {
+	// RequestParam is a single URL parameter, consisting of a key and a value.
+	RequestParam struct {
 		Key   string
 		Value string
 	}
-	// ApiParams is a Param-slice, as returned by the router.
+	// RequestParams is a Param-slice, as returned by the router.
 	// The slice is ordered, the first URL parameter is also the first slice value.
 	// It is therefore safe to read values by the index.
-	ApiParams []ApiParam
+	RequestParams []RequestParam
 	// Map is just a conversion for a map[string]string
 	Map map[string]string
 )
@@ -65,11 +65,11 @@ func (m Map) Get(k string) (string, bool) {
 	return v, found
 }
 
-var _ ParamsKVStore = ApiParams{}
+var _ ParamsKVStore = RequestParams{}
 
-// ByName returns the value of the first ApiParam which key matches the given name.
-// If no matching ApiParam is found, an empty string is returned.
-func (ps ApiParams) ByName(name string) string {
+// ByName returns the value of the first RequestParam which key matches the given name.
+// If no matching RequestParam is found, an empty string is returned.
+func (ps RequestParams) ByName(name string) string {
 	for i := range ps {
 		if ps[i].Key == name {
 			return ps[i].Value
@@ -78,9 +78,9 @@ func (ps ApiParams) ByName(name string) string {
 	return ""
 }
 
-// Get returns the value of the first ApiParam which key matches the given name.
+// Get returns the value of the first RequestParam which key matches the given name.
 // It implements the ParamsKVStore interface.
-func (ps ApiParams) Get(name string) (string, bool) {
+func (ps RequestParams) Get(name string) (string, bool) {
 	for i := range ps {
 		if ps[i].Key == name {
 			return ps[i].Value, true
@@ -89,10 +89,10 @@ func (ps ApiParams) Get(name string) (string, bool) {
 	return "", false
 }
 
-// Replace changes the value of the first ApiParam which key matches the given name.
+// Replace changes the value of the first RequestParam which key matches the given name.
 // If n < 0, there is no limit on the number of changed.
 // If the key is changed, return true.
-func (ps ApiParams) Replace(name string, value string, n int) bool {
+func (ps RequestParams) Replace(name string, value string, n int) bool {
 	if n < 0 {
 		n = len(ps)
 	}
@@ -117,34 +117,34 @@ var (
 	}
 )
 var (
-	defaultApiMap = &ApiMap{
-		Map: map[string]*Api{},
+	defaultRequestMap = &RequestMap{
+		Map: map[string]*Request{},
 	}
 )
 
-func GetApi(ApiName string) (*Api, error) {
-	api, ok := defaultApiMap.get(ApiName)
+func GetRequest(RequestName string) (*Request, error) {
+	api, ok := defaultRequestMap.get(RequestName)
 	if !ok {
-		return nil, errors.New("struct `" + ApiName + "` is not registered")
+		return nil, errors.New("struct `" + RequestName + "` is not registered")
 	}
 	return api, nil
 }
 
-// SetApi caches `*Api`
-func SetApi(api *Api) {
-	defaultApiMap.set(api)
+// SetRequest caches `*Request`
+func SetRequest(api *Request) {
+	defaultRequestMap.set(api)
 }
 
-// NewApi parses and store the struct object, requires a struct pointer,
+// NewRequest parses and store the struct object, requires a struct pointer,
 // if `paramNameNormalizer` is nil, `paramNameNormalizer=toSnake`,
 // if `bodydecoder` is nil, `bodydecoder=bodyJSON`,
-func NewApi(
+func NewRequest(
 	structPointer interface{},
 	paramNameNormalizer ParamNameMapper,
 	bodydecoder Bodydecoder,
 	useDefaultValues bool,
 ) (
-	*Api,
+	*Request,
 	error,
 ) {
 	name := reflect.TypeOf(structPointer).String()
@@ -156,7 +156,7 @@ func NewApi(
 	if v.Kind() != reflect.Struct {
 		return nil, errors.Trace(fmt.Errorf("%s|%s|%s", name, "*", "the binding object must be a struct pointer"))
 	}
-	var api = &Api{
+	var api = &Request{
 		name:             name,
 		params:           []*Param{},
 		structType:       v.Type(),
@@ -184,15 +184,15 @@ func NewApi(
 			api.defaultValues = buf.Bytes()
 		}
 	}
-	defaultApiMap.set(api)
+	defaultRequestMap.set(api)
 	return api, nil
 }
 
-// Raw returns the Api's original value
-func (api *Api) Raw() interface{} {
+// Raw returns the Request's original value
+func (api *Request) Raw() interface{} {
 	return api.rawStructPointer
 }
-func (api *Api) addFields(parentIndexPath []int, t reflect.Type, v reflect.Value) error {
+func (api *Request) addFields(parentIndexPath []int, t reflect.Type, v reflect.Value) error {
 	var err error
 	var maxMemoryMB int64
 	var hasFormData, hasBody bool
@@ -341,13 +341,13 @@ func (api *Api) addFields(parentIndexPath []int, t reflect.Type, v reflect.Value
 }
 
 // Number returns the number of parameters to be bound
-func (api *Api) Number() int {
+func (api *Request) Number() int {
 	return len(api.params)
 }
 
 // BindAt binds the net/http request params to a struct pointer and validate it.
 // note: structPointer must be struct pointer.
-func (api *Api) BindAt(
+func (api *Request) BindAt(
 	structPointer interface{},
 	req *http.Request,
 	apiParams ParamsKVStore,
@@ -364,7 +364,7 @@ func (api *Api) BindAt(
 }
 
 // BindNew binds the net/http request params to a struct pointer and validate it.
-func (api *Api) BindNew(
+func (api *Request) BindNew(
 	req *http.Request,
 	apiParams ParamsKVStore,
 ) (
@@ -377,7 +377,7 @@ func (api *Api) BindNew(
 }
 
 // NewReceiver creates a new struct pointer and the field's values  for its receive parameterste it.
-func (api *Api) NewReceiver() (interface{}, []interface{}) {
+func (api *Request) NewReceiver() (interface{}, []interface{}) {
 	object := reflect.New(api.structType)
 	if len(api.defaultValues) > 0 {
 		// fmt.Printf("setting default value: %s\n", api.structType.String())
@@ -390,7 +390,7 @@ func (api *Api) NewReceiver() (interface{}, []interface{}) {
 	return object.Interface(), api.fieldsForBinding(object.Elem())
 }
 
-func (api *Api) fieldsForBinding(structElem reflect.Value) []interface{} {
+func (api *Request) fieldsForBinding(structElem reflect.Value) []interface{} {
 	count := len(api.params)
 	fields := make([]interface{}, count)
 	for i := 0; i < count; i++ {
@@ -406,7 +406,7 @@ func (api *Api) fieldsForBinding(structElem reflect.Value) []interface{} {
 
 // BindFields binds the net/http request params to a struct and validate it.
 // Must ensure that the param `fields` matches `api.params`.
-func (api *Api) BindFields(
+func (api *Request) BindFields(
 	fields []interface{},
 	req *http.Request,
 	apiParams ParamsKVStore,
@@ -534,7 +534,7 @@ func (api *Api) BindFields(
 }
 
 // Params gets the parameter information
-func (api *Api) Params() []*Param {
+func (api *Request) Params() []*Param {
 	return api.params
 }
 
@@ -547,7 +547,7 @@ func BindByName(
 	interface{},
 	error,
 ) {
-	api, err := GetApi(apiName)
+	api, err := GetRequest(apiName)
 	if err != nil {
 		return nil, err
 	}
@@ -561,29 +561,29 @@ func Bind(
 	req *http.Request,
 	apiParams ParamsKVStore,
 ) error {
-	api, err := GetApi(reflect.TypeOf(structPointer).String())
+	api, err := GetRequest(reflect.TypeOf(structPointer).String())
 	if err != nil {
 		return err
 	}
 	return api.BindAt(structPointer, req, apiParams)
 }
 
-func (apiMap *ApiMap) get(apiName string) (*Api, bool) {
+func (apiMap *RequestMap) get(apiName string) (*Request, bool) {
 	apiMap.RLock()
 	defer apiMap.RUnlock()
 	api, ok := apiMap.Map[apiName]
 	return api, ok
 }
 
-func (apiMap *ApiMap) set(api *Api) {
+func (apiMap *RequestMap) set(api *Request) {
 	apiMap.Lock()
 	apiMap.Map[api.name] = api
 	defer apiMap.Unlock()
 }
 
 // Get distinct and sorted parameters information.
-func distinctAndSortedRequestParams(infos []RequestParam) []RequestParam {
-	infoMap := make(map[string]RequestParam, len(infos))
+func distinctAndSortedRequestParams(infos []APIParam) []APIParam {
+	infoMap := make(map[string]APIParam, len(infos))
 	ks := make([]string, 0, len(infos))
 	for _, info := range infos {
 		k := info.Name + "<\r-\n-\t>" + info.In
@@ -602,7 +602,7 @@ func distinctAndSortedRequestParams(infos []RequestParam) []RequestParam {
 		infoMap[k] = info
 	}
 	sort.Strings(ks)
-	newinfos := make([]RequestParam, 0, len(ks))
+	newinfos := make([]APIParam, 0, len(ks))
 	for _, k := range ks {
 		newinfos = append(newinfos, infoMap[k])
 	}

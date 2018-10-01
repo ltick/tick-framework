@@ -77,12 +77,6 @@ func (l *Logger) OnStartup(ctx context.Context) (context.Context, error) {
 func (l *Logger) OnShutdown(ctx context.Context) (context.Context, error) {
 	return ctx, nil
 }
-func (l *Logger) OnRequestStartup(c *routing.Context) error {
-	return nil
-}
-func (l *Logger) OnRequestShutdown(c *routing.Context) error {
-	return nil
-}
 func (l *Logger) HandlerName() string {
 	return l.handlerName
 }
