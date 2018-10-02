@@ -7,12 +7,12 @@ Package tick-framework help you build your Go application extremely fast.
 
 ## Feature
 
-- [x] Module 
+- [x] Component 
 - [x] Life Cycle
 - [x] Dependency Injection
 - [x] Routing 
 
-## Module
+## Component
 
 - [x] Config
 - [x] Logger

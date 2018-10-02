@@ -5,8 +5,10 @@ import (
 	"reflect"
 	"net/http"
 	"fmt"
+	"net/http/httputil"
 
 	"github.com/ltick/tick-framework/utility"
+	"github.com/ltick/tick-routing/proxy"
 )
 
 type (
@@ -24,7 +26,7 @@ type (
 	// HandlerWithBody is the Faygo APIHandler interface but with DecodeBody method.
 	HandlerWithBody interface {
 		Handler
-		BodyDecoder // Decode params from request body
+		BodyDecoder // Decode params from api body
 	}
 	// BodyDecoder is an interface to customize decoding operation
 	BodyDecoder interface {
@@ -38,7 +40,7 @@ type (
 	APIDoc interface {
 		Doc() Doc
 	}
-	// APIParam is the request parameter information
+	// APIParam is the api parameter information
 	APIParam struct {
 		Name     string      // Parameter name
 		In       string      // The position of the parameter
@@ -46,7 +48,7 @@ type (
 		Model    interface{} // A parameter value that is used to infer a value type and as a default value
 		Desc     string      // Description
 	}
-	// Doc request information
+	// Doc api information
 	Doc struct {
 		Note   string      `json:"note" xml:"note"`
 		Return interface{} `json:"return,omitempty" xml:"return,omitempty"`
@@ -61,27 +63,27 @@ type (
 	// JSONMsg is commonly used to return JSON format response.
 	JSONMsg struct {
 		Code int         `json:"code" xml:"code"`                     // the status code of the business process (required)
-		Info interface{} `json:"info,omitempty" xml:"info,omitempty"` // response's requestMap and example value (optional)
+		Info interface{} `json:"info,omitempty" xml:"info,omitempty"` // response's apiMap and example value (optional)
 	}
-	// requestHandler is an intelligent Handler of binding parameters.
-	requestHandler struct {
-		request *Request
+	// apiHandler is an intelligent Handler of binding parameters.
+	apiHandler struct {
+		api *Api
 	}
 	// HandlerFunc type is an adapter to allow the use of
 	// ordinary functions as HTTP handlers.  If f is a function
 	// with the appropriate signature, HandlerFunc(f) is a
 	// Handler that calls f.
 	HandlerFunc func(ctx *Context) error
-	// HandlerChain is the chain of handlers for a request.
+	// HandlerChain is the chain of handlers for a api.
 	HandlerChain []Handler
-	// ErrorFunc replies to the request with the specified error message and HTTP code.
-	// It does not otherwise end the request; the caller should ensure no further
+	// ErrorFunc replies to the api with the specified error message and HTTP code.
+	// It does not otherwise end the api; the caller should ensure no further
 	// writes are done to ctx.
 	// The error message should be plain text.
 	ErrorFunc func(ctx *Context, errStr string, status int)
-	// BinderrorFunc is called when binding or validation requestHandler parameters are wrong.
+	// BinderrorFunc is called when binding or validation apiHandler parameters are wrong.
 	BinderrorFunc func(ctx *Context, err error)
-	// Bodydecoder decodes params from request body.
+	// Bodydecoder decodes params from api body.
 	Bodydecoder func(dest interface{}, body []byte) error
 )
 
@@ -104,10 +106,10 @@ var (
 	}
 )
 
-var _ APIDoc = new(requestHandler)
+var _ APIDoc = new(apiHandler)
 
-// ToAPIHandler tries converts it to an *requestHandler.
-func ToAPIHandler(handler Handler, noDefaultParams bool) (*requestHandler, error) {
+// ToAPIHandler tries converts it to an *apiHandler.
+func ToAPIHandler(handler Handler, noDefaultParams bool) (*apiHandler, error) {
 	v := reflect.Indirect(reflect.ValueOf(handler))
 	if v.Kind() != reflect.Struct {
 		return nil, ErrNotStructPtr
@@ -119,17 +121,17 @@ func ToAPIHandler(handler Handler, noDefaultParams bool) (*requestHandler, error
 		bodydecoder = h.Decode
 	}
 
-	request, err := NewRequest(structPointer, defaultParamNameMapper, bodydecoder, !noDefaultParams)
+	api, err := NewApi(structPointer, defaultParamNameMapper, bodydecoder, !noDefaultParams)
 	if err != nil {
 		return nil, err
 	}
-	if request.Number() == 0 {
+	if api.Number() == 0 {
 		return nil, ErrNoParamHandler
 	}
 
 	// Reduce the creation of unnecessary field paramValues.
-	return &requestHandler{
-		request: request,
+	return &apiHandler{
+		api: api,
 	}, nil
 }
 
@@ -139,11 +141,11 @@ func IsHandlerWithoutPath(handler Handler, noDefaultParams bool) bool {
 	if v.Kind() != reflect.Struct {
 		return true
 	}
-	request, err := NewRequest(v.Addr().Interface(), nil, nil, !noDefaultParams)
+	api, err := NewApi(v.Addr().Interface(), nil, nil, !noDefaultParams)
 	if err != nil {
 		return true
 	}
-	for _, param := range request.Params() {
+	for _, param := range api.Params() {
 		if param.In() == "path" {
 			return false
 		}
@@ -152,11 +154,11 @@ func IsHandlerWithoutPath(handler Handler, noDefaultParams bool) bool {
 }
 
 // Serve implements the APIHandler.
-// creates a new `*requestHandler`;
-// binds the request path params to `requestHandler.handler`;
+// creates a new `*apiHandler`;
+// binds the api path params to `apiHandler.handler`;
 // calls Handler.Serve() method.
-func (h *requestHandler) Serve(ctx *Context) error {
-	obj, err := h.request.BindNew(ctx.Request, ctx.requestParams)
+func (h *apiHandler) Serve(ctx *Context) error {
+	obj, err := h.api.BindNew(ctx.Request, ctx.apiParams)
 	if err != nil {
 		defaultBinderrorFunc(ctx, err)
 		ctx.Abort()
@@ -166,12 +168,12 @@ func (h *requestHandler) Serve(ctx *Context) error {
 }
 
 // Doc returns the API's note, result or parameters information.
-func (h *requestHandler) Doc() Doc {
+func (h *apiHandler) Doc() Doc {
 	var doc Doc
-	if d, ok := h.request.Raw().(APIDoc); ok {
+	if d, ok := h.api.Raw().(APIDoc); ok {
 		doc = d.Doc()
 	}
-	for _, param := range h.request.Params() {
+	for _, param := range h.api.Params() {
 		var had bool
 		var info = APIParam{
 			Name:     param.Name(),

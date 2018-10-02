@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ltick/tick-framework/module"
 	"github.com/ltick/tick-routing"
 	"github.com/ltick/tick-routing/access"
 	"github.com/ltick/tick-routing/content"
@@ -160,15 +159,15 @@ func (e *Engine) NewServer(name string, port uint, gracefulStopTimeout time.Dura
 		RouteGroups: map[string]*ServerRouteGroup{},
 		mutex:       sync.RWMutex{},
 	}
-	modules := make([]module.ModuleInterface, 0)
-	for _, sortedModule := range e.Module.GetSortedModules() {
-		module, ok := sortedModule.(*module.Module)
+	middlewares := make([]MiddlewareInterface, 0)
+	for _, sortedComponent := range GetSortedMiddlewares() {
+		middleware, ok := sortedComponent.(*Component)
 		if !ok {
 			continue
 		}
-		modules = append(modules, module.Module)
+		middlewares = append(middlewares, middleware.Component)
 	}
-	server.RouteGroups["/"] = server.Router.AddRouteGroup("/", modules)
+	server.RouteGroups["/"] = server.Router.AddRouteGroup("/", middlewares)
 	e.Servers[name] = server
 	e.SystemLog(fmt.Sprintf("ltick: new server [name:'%s', port:'%d', gracefulStopTimeout:'%.fs', requestTimeout:'%.fs']", name, port, gracefulStopTimeout.Seconds(), requestTimeout.Seconds()))
 	return server
@@ -477,11 +476,11 @@ func (r *ServerRouter) WithCallback(callback RouterCallback) *ServerRouter {
 	return r
 }
 
-func (r *ServerRouter) AddRouteGroup(groupName string, modules []module.ModuleInterface, handlers ...routing.Handler) *ServerRouteGroup {
+func (r *ServerRouter) AddRouteGroup(groupName string, middlewares []MiddlewareInterface, handlers ...routing.Handler) *ServerRouteGroup {
 	g := &ServerRouteGroup{
 		RouteGroup: r.Router.Group(groupName, handlers, nil),
 	}
-	for _, m := range modules {
+	for _, m := range middlewares {
 		g.AppendAnteriorHandler(m.OnRequestStartup)
 		g.PrependPosteriorHandler(m.OnRequestShutdown)
 	}

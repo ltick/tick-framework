@@ -13,8 +13,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ltick/tick-framework/module/session"
-	libSession "github.com/ltick/tick-framework/module/session"
+	"github.com/ltick/tick-framework/session"
+	libSession "github.com/ltick/tick-framework/session"
 	libUtility "github.com/ltick/tick-framework/utility"
 	"github.com/ltick/tick-routing"
 )
@@ -122,7 +122,7 @@ type (
 	Context struct {
 		routing.Context
 
-		requestParams RequestParams // The parameter values on the URL path
+		apiParams ApiParams // The parameter values on the URL path
 		Response  *Response
 
 		Session       *libSession.Session
@@ -221,7 +221,7 @@ var proxyList = &struct {
 	m: map[string]*httputil.ReverseProxy{},
 }
 func (ctx *Context) GetParam(key string) (string, bool) {
-	return ctx.requestParams.Get(key)
+	return ctx.apiParams.Get(key)
 }
 // ReverseProxy routes URLs to the scheme, host, and base path provided in targetUrlBase.
 // If pathAppend is "true" and the targetUrlBase's path is "/base" and the incoming request was for "/dir",

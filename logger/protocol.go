@@ -94,7 +94,7 @@ func (l *Logger) Use(ctx context.Context, handlerName string) error {
 	return nil
 }
 
-func (l *Logger) LoadModuleFileConfig(configFile string, configProviders map[string]interface{}, configTag ...string) (err error) {
+func (l *Logger) LoadComponentFileConfig(configFile string, configProviders map[string]interface{}, configTag ...string) (err error) {
 	c := config.New()
 	err = c.Load(configFile)
 	if err != nil {
@@ -115,7 +115,7 @@ func (l *Logger) LoadModuleFileConfig(configFile string, configProviders map[str
 	return nil
 }
 
-func (l *Logger) LoadModuleJsonConfig(configData []byte, configProviders map[string]interface{}, configTag ...string) (err error) {
+func (l *Logger) LoadComponentJsonConfig(configData []byte, configProviders map[string]interface{}, configTag ...string) (err error) {
 	c := config.New()
 	err = c.LoadJSON(configData)
 	if err != nil {

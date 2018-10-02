@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ltick/tick-framework/module/config"
+	"github.com/ltick/tick-framework/config"
 )
 
 type KVLruFileStore struct {

@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	libDatabase "github.com/ltick/tick-framework/module/database"
+	libDatabase "github.com/ltick/tick-framework/database"
 )
 
 type MysqlStore struct {

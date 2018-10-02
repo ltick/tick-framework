@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ltick/tick-framework/module/config"
+	"github.com/ltick/tick-framework/config"
 	"github.com/ltick/tick-routing"
 )
 

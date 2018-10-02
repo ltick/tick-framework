@@ -11,9 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ltick/tick-framework/module"
-	libConfig "github.com/ltick/tick-framework/module/config"
-	"github.com/ltick/tick-framework/module/logger"
+	libConfig "github.com/ltick/tick-framework/config"
+	"github.com/ltick/tick-framework/logger"
 	"github.com/ltick/tick-framework/utility"
 	"github.com/ltick/tick-log"
 	"github.com/ltick/tick-routing"
@@ -24,11 +23,11 @@ import (
 type ServerAppInitFunc struct{}
 
 func (f *ServerAppInitFunc) OnStartup(e *Engine) error {
-	loggerModule, err := e.GetBuiltinModule("logger")
+	loggerComponent, err := e.GetBuiltinComponent("logger")
 	if err != nil {
 		return err
 	}
-	logger, ok := loggerModule.(*logger.Logger)
+	logger, ok := loggerComponent.(*logger.Logger)
 	if !ok {
 		return errors.New("logger type error")
 	}
@@ -40,7 +39,7 @@ func (f *ServerAppInitFunc) OnStartup(e *Engine) error {
 	if err != nil {
 		return err
 	}
-	err = logger.LoadModuleFileConfig(configPath, configProviders, "modules.Logger")
+	err = logger.LoadComponentFileConfig(configPath, configProviders, "modules.Logger")
 	if err != nil {
 		return err
 	}
@@ -83,16 +82,16 @@ func (f *ServerGroupRequestInitFunc) OnRequestShutdown(c *routing.Context) error
 func TestServerCallback(t *testing.T) {
 	var options map[string]libConfig.Option = map[string]libConfig.Option{}
 	var values map[string]interface{} = make(map[string]interface{}, 0)
-	var modules []*module.Module = []*module.Module{}
+	var modules []*Component = []*Component{}
 	a := New(os.Args[0], filepath.Dir(filepath.Dir(os.Args[0])), "ltick.json", "LTICK", modules, options).
 		WithCallback(&ServerAppInitFunc{}).WithValues(values)
 	a.SetSystemLogWriter(ioutil.Discard)
 	err := a.Startup()
 	assert.Nil(t, err)
 	assert.NotNil(t, a.Context.Value("testlogger"))
-	utilityModule, err := a.GetBuiltinModule("utility")
+	utilityComponent, err := a.GetBuiltinComponent("utility")
 	assert.Nil(t, err)
-	a.SetContextValue("utility", utilityModule)
+	a.SetContextValue("utility", utilityComponent)
 	accessLogFunc := func(c *routing.Context, rw *access.LogResponseWriter, elapsed float64) {
 		testlogger := c.Context.Value("testlogger").(*log.Logger)
 		clientIP := utility.GetClientIP(c.Request)

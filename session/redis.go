@@ -7,7 +7,7 @@ import (
 	"sync"
 	"net/http"
 
-	libCache "github.com/ltick/tick-framework/module/cache"
+	libCache "github.com/ltick/tick-framework/cache"
 )
 type RedisStore struct {
 	sessionMaxAge int64

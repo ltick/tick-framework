@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"net/http/httputil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,12 +17,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ltick/tick-framework/module"
-	libConfig "github.com/ltick/tick-framework/module/config"
-	libLogger "github.com/ltick/tick-framework/module/logger"
+	libConfig "github.com/ltick/tick-framework/config"
+	libLogger "github.com/ltick/tick-framework/logger"
 	libUtility "github.com/ltick/tick-framework/utility"
 	"github.com/ltick/tick-graceful"
-	"github.com/ltick/tick-routing"
 )
 
 var (
@@ -37,9 +34,9 @@ var (
 	errStartupCallback            = "ltick: startup callback error"
 	errStartupRouterCallback      = "ltick: startup router callback error"
 	errStartupRouteGroupCallback  = "ltick: startup route group callback error"
-	errStartupConfigureModule     = "ltick: startup configure module error"
-	errStartupInjectModule        = "ltick: startup inject module error"
-	errStartupInjectBuiltinModule = "ltick: startup inject builtin module error"
+	errStartupConfigureComponent     = "ltick: startup configure component error"
+	errStartupInjectComponent        = "ltick: startup inject component error"
+	errStartupInjectBuiltinComponent = "ltick: startup inject builtin component error"
 
 	errLoadSystemConfig  = "ltick: load system config error"
 	errLoadEnvConfigFile = "ltick: load env config file error"
@@ -60,11 +57,10 @@ type (
 		systemLogWriter io.Writer
 		callback        Callback
 		option          *Option
-		modules         []*module.Module
+		components         []*Component
 		Config          *libConfig.Config
 		Logger          *libLogger.Logger
 
-		Module  *module.Instance
 		Context context.Context
 		Servers map[string]*Server
 	}
@@ -73,8 +69,8 @@ type (
 		EnvPrefix  string
 	}
 	Callback interface {
-		OnStartup(*Engine) error  // Execute On After All Engine Module OnStartup
-		OnShutdown(*Engine) error // Execute On After All Engine Module OnShutdown
+		OnStartup(*Engine) error  // Execute On After All Engine Component OnStartup
+		OnShutdown(*Engine) error // Execute On After All Engine Component OnShutdown
 	}
 	LogHanlder struct {
 		Name      string
@@ -90,7 +86,7 @@ var defaultConfigName = "ltick.json"
 var defaultConfigReloadTime = 120 * time.Second
 var configPlaceholdRegExp = regexp.MustCompile(`%\w+%`)
 
-func NewClassic(modules []*module.Module, configOptions map[string]libConfig.Option, option *Option) (engine *Engine) {
+func NewClassic(components []*Component, configOptions map[string]libConfig.Option, option *Option) (engine *Engine) {
 	executeFile, err := exec.LookPath(os.Args[0])
 	if err != nil {
 		fmt.Printf(errNewClassic+": %s\r\n", err.Error())
@@ -104,9 +100,9 @@ func NewClassic(modules []*module.Module, configOptions map[string]libConfig.Opt
 	if option.PathPrefix == "" {
 		option.PathPrefix = filepath.Dir(filepath.Dir(executePath))
 	}
-	engine = New(executeFile, option.PathPrefix, defaultConfigName, option.EnvPrefix, modules, configOptions)
+	engine = New(executeFile, option.PathPrefix, defaultConfigName, option.EnvPrefix, components, configOptions)
 	logHandlers := make([]*LogHanlder, 0)
-	loggerTargetsConfig := engine.Config.GetStringMap("modules.logger.targets")
+	loggerTargetsConfig := engine.Config.GetStringMap("components.logger.targets")
 	for loggerName, loggerTargetInterface := range loggerTargetsConfig {
 		loggerTarget := loggerTargetInterface.(map[string]interface{})
 		loggerTargetTypeInterface, ok := loggerTarget["type"]
@@ -177,7 +173,7 @@ func NewClassic(modules []*module.Module, configOptions map[string]libConfig.Opt
 	return engine
 }
 
-func New(executeFile string, pathPrefix string, configName string, envPrefix string, modules []*module.Module, configOptions map[string]libConfig.Option) (engine *Engine) {
+func New(executeFile string, pathPrefix string, configName string, envPrefix string, components []*Component, configOptions map[string]libConfig.Option) (engine *Engine) {
 	engine = &Engine{
 		option:          &Option{},
 		state:           STATE_INITIATE,
@@ -186,34 +182,37 @@ func New(executeFile string, pathPrefix string, configName string, envPrefix str
 		Context:         context.Background(),
 		Servers:         make(map[string]*Server, 0),
 	}
-	ctx, module, err := module.NewInstance(engine.Context)
+	var err error
+	// 内置模块注册
+	for _, builtinComponent := range BuiltinComponents {
+		canonicalBuiltinComponentName := strings.ToUpper(builtinComponent.Name[0:1]) + builtinComponent.Name[1:]
+		engine.Context, err = registerBuiltinComponent(engine.Context, canonicalBuiltinComponentName, builtinComponent.Component, true)
+		if err != nil {
+			fmt.Printf(errNew+": %s\r\n", err.Error())
+			os.Exit(1)
+		}
+	}
+	configComponent, err := GetBuiltinComponent("Config")
 	if err != nil {
 		fmt.Printf(errNew+": %s\r\n", err.Error())
 		os.Exit(1)
 	}
-	configModule, err := module.GetBuiltinModule("Config")
-	if err != nil {
-		fmt.Printf(errNew+": %s\r\n", err.Error())
-		os.Exit(1)
-	}
-	config, ok := configModule.(*libConfig.Config)
+	config, ok := configComponent.(*libConfig.Config)
 	if !ok {
-		fmt.Printf(errNew+": %s\r\n", "invalid 'Config' module type")
+		fmt.Printf(errNew+": %s\r\n", "invalid 'Config' component type")
 		os.Exit(1)
 	}
-	loggerModule, err := module.GetBuiltinModule("logger")
+	loggerComponent, err := GetBuiltinComponent("logger")
 	if err != nil {
 		fmt.Printf(errNew+": %s\r\n", err.Error())
 		os.Exit(1)
 	}
-	logger, ok := loggerModule.(*libLogger.Logger)
+	logger, ok := loggerComponent.(*libLogger.Logger)
 	if !ok {
-		fmt.Printf(errNew+": %s\r\n", "invalid 'Logger' module type")
+		fmt.Printf(errNew+": %s\r\n", "invalid 'Logger' component type")
 		os.Exit(1)
 	}
-	engine.modules = modules
-	engine.Context = ctx
-	engine.Module = module
+	engine.components = components
 	engine.Config = config
 	engine.Logger = logger
 	engine.SetPathPrefix(pathPrefix)
@@ -402,7 +401,7 @@ func (e *Engine) WithLoggers(handlers []*LogHanlder) *Engine {
 		loggerConfig = loggerConfig + `"Targets": {` + strings.Join(logTargetProviderConfigs, ",") + `}`
 	}
 	loggerConfig = loggerConfig + `}`
-	e.Logger.LoadModuleJsonConfig([]byte(loggerConfig), logProviders)
+	e.Logger.LoadComponentJsonConfig([]byte(loggerConfig), logProviders)
 	for _, hanlder := range handlers {
 		e.Logger.NewLogger(hanlder.Name)
 		switch hanlder.Formatter {
@@ -451,7 +450,7 @@ func (e *Engine) Startup() (err error) {
 	e.LoadSystemConfig(e.option.PathPrefix+"/etc/"+defaultConfigName, e.option.EnvPrefix, e.option.PathPrefix+"/.env")
 
 	if e.callback != nil {
-		err = e.Module.InjectModuleTo([]interface{}{e.callback})
+		err = InjectComponentTo([]interface{}{e.callback})
 		if err != nil {
 			return fmt.Errorf(errStartupCallback+": %s", err.Error())
 		}
@@ -468,32 +467,12 @@ func (e *Engine) Startup() (err error) {
 		}
 		// proxy
 		if server.Router.proxys != nil && len(server.Router.proxys) > 0 {
-			server.addRoute("ANY", "/", func(c *routing.Context) error {
-				for _, proxy := range server.Router.proxys {
-					upstreamURL, err := proxy.MatchProxy(c.Request)
-					if err != nil {
-						return routing.NewHTTPError(http.StatusInternalServerError, err.Error())
-					}
-					if upstreamURL != nil {
-						director := func(req *http.Request) {
-							req = c.Request
-							req.URL.Scheme = upstreamURL.Scheme
-							req.URL.Host = upstreamURL.Host
-							req.RequestURI = upstreamURL.RequestURI()
-						}
-						proxy := &httputil.ReverseProxy{Director: director}
-						proxy.ServeHTTP(c.ResponseWriter, c.Request)
-						c.Abort()
-						return nil
-					}
-				}
-				return nil
-			})
+			server.addRoute("ANY", "/", )
 		}
 		if server.RouteGroups != nil {
 			for _, routeGroup := range server.RouteGroups {
 				if routeGroup.callback != nil {
-					err = e.Module.InjectModuleTo([]interface{}{routeGroup.callback})
+					err = InjectComponentTo([]interface{}{routeGroup.callback})
 					if err != nil {
 						return fmt.Errorf(errStartupRouteGroupCallback+": %s", err.Error())
 					}
@@ -501,40 +480,40 @@ func (e *Engine) Startup() (err error) {
 			}
 		}
 		if server.Router.callback != nil {
-			err = e.Module.InjectModuleTo([]interface{}{server.Router.callback})
+			err = InjectComponentTo([]interface{}{server.Router.callback})
 			if err != nil {
 				return fmt.Errorf(errStartupRouterCallback+": %s", err.Error())
 			}
 		}
 	}
 	// 内置模块注入
-	for index, sortedBuiltinModule := range e.Module.GetSortedBuiltinModules() {
-		sortedBuiltinModuleInstance, ok := sortedBuiltinModule.(module.ModuleInterface)
+	for index, sortedBuiltinComponent := range GetSortedBuiltinComponents() {
+		sortedBuiltinComponentInstance, ok := sortedBuiltinComponent.(ComponentInterface)
 		if !ok {
-			return fmt.Errorf(errStartupInjectBuiltinModule+": invalid '%s' module type", e.Module.SortedBuiltinModules[index])
+			return fmt.Errorf(errStartupInjectBuiltinComponent+": invalid '%s' component type", BuiltinComponentOrder[index])
 		}
-		e.Context, err = sortedBuiltinModuleInstance.OnStartup(e.Context)
+		e.Context, err = sortedBuiltinComponentInstance.OnStartup(e.Context)
 		if err != nil {
-			return fmt.Errorf(errStartupInjectBuiltinModule+": %s", err.Error())
+			return fmt.Errorf(errStartupInjectBuiltinComponent+": %s", err.Error())
 		}
 	}
-	sortedModules := e.Module.GetSortedModules()
+	sortedComponents := GetSortedComponents()
 	// 模块启动
-	for index, sortedModule := range sortedModules {
-		sortedModuleInstance, ok := sortedModule.(module.ModuleInterface)
+	for index, sortedComponent := range sortedComponents {
+		sortedComponentInstance, ok := sortedComponent.(ComponentInterface)
 		if !ok {
-			return fmt.Errorf(errStartupInjectModule+": invalid '%s' module type", e.Module.SortedModules[index])
+			return fmt.Errorf(errStartupInjectComponent+": invalid '%s' component type", ComponentOrder[index])
 		}
-		e.Context, err = sortedModuleInstance.OnStartup(e.Context)
+		e.Context, err = sortedComponentInstance.OnStartup(e.Context)
 		if err != nil {
-			return fmt.Errorf(errStartupInjectModule+": %s", err.Error())
+			return fmt.Errorf(errStartupInjectComponent+": %s", err.Error())
 		}
 	}
 	// 注册模块
-	for _, module := range e.modules {
-		err := e.RegisterUserModule(module.Name, module.Module)
+	for _, component := range e.components {
+		err := e.RegisterUserComponent(component.Name, component.Component)
 		if err != nil {
-			return fmt.Errorf(errStartupInjectModule+": %s [module:'%s']", err.Error(), module.Name)
+			return fmt.Errorf(errStartupInjectComponent+": %s [component:'%s']", err.Error(), component.Name)
 		}
 	}
 
@@ -542,9 +521,9 @@ func (e *Engine) Startup() (err error) {
 	e.Module.SetSortedUserModules()
 
 	// 注入模块
-	err = e.Module.InjectModule()
+	err = InjectComponent()
 	if err != nil {
-		return fmt.Errorf(errStartupInjectModule+": %s", err.Error())
+		return fmt.Errorf(errStartupInjectComponent+": %s", err.Error())
 	}
 	e.state = STATE_STARTUP
 	return nil
@@ -555,14 +534,14 @@ func (e *Engine) Shutdown() (err error) {
 		return nil
 	}
 	e.SystemLog("ltick: Shutdown")
-	for _, sortedModule := range e.Module.GetSortedModules(true) {
-		module, ok := sortedModule.(module.ModuleInterface)
+	for _, sortedComponent := range GetSortedComponents(true) {
+		component, ok := sortedComponent.(ComponentInterface)
 		if !ok {
-			e.SystemLog("ltick: Shutdown module error: invalid module type")
+			e.SystemLog("ltick: Shutdown component error: invalid component type")
 		}
-		e.Context, err = module.OnShutdown(e.Context)
+		e.Context, err = component.OnShutdown(e.Context)
 		if err != nil {
-			e.SystemLog("ltick: Shutdown module error: " + err.Error())
+			e.SystemLog("ltick: Shutdown component error: " + err.Error())
 			return err
 		}
 	}
@@ -647,70 +626,70 @@ func (e *Engine) GetContextValueString(key string) string {
 		return ""
 	}
 }
-func (e *Engine) UseModule(moduleNames ...string) (err error) {
-	e.Context, err = e.Module.UseModule(e.Context, moduleNames...)
+func (e *Engine) UseComponent(componentNames ...string) (err error) {
+	e.Context, err = UseComponent(e.Context, componentNames...)
 	return err
 }
 
-// Register As Module
-func (e *Engine) RegisterUserModule(moduleName string, module module.ModuleInterface, forceOverwrites ...bool) (err error) {
-	e.Context, err = e.Module.RegisterUserModule(e.Context, moduleName, module, forceOverwrites...)
+// Register As Component
+func (e *Engine) RegisterUserComponent(componentName string, component ComponentInterface, forceOverwrites ...bool) (err error) {
+	e.Context, err = RegisterUserComponent(e.Context, componentName, component, forceOverwrites...)
 	return err
 }
 
-// Unregister As Module
-func (e *Engine) UnregisterUserModule(moduleNames ...string) (err error) {
-	e.Context, err = e.Module.UnregisterUserModule(e.Context, moduleNames...)
+// Unregister As Component
+func (e *Engine) UnregisterUserComponent(componentNames ...string) (err error) {
+	e.Context, err = UnregisterUserComponent(e.Context, componentNames...)
 	return err
 }
 
-func (e *Engine) GetBuiltinModule(moduleName string) (interface{}, error) {
-	return e.Module.GetBuiltinModule(moduleName)
+func (e *Engine) GetBuiltinComponent(componentName string) (interface{}, error) {
+	return GetBuiltinComponent(componentName)
 }
 
-func (e *Engine) GetBuiltinModules() map[string]interface{} {
-	return e.Module.GetBuiltinModules()
+func (e *Engine) GetBuiltinComponents() map[string]interface{} {
+	return GetBuiltinComponents()
 }
 
-func (e *Engine) GetModule(moduleName string) (interface{}, error) {
-	return e.Module.GetModule(moduleName)
+func (e *Engine) GetComponent(componentName string) (interface{}, error) {
+	return GetComponent(componentName)
 }
 
-func (e *Engine) GetModules() map[string]interface{} {
-	return e.Module.GetModules()
+func (e *Engine) GetComponents() map[string]interface{} {
+	return GetComponents()
 }
 
-func (e *Engine) LoadModuleFileConfig(moduleName string, configFile string, configProviders map[string]interface{}, configTag ...string) (err error) {
-	return e.Module.LoadModuleFileConfig(moduleName, configFile, configProviders, configTag...)
+func (e *Engine) LoadComponentFileConfig(componentName string, configFile string, configProviders map[string]interface{}, configTag ...string) (err error) {
+	return LoadComponentFileConfig(componentName, configFile, configProviders, configTag...)
 }
 
-// Register As Module
-func (e *Engine) LoadModuleJsonConfig(moduleName string, configData []byte, configProviders map[string]interface{}, configTag ...string) (err error) {
-	return e.Module.LoadModuleJsonConfig(moduleName, configData, configProviders, configTag...)
+// Register As Component
+func (e *Engine) LoadComponentJsonConfig(componentName string, configData []byte, configProviders map[string]interface{}, configTag ...string) (err error) {
+	return LoadComponentJsonConfig(componentName, configData, configProviders, configTag...)
 }
 
 // Register As Value
 func (e *Engine) RegisterValue(key string, value interface{}, forceOverwrites ...bool) (err error) {
-	e.Context, err = e.Module.RegisterValue(e.Context, key, value, forceOverwrites...)
+	e.Context, err = RegisterValue(e.Context, key, value, forceOverwrites...)
 	return err
 }
 
 // Unregister As Value
 func (e *Engine) UnregisterValue(keys ...string) (context.Context, error) {
-	return e.Module.UnregisterValue(e.Context, keys...)
+	return UnregisterValue(e.Context, keys...)
 }
 
 func (e *Engine) GetValue(key string) (interface{}, error) {
-	return e.Module.GetValue(key)
+	return GetValue(key)
 }
 
 func (e *Engine) GetValues() map[string]interface{} {
-	return e.Module.GetValues()
+	return GetValues()
 }
 
-func (e *Engine) InjectModule() error {
-	return e.Module.InjectModule()
+func (e *Engine) InjectComponent() error {
+	return InjectComponent()
 }
-func (e *Engine) InjectModuleByName(moduleNames ...string) error {
-	return e.Module.InjectModuleByName(moduleNames)
+func (e *Engine) InjectComponentByName(componentNames ...string) error {
+	return InjectComponentByName(componentNames)
 }
