@@ -10,8 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ltick/tick-framework/module"
-	libConfig "github.com/ltick/tick-framework/module/config"
+	libConfig "github.com/ltick/tick-framework/config"
 	"github.com/ltick/tick-routing"
 	"github.com/stretchr/testify/assert"
 )
@@ -34,7 +33,7 @@ func (f *TestCallback) OnShutdown(e *Engine) error {
 
 func TestAppCallback(t *testing.T) {
 	var values map[string]interface{} = make(map[string]interface{}, 0)
-	var modules []*module.Module = []*module.Module{}
+	var modules []*Component = []*Component{}
 	var configs map[string]libConfig.Option = make(map[string]libConfig.Option, 0)
 	a := New(os.Args[0], filepath.Dir(filepath.Dir(os.Args[0])), "ltick.json", "LTICK", modules, configs).
 		WithCallback(&TestCallback{}).WithValues(values)
@@ -49,13 +48,13 @@ func TestAppCallback(t *testing.T) {
 	assert.Equal(t, "Startup|Shutdown", output)
 }
 
-type testModule1 struct {
+type testComponent1 struct {
 	Config *libConfig.Config
 	Foo    string
 	Foo1   string
 }
 
-func (this *testModule1) Initiate(ctx context.Context) (newCtx context.Context, err error) {
+func (this *testComponent1) Initiate(ctx context.Context) (newCtx context.Context, err error) {
 	var options map[string]libConfig.Option = map[string]libConfig.Option{}
 	newCtx, err = this.Config.SetOptions(ctx, options)
 	if err != nil {
@@ -63,26 +62,26 @@ func (this *testModule1) Initiate(ctx context.Context) (newCtx context.Context, 
 	}
 	return ctx, nil
 }
-func (f *testModule1) OnStartup(ctx context.Context) (context.Context, error) {
+func (f *testComponent1) OnStartup(ctx context.Context) (context.Context, error) {
 	if ctx.Value("output") != nil {
 		output := ctx.Value("output").(string)
-		output = output + "testModule1-Startup|"
+		output = output + "testComponent1-Startup|"
 		ctx = context.WithValue(ctx, "output", output)
 	}
 	return ctx, nil
 }
-func (f *testModule1) OnShutdown(ctx context.Context) (context.Context, error) {
+func (f *testComponent1) OnShutdown(ctx context.Context) (context.Context, error) {
 	if ctx.Value("output") != nil {
 		output := ctx.Value("output").(string)
-		output = output + "|testModule1-Shutdown"
+		output = output + "|testComponent1-Shutdown"
 		ctx = context.WithValue(ctx, "output", output)
 	}
 	return ctx, nil
 }
-func (f *testModule1) OnRequestStartup(c *routing.Context) error {
+func (f *testComponent1) OnRequestStartup(c *routing.Context) error {
 	if c.Context.Value("output") != nil {
 		output := c.Context.Value("output").(string)
-		output = output + "testModule1-RequestStartup|"
+		output = output + "testComponent1-RequestStartup|"
 		c.Context = context.WithValue(c.Context, "output", output)
 	}
 	if c.Get("Foo") == nil {
@@ -90,10 +89,10 @@ func (f *testModule1) OnRequestStartup(c *routing.Context) error {
 	}
 	return nil
 }
-func (f *testModule1) OnRequestShutdown(c *routing.Context) error {
+func (f *testComponent1) OnRequestShutdown(c *routing.Context) error {
 	if c.Context.Value("output") != nil {
 		output := c.Context.Value("output").(string)
-		output = output + "|testModule1-RequestShutdown"
+		output = output + "|testComponent1-RequestShutdown"
 		c.Context = context.WithValue(c.Context, "output", output)
 	}
 	if c.Get("Foo") == nil {
@@ -102,12 +101,12 @@ func (f *testModule1) OnRequestShutdown(c *routing.Context) error {
 	return nil
 }
 
-type testModule2 struct {
+type testComponent2 struct {
 	Config *libConfig.Config
-	Test   *testModule1 `inject:"true"`
+	Test   *testComponent1 `inject:"true"`
 }
 
-func (this *testModule2) Initiate(ctx context.Context) (newCtx context.Context, err error) {
+func (this *testComponent2) Initiate(ctx context.Context) (newCtx context.Context, err error) {
 	var options map[string]libConfig.Option = map[string]libConfig.Option{}
 	newCtx, err = this.Config.SetOptions(ctx, options)
 	if err != nil {
@@ -115,27 +114,27 @@ func (this *testModule2) Initiate(ctx context.Context) (newCtx context.Context, 
 	}
 	return ctx, nil
 }
-func (f *testModule2) OnStartup(ctx context.Context) (context.Context, error) {
+func (f *testComponent2) OnStartup(ctx context.Context) (context.Context, error) {
 	if ctx.Value("output") != nil {
 		output := ctx.Value("output").(string)
-		output = output + "testModule2-Startup|"
+		output = output + "testComponent2-Startup|"
 		ctx = context.WithValue(ctx, "output", output)
 	}
 	f.Test.Foo = "Bar2"
 	return ctx, nil
 }
-func (f *testModule2) OnShutdown(ctx context.Context) (context.Context, error) {
+func (f *testComponent2) OnShutdown(ctx context.Context) (context.Context, error) {
 	if ctx.Value("output") != nil {
 		output := ctx.Value("output").(string)
-		output = output + "|testModule2-Shutdown"
+		output = output + "|testComponent2-Shutdown"
 		ctx = context.WithValue(ctx, "output", output)
 	}
 	return ctx, nil
 }
-func (f *testModule2) OnRequestStartup(c *routing.Context) error {
+func (f *testComponent2) OnRequestStartup(c *routing.Context) error {
 	if c.Context.Value("output") != nil {
 		output := c.Context.Value("output").(string)
-		output = output + "testModule2-RequestStartup|"
+		output = output + "testComponent2-RequestStartup|"
 		c.Context = context.WithValue(c.Context, "output", output)
 	}
 	if c.Get("Foo") == nil {
@@ -143,19 +142,19 @@ func (f *testModule2) OnRequestStartup(c *routing.Context) error {
 	}
 	return  nil
 }
-func (f *testModule2) OnRequestShutdown(c *routing.Context) error {
+func (f *testComponent2) OnRequestShutdown(c *routing.Context) error {
 	if c.Context.Value("output") != nil {
 		output := c.Context.Value("output").(string)
-		output = output + "|testModule2-RequestShutdown"
+		output = output + "|testComponent2-RequestShutdown"
 		c.Context = context.WithValue(c.Context, "output", output)
 	}
 	return nil
 }
 
-func TestModule(t *testing.T) {
+func TestComponent(t *testing.T) {
 	var values map[string]interface{} = make(map[string]interface{}, 0)
-	var modules []*module.Module = []*module.Module{
-		&module.Module{Name: "testModule2", Module: &testModule2{}},
+	var modules []*Component = []*Component{
+		&Component{Name: "testComponent2", Component: &testComponent2{}},
 	}
 	var options map[string]libConfig.Option = make(map[string]libConfig.Option, 0)
 	a := New(os.Args[0], filepath.Dir(filepath.Dir(os.Args[0])), "ltick.json", "LTICK", modules, options).
@@ -163,30 +162,30 @@ func TestModule(t *testing.T) {
 		WithValues(values)
 	a.SetSystemLogWriter(ioutil.Discard)
 	a.SetContextValue("output", "")
-	err := a.RegisterUserModule("testModule1", &testModule1{})
+	err := a.RegisterUserComponent("testComponent1", &testComponent1{})
 	assert.Nil(t, err)
-	testModule, err := a.GetModule("testModule1")
+	testComponent, err := a.GetComponent("testComponent1")
 	assert.Nil(t, err)
-	module, ok := testModule.(*testModule1)
+	module, ok := testComponent.(*testComponent1)
 	assert.Equal(t, true, ok)
 	assert.Equal(t, "Foo", module.Foo)
-	err = a.LoadModuleFileConfig("testModule1", "testdata/services.json", nil, "modules.testModule1")
+	err = a.LoadComponentFileConfig("testComponent1", "testdata/services.json", nil, "modules.testComponent1")
 	assert.Nil(t, err)
 	a.Startup()
-	assert.Equal(t, "testModule1-Register|testModule1-Startup|", a.GetContextValue("output"))
-	testModule, err = a.GetModule("testModule1")
+	assert.Equal(t, "testComponent1-Register|testComponent1-Startup|", a.GetContextValue("output"))
+	testComponent, err = a.GetComponent("testComponent1")
 	assert.Nil(t, err)
-	module, ok = testModule.(*testModule1)
+	module, ok = testComponent.(*testComponent1)
 	assert.Equal(t, true, ok)
 	assert.Equal(t, "Bar", module.Foo)
-	a.LoadModuleJsonConfig("testModule1", []byte(`
+	a.LoadComponentJsonConfig("testComponent1", []byte(`
 {
   "modules": {
-    "testModule1": {
+    "testComponent1": {
         "Foo": "Bar1"
     }
   }
-}`), nil, "testModule1")
+}`), nil, "testComponent1")
 	assert.Equal(t, "Bar1", module.Foo)
 	srv := a.NewServer("test", 8080, 30*time.Second, 3*time.Second)
 	rg := srv.GetRouteGroup("/")
@@ -200,72 +199,72 @@ func TestModule(t *testing.T) {
 	a.ServeHTTP(res, req)
 	assert.Equal(t, "Bar1", res.Body.String())
 
-	err = a.UnregisterUserModule("testModule1")
+	err = a.UnregisterUserComponent("testComponent1")
 	assert.Nil(t, err)
 	a.Shutdown()
-	assert.Equal(t, "testModule1-Register|testModule1-Startup||testModule1-Unregister", a.GetContextValue("output"))
+	assert.Equal(t, "testComponent1-Register|testComponent1-Startup||testComponent1-Unregister", a.GetContextValue("output"))
 }
 
-func TestInjectModule(t *testing.T) {
+func TestInjectComponent(t *testing.T) {
 	var options map[string]libConfig.Option = map[string]libConfig.Option{}
 	var values map[string]interface{} = make(map[string]interface{}, 0)
-	var modules []*module.Module = []*module.Module{}
+	var modules []*Component = []*Component{}
 	a := New(os.Args[0], filepath.Dir(filepath.Dir(os.Args[0])), "ltick.json", "LTICK", modules, options).
 		WithCallback(&TestCallback{}).
 		WithValues(values)
 	a.SetSystemLogWriter(ioutil.Discard)
 	a.SetContextValue("output", "")
-	err := a.RegisterUserModule("Test", &testModule1{})
+	err := a.RegisterUserComponent("Test", &testComponent1{})
 	assert.Nil(t, err)
-	testModule, err := a.GetModule("Test")
+	testComponent, err := a.GetComponent("Test")
 	assert.Nil(t, err)
-	module, ok := testModule.(*testModule1)
+	module, ok := testComponent.(*testComponent1)
 	assert.Equal(t, true, ok)
 	assert.Equal(t, "Foo", module.Foo)
-	err = a.RegisterUserModule("testModule2", &testModule2{})
+	err = a.RegisterUserComponent("testComponent2", &testComponent2{})
 	assert.Nil(t, err)
 	err = a.RegisterValue("Foo", "Bar2")
 	assert.Nil(t, err)
-	err = a.InjectModuleByName("testModule2")
+	err = a.InjectComponentByName("testComponent2")
 	assert.Nil(t, err)
 	a.Startup()
-	testModule, err = a.GetModule("testModule2")
+	testComponent, err = a.GetComponent("testComponent2")
 	assert.Nil(t, err)
-	_module, ok := testModule.(*testModule2)
+	_module, ok := testComponent.(*testComponent2)
 	assert.Equal(t, true, ok)
 	assert.Equal(t, "Bar2", _module.Test.Foo)
 	assert.Equal(t, "Bar2", module.Foo)
-	assert.Equal(t, "testModule1-Register|testModule2-Register|testModule1-Startup|testModule2-Startup|", a.GetContextValue("output"))
+	assert.Equal(t, "testComponent1-Register|testComponent2-Register|testComponent1-Startup|testComponent2-Startup|", a.GetContextValue("output"))
 	a.Shutdown()
-	assert.Equal(t, "testModule1-Register|testModule2-Register|testModule1-Startup|testModule2-Startup||testModule2-Shutdown|testModule1-Shutdown", a.GetContextValue("output"))
+	assert.Equal(t, "testComponent1-Register|testComponent2-Register|testComponent1-Startup|testComponent2-Startup||testComponent2-Shutdown|testComponent1-Shutdown", a.GetContextValue("output"))
 }
 
-func TestBuildinModule(t *testing.T) {
+func TestBuildinComponent(t *testing.T) {
 	var options map[string]libConfig.Option = map[string]libConfig.Option{}
 	var values map[string]interface{} = make(map[string]interface{}, 0)
-	var modules []*module.Module = []*module.Module{}
+	var modules []*Component = []*Component{}
 	a := New(os.Args[0], filepath.Dir(filepath.Dir(os.Args[0])), "ltick.json", "LTICK", modules, options).
 		WithCallback(&TestCallback{}).
 		WithValues(values)
 	a.SetSystemLogWriter(ioutil.Discard)
-	err := a.UseModule("Database", "Cache", "queue")
+	err := a.UseComponent("Database", "Cache", "queue")
 	assert.Nil(t, err)
-	logger, err := a.GetBuiltinModule("logger")
+	logger, err := a.GetBuiltinComponent("logger")
 	assert.Nil(t, err)
 	assert.NotNil(t, logger)
-	config, err := a.GetBuiltinModule("Config")
+	config, err := a.GetBuiltinComponent("Config")
 	assert.Nil(t, err)
 	assert.NotNil(t, config)
-	utility, err := a.GetBuiltinModule("utility")
+	utility, err := a.GetBuiltinComponent("utility")
 	assert.Nil(t, err)
 	assert.NotNil(t, utility)
-	database, err := a.GetModule("database")
+	database, err := a.GetComponent("database")
 	assert.Nil(t, err)
 	assert.NotNil(t, database)
-	cache, err := a.GetModule("cache")
+	cache, err := a.GetComponent("cache")
 	assert.Nil(t, err)
 	assert.NotNil(t, cache)
-	queue, err := a.GetModule("queue")
+	queue, err := a.GetComponent("queue")
 	assert.Nil(t, err)
 	assert.NotNil(t, queue)
 }

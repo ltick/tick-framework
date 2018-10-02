@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ltick/tick-framework/module/config"
-	"github.com/ltick/tick-framework/module/filesystem/block"
+	"github.com/ltick/tick-framework/config"
+	"github.com/ltick/tick-framework/filesyste"
 )
 
 var (

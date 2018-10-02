@@ -19,9 +19,9 @@ import (
 	"strings"
 	"time"
 
-	libCache "github.com/ltick/tick-framework/module/cache"
-	"github.com/ltick/tick-framework/module/config"
-	libDatabase "github.com/ltick/tick-framework/module/database"
+	libCache "github.com/ltick/tick-framework/cache"
+	"github.com/ltick/tick-framework/config"
+	libDatabase "github.com/ltick/tick-framework/database"
 	libUtility "github.com/ltick/tick-framework/utility"
 	"github.com/ltick/tick-routing"
 )

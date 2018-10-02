@@ -10,7 +10,7 @@ import (
 
 	"github.com/ltick/tick-framework/utility/kvstore"
 	"github.com/ltick/tick-framework/utility/pooling"
-	"github.com/ltick/tick-framework/module/config"
+	"github.com/ltick/tick-framework/config"
 )
 
 var (
