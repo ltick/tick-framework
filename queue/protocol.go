@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/ltick/tick-framework/config"
-	"github.com/ltick/tick-routing"
 )
 
 var (

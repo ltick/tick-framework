@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/ltick/tick-framework/config"
-	"github.com/ltick/tick-routing"
 )
 
 var (
@@ -72,12 +71,6 @@ func (f *Filesystem) OnStartup(ctx context.Context) (newCtx context.Context, err
 func (f *Filesystem) OnShutdown(ctx context.Context) (context.Context, error) {
 	return ctx, nil
 }
-func (f *Filesystem) OnRequestStartup(c *routing.Context) error {
-	return nil
-}
-func (f *Filesystem) OnRequestShutdown(c *routing.Context) error {
-	return nil
-}
 
 func (f *Filesystem) Use(ctx context.Context, handlerName string) (err error) {
 	var handler storageHandler
@@ -100,8 +93,8 @@ func (f *Filesystem) GetContent(key string) (content []byte, err error) {
 	return f.handler.GetContent(key)
 }
 
-func (this *Instance) DelContent(key string) (err error) {
-	return this.handler.DelContent(key)
+func (f *Filesystem) DelContent(key string) (err error) {
+	return f.handler.DelContent(key)
 }
 
 type Handler interface {

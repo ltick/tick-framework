@@ -3,25 +3,30 @@ package utility
 import "strings"
 
 // inArray 判断字符串是否存在数组中
-func InArrayString(needle string, haystack []string, caseSensitives ...bool) bool {
+func InArrayString(needle string, haystack []string, caseSensitives ...bool) *int {
 	caseSensitive := true
 	if len(caseSensitives) > 0 {
 		caseSensitive = caseSensitives[0]
 	}
-	for _, value := range haystack {
+	for index, value := range haystack {
 		if caseSensitive {
 			if needle == value {
-				return true
+				return &index
 			}
 		} else {
 			if strings.ToLower(needle) == strings.ToLower(value) {
-				return true
+				return &index
 			}
 		}
 	}
-	return false
+	return nil
 }
-
+func AppendDistinctiveArrayString(needle string, haystack []string) []string {
+	if InArrayString(needle, haystack, true) == nil {
+		haystack = append(haystack, needle)
+	}
+	return haystack
+}
 func InMapString(needle string, haystack map[string]string) bool {
 	for _, value := range haystack {
 		if needle == value {

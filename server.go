@@ -160,12 +160,12 @@ func (e *Engine) NewServer(name string, port uint, gracefulStopTimeout time.Dura
 		mutex:       sync.RWMutex{},
 	}
 	middlewares := make([]MiddlewareInterface, 0)
-	for _, sortedComponent := range GetSortedMiddlewares() {
-		middleware, ok := sortedComponent.(*Component)
+	for _, sortedMiddleware := range GetSortedMiddlewares() {
+		middleware, ok := sortedMiddleware.(*Middleware)
 		if !ok {
 			continue
 		}
-		middlewares = append(middlewares, middleware.Component)
+		middlewares = append(middlewares, middleware.Middleware)
 	}
 	server.RouteGroups["/"] = server.Router.AddRouteGroup("/", middlewares)
 	e.Servers[name] = server

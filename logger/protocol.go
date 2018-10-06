@@ -8,7 +8,6 @@ import (
 
 	"github.com/go-ozzo/ozzo-config"
 	libLogger "github.com/ltick/tick-log"
-	"github.com/ltick/tick-routing"
 )
 
 var (

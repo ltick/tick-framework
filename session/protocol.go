@@ -151,12 +151,6 @@ func (s *Session) OnStartup(ctx context.Context) (context.Context, error) {
 func (s *Session) OnShutdown(ctx context.Context) (context.Context, error) {
 	return ctx, nil
 }
-func (s *Session) OnRequestStartup(c *routing.Context) error {
-	return nil
-}
-func (s *Session) OnRequestShutdown(c *routing.Context) error {
-	return  nil
-}
 
 func (s *Session) HandlerName() string {
 	return s.handlerName

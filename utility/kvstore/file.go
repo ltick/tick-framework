@@ -44,7 +44,7 @@ func (f *KVFileStore) Write(v *KVStoreData) (err error) {
 	return nil
 }
 
-func (f *KVFileStore) Read(offset uint32) (v *KVStoreData, err error) {
+func (f *KVFileStore) Read(offset int64) (v *KVStoreData, err error) {
 	v, err = f.KVStore.Get(offset)
 	if err != nil {
 		return nil, errors.New(err.Error())

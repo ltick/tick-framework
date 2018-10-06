@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -24,22 +25,24 @@ import (
 )
 
 var (
-	errNew                        = "ltick: new error"
-	errNewClassic                 = "ltick: new classic error"
-	errNewServer                  = "ltick: new server error"
-	errConfigure                  = "ltick: configure error"
-	errStartup                    = "ltick: startup error"
-	errGetLogger                  = "ltick: get logger error"
-	errWithValues                 = "ltick: with values error"
-	errStartupCallback            = "ltick: startup callback error"
-	errStartupRouterCallback      = "ltick: startup router callback error"
-	errStartupRouteGroupCallback  = "ltick: startup route group callback error"
-	errStartupConfigureComponent     = "ltick: startup configure component error"
-	errStartupInjectComponent        = "ltick: startup inject component error"
-	errStartupInjectBuiltinComponent = "ltick: startup inject builtin component error"
+	errNew                       = "ltick: new error"
+	errNewClassic                = "ltick: new classic error"
+	errNewServer                 = "ltick: new server error"
+	errConfigure                 = "ltick: configure error"
+	errStartup                   = "ltick: startup error"
+	errGetLogger                 = "ltick: get logger error"
+	errWithValues                = "ltick: with values error"
+	errInitiateComponent         = "ltick: initiate component '%s' error"
+	errStartupCallback           = "ltick: startup callback error"
+	errStartupRouterCallback     = "ltick: startup router callback error"
+	errStartupRouteGroupCallback = "ltick: startup route group callback error"
+	errStartupConfigureComponent = "ltick: startup configure component error"
+	errStartupInjectComponent    = "ltick: startup inject component error"
+	errStartupInitiateComponent  = "ltick: startup initiate component '%s' error"
 
-	errLoadSystemConfig  = "ltick: load system config error"
-	errLoadEnvConfigFile = "ltick: load env config file error"
+	errLoadCachedConfig = "ltick: load cached config error"
+	errLoadSystemConfig = "ltick: load system config error"
+	errLoadEnvFile      = "ltick: load env file error"
 )
 
 type State int8
@@ -52,14 +55,17 @@ const (
 
 type (
 	Engine struct {
-		state           State
-		executeFile     string
-		systemLogWriter io.Writer
-		callback        Callback
-		option          *Option
-		components         []*Component
-		Config          *libConfig.Config
-		Logger          *libLogger.Logger
+		state            State
+		executeFile      string
+		systemLogWriter  io.Writer
+		callback         Callback
+		option           *Option
+		Components       []interface{}
+		ComponentMap     map[string]interface{}
+		SortedComponents []string
+		Values           map[string]interface{}
+		Config           *libConfig.Config `inject:true`
+		Logger           *libLogger.Logger `inject:true`
 
 		Context context.Context
 		Servers map[string]*Server
@@ -82,7 +88,7 @@ type (
 	}
 )
 
-var defaultConfigName = "ltick.json"
+var defaultConfigPath = "etc/ltick.json"
 var defaultConfigReloadTime = 120 * time.Second
 var configPlaceholdRegExp = regexp.MustCompile(`%\w+%`)
 
@@ -100,7 +106,7 @@ func NewClassic(components []*Component, configOptions map[string]libConfig.Opti
 	if option.PathPrefix == "" {
 		option.PathPrefix = filepath.Dir(filepath.Dir(executePath))
 	}
-	engine = New(executeFile, option.PathPrefix, defaultConfigName, option.EnvPrefix, components, configOptions)
+	engine = New(executeFile, option.PathPrefix, defaultConfigPath, option.EnvPrefix, components, configOptions)
 	logHandlers := make([]*LogHanlder, 0)
 	loggerTargetsConfig := engine.Config.GetStringMap("components.logger.targets")
 	for loggerName, loggerTargetInterface := range loggerTargetsConfig {
@@ -173,26 +179,42 @@ func NewClassic(components []*Component, configOptions map[string]libConfig.Opti
 	return engine
 }
 
-func New(executeFile string, pathPrefix string, configName string, envPrefix string, components []*Component, configOptions map[string]libConfig.Option) (engine *Engine) {
-	engine = &Engine{
-		option:          &Option{},
-		state:           STATE_INITIATE,
-		executeFile:     executeFile,
-		systemLogWriter: os.Stdout,
-		Context:         context.Background(),
-		Servers:         make(map[string]*Server, 0),
+func New(executeFile string, pathPrefix string, configPath string, envPrefix string, components []*Component, configOptions map[string]libConfig.Option) (e *Engine) {
+	e = &Engine{
+		option:           &Option{},
+		state:            STATE_INITIATE,
+		executeFile:      executeFile,
+		systemLogWriter:  os.Stdout,
+		Context:          context.Background(),
+		Servers:          make(map[string]*Server, 0),
+		Components:       make([]interface{}, 0),
+		ComponentMap:     make(map[string]interface{}),
+		SortedComponents: make([]string, 0),
+		Values:           make(map[string]interface{}),
 	}
 	var err error
-	// 内置模块注册
-	for _, builtinComponent := range BuiltinComponents {
-		canonicalBuiltinComponentName := strings.ToUpper(builtinComponent.Name[0:1]) + builtinComponent.Name[1:]
-		engine.Context, err = registerBuiltinComponent(engine.Context, canonicalBuiltinComponentName, builtinComponent.Component, true)
+	// 注册内置模块
+	for _, component := range BuiltinComponents {
+		err = e.RegisterComponent(component.Name, component.Component, true)
 		if err != nil {
 			fmt.Printf(errNew+": %s\r\n", err.Error())
 			os.Exit(1)
 		}
 	}
-	configComponent, err := GetBuiltinComponent("Config")
+	// 模块初始化
+	for index, c := range e.Components {
+		ci, ok := c.(ComponentInterface)
+		if !ok {
+			fmt.Printf(errInitiateComponent+": invalid type", e.SortedComponents[index])
+			os.Exit(1)
+		}
+		e.Context, err = ci.Initiate(e.Context)
+		if err != nil {
+			fmt.Printf(errInitiateComponent+": %s", e.SortedComponents[index], err.Error())
+			os.Exit(1)
+		}
+	}
+	configComponent, err := e.GetComponentByName("Config")
 	if err != nil {
 		fmt.Printf(errNew+": %s\r\n", err.Error())
 		os.Exit(1)
@@ -202,7 +224,7 @@ func New(executeFile string, pathPrefix string, configName string, envPrefix str
 		fmt.Printf(errNew+": %s\r\n", "invalid 'Config' component type")
 		os.Exit(1)
 	}
-	loggerComponent, err := GetBuiltinComponent("logger")
+	loggerComponent, err := e.GetComponentByName("Logger")
 	if err != nil {
 		fmt.Printf(errNew+": %s\r\n", err.Error())
 		os.Exit(1)
@@ -212,45 +234,69 @@ func New(executeFile string, pathPrefix string, configName string, envPrefix str
 		fmt.Printf(errNew+": %s\r\n", "invalid 'Logger' component type")
 		os.Exit(1)
 	}
-	engine.components = components
-	engine.Config = config
-	engine.Logger = logger
-	engine.SetPathPrefix(pathPrefix)
-	engine.Context, err = engine.Config.SetOptions(engine.Context, configOptions)
+	for _, c := range components {
+		err = e.RegisterComponent(c.Name, c.Component, true)
+		if err != nil {
+			fmt.Printf(errNew+": %s\r\n", err.Error())
+			os.Exit(1)
+		}
+	}
+	e.Config = config
+	e.Logger = logger
+	e.SetPathPrefix(pathPrefix)
+	e.Context, err = e.Config.SetOptions(e.Context, configOptions)
 	if err != nil {
 		fmt.Printf(errNew+": %s\r\n", err.Error())
 		os.Exit(1)
 	}
-	engine.LoadSystemConfig(pathPrefix+"/etc/"+configName, envPrefix, pathPrefix+"/.env")
-	return engine
+	if !path.IsAbs(configPath) {
+		configPath = pathPrefix + "/" + configPath
+	}
+	_, err = os.Stat(pathPrefix + "/.env")
+	if err == nil {
+		e.LoadSystemConfig(configPath, envPrefix, pathPrefix+"/.env")
+	} else {
+		e.LoadSystemConfig(configPath, envPrefix)
+	}
+	return e
 }
-func (e *Engine) LoadSystemConfig(configFilePath string, envPrefix string, dotEnvFile string) *Engine {
+func (e *Engine) LoadSystemConfig(configFilePath string, envPrefix string, dotEnvFiles ...string) *Engine {
+	var dotEnvFile string
+	if len(dotEnvFiles) > 0 {
+		dotEnvFile = dotEnvFiles[0]
+	}
 	configCachedFile, err := libUtility.GetCachedFile(configFilePath)
 	if err != nil {
 		fmt.Printf(errLoadSystemConfig+": %s\r\n", err.Error())
 	}
 	defer configCachedFile.Close()
 	cachedConfigFilePath := configCachedFile.Name()
-	e.LoadEnvConfigFile(envPrefix, dotEnvFile)
+	if dotEnvFile != "" {
+		e.LoadEnvFile(envPrefix, dotEnvFile)
+	} else {
+		e.LoadEnv(envPrefix)
+	}
 	e.LoadCachedConfig(configFilePath, cachedConfigFilePath)
 	go func() {
 		// 刷新缓存
 		for {
-			dotEnvFileInfo, err := os.Stat(dotEnvFile)
-			if err != nil {
-				fmt.Printf(errLoadSystemConfig+": %s\r\n", err.Error())
-			}
-			configFileInfo, err := os.Stat(configFilePath)
-			if err != nil {
-				fmt.Printf(errLoadSystemConfig+": %s\r\n", err.Error())
-			}
 			cachedConfigFileInfo, err := os.Stat(cachedConfigFilePath)
 			if err != nil {
 				fmt.Printf(errLoadSystemConfig+": %s\r\n", err.Error())
 			}
-			if cachedConfigFileInfo.ModTime().Before(dotEnvFileInfo.ModTime()) {
-				e.LoadEnvConfigFile(envPrefix, dotEnvFile)
-				e.LoadCachedConfig(configFilePath, cachedConfigFilePath)
+			if dotEnvFile != "" {
+				dotEnvFileInfo, err := os.Stat(dotEnvFile)
+				if err != nil {
+					fmt.Printf(errLoadSystemConfig+": %s\r\n", err.Error())
+				}
+				if cachedConfigFileInfo.ModTime().Before(dotEnvFileInfo.ModTime()) {
+					e.LoadEnvFile(envPrefix, dotEnvFile)
+					e.LoadCachedConfig(configFilePath, cachedConfigFilePath)
+				}
+			}
+			configFileInfo, err := os.Stat(configFilePath)
+			if err != nil {
+				fmt.Printf(errLoadSystemConfig+": %s\r\n", err.Error())
 			}
 			if cachedConfigFileInfo.ModTime().Before(configFileInfo.ModTime()) {
 				e.LoadCachedConfig(configFilePath, cachedConfigFilePath)
@@ -271,13 +317,13 @@ func (e *Engine) SetConfigOptions(configOptions map[string]libConfig.Option) (er
 func (e *Engine) LoadCachedConfig(configFilePath string, cachedConfigFilePath string) {
 	configFile, err := os.OpenFile(configFilePath, os.O_RDONLY, 0644)
 	if err != nil {
-		fmt.Printf(errLoadSystemConfig+": %s\r\n", err.Error())
+		fmt.Printf(errLoadCachedConfig+": %s\r\n", err.Error())
 		os.Exit(1)
 	}
 	defer configFile.Close()
 	cachedFileByte, err := ioutil.ReadAll(configFile)
 	if err != nil {
-		fmt.Printf(errLoadSystemConfig+": %s\r\n", err.Error())
+		fmt.Printf(errLoadCachedConfig+": %s\r\n", err.Error())
 		os.Exit(1)
 	}
 	matches := configPlaceholdRegExp.FindAll(cachedFileByte, -1)
@@ -288,7 +334,7 @@ func (e *Engine) LoadCachedConfig(configFilePath string, cachedConfigFilePath st
 	}
 	err = ioutil.WriteFile(cachedConfigFilePath, cachedFileByte, 0644)
 	if err != nil {
-		fmt.Printf(errLoadSystemConfig+": %s\r\n", err.Error())
+		fmt.Printf(errLoadCachedConfig+": %s\r\n", err.Error())
 		os.Exit(1)
 	}
 	e.LoadConfig(filepath.Dir(cachedConfigFilePath), strings.Replace(filepath.Base(cachedConfigFilePath), filepath.Ext(cachedConfigFilePath), "", 1))
@@ -328,13 +374,13 @@ func (e *Engine) LoadEnv(envPrefix string) *Engine {
 	}
 	return nil
 }
-func (e *Engine) LoadEnvConfigFile(envPrefix string, dotEnvFile string) *Engine {
+func (e *Engine) LoadEnvFile(envPrefix string, dotEnvFile string) *Engine {
 	e.option.EnvPrefix = envPrefix
 	e.Config.SetPathPrefix(e.option.PathPrefix)
 	e.Config.SetEnvPrefix(envPrefix)
 	err := e.Config.LoadFromEnvFile(dotEnvFile)
 	if err != nil {
-		fmt.Printf(errLoadEnvConfigFile+": %s\r\n", err.Error())
+		fmt.Printf(errLoadEnvFile+": %s\r\n", err.Error())
 		os.Exit(1)
 	}
 	return e
@@ -379,7 +425,7 @@ func (e *Engine) WithLoggers(handlers []*LogHanlder) *Engine {
 						os.Exit(1)
 					}
 				} else {
-					fmt.Printf("ltick: check system log file '%s' error:%s\r\n", hanlder.Name, logFilename, err.Error())
+					fmt.Printf("ltick: fail to create %s log file '%s' error:%s\r\n", hanlder.Name, logFilename, err.Error())
 					os.Exit(1)
 				}
 			}
@@ -446,11 +492,8 @@ func (e *Engine) Startup() (err error) {
 	}
 	e.SystemLog("ltick: Execute file \"" + e.executeFile + "\"")
 	e.SystemLog("ltick: Startup")
-
-	e.LoadSystemConfig(e.option.PathPrefix+"/etc/"+defaultConfigName, e.option.EnvPrefix, e.option.PathPrefix+"/.env")
-
 	if e.callback != nil {
-		err = InjectComponentTo([]interface{}{e.callback})
+		err = e.InjectComponentTo([]interface{}{e.callback})
 		if err != nil {
 			return fmt.Errorf(errStartupCallback+": %s", err.Error())
 		}
@@ -467,12 +510,12 @@ func (e *Engine) Startup() (err error) {
 		}
 		// proxy
 		if server.Router.proxys != nil && len(server.Router.proxys) > 0 {
-			server.addRoute("ANY", "/", )
+			server.addRoute("ANY", "/")
 		}
 		if server.RouteGroups != nil {
 			for _, routeGroup := range server.RouteGroups {
 				if routeGroup.callback != nil {
-					err = InjectComponentTo([]interface{}{routeGroup.callback})
+					err = e.InjectComponentTo([]interface{}{routeGroup.callback})
 					if err != nil {
 						return fmt.Errorf(errStartupRouteGroupCallback+": %s", err.Error())
 					}
@@ -480,48 +523,37 @@ func (e *Engine) Startup() (err error) {
 			}
 		}
 		if server.Router.callback != nil {
-			err = InjectComponentTo([]interface{}{server.Router.callback})
+			err = e.InjectComponentTo([]interface{}{server.Router.callback})
 			if err != nil {
 				return fmt.Errorf(errStartupRouterCallback+": %s", err.Error())
 			}
 		}
 	}
-	// 内置模块注入
-	for index, sortedBuiltinComponent := range GetSortedBuiltinComponents() {
-		sortedBuiltinComponentInstance, ok := sortedBuiltinComponent.(ComponentInterface)
+	sortedComponents := e.GetSortedComponents()
+	// 模块初始化
+	for index, c := range sortedComponents {
+		ci, ok := c.(ComponentInterface)
 		if !ok {
-			return fmt.Errorf(errStartupInjectBuiltinComponent+": invalid '%s' component type", BuiltinComponentOrder[index])
+			return fmt.Errorf(errStartupInitiateComponent+": invalid type", e.SortedComponents[index])
 		}
-		e.Context, err = sortedBuiltinComponentInstance.OnStartup(e.Context)
+		e.Context, err = ci.Initiate(e.Context)
 		if err != nil {
-			return fmt.Errorf(errStartupInjectBuiltinComponent+": %s", err.Error())
+			return fmt.Errorf(errStartupInitiateComponent+": %s", e.SortedComponents[index], err.Error())
 		}
 	}
-	sortedComponents := GetSortedComponents()
 	// 模块启动
-	for index, sortedComponent := range sortedComponents {
-		sortedComponentInstance, ok := sortedComponent.(ComponentInterface)
+	for index, c := range sortedComponents {
+		ci, ok := c.(ComponentInterface)
 		if !ok {
-			return fmt.Errorf(errStartupInjectComponent+": invalid '%s' component type", ComponentOrder[index])
+			return fmt.Errorf(errStartupInjectComponent+": invalid '%s' component type", e.SortedComponents[index])
 		}
-		e.Context, err = sortedComponentInstance.OnStartup(e.Context)
+		e.Context, err = ci.OnStartup(e.Context)
 		if err != nil {
 			return fmt.Errorf(errStartupInjectComponent+": %s", err.Error())
 		}
 	}
-	// 注册模块
-	for _, component := range e.components {
-		err := e.RegisterUserComponent(component.Name, component.Component)
-		if err != nil {
-			return fmt.Errorf(errStartupInjectComponent+": %s [component:'%s']", err.Error(), component.Name)
-		}
-	}
-
-	// 用户模块排序
-	e.Module.SetSortedUserModules()
-
 	// 注入模块
-	err = InjectComponent()
+	err = e.InjectComponent()
 	if err != nil {
 		return fmt.Errorf(errStartupInjectComponent+": %s", err.Error())
 	}
@@ -534,7 +566,7 @@ func (e *Engine) Shutdown() (err error) {
 		return nil
 	}
 	e.SystemLog("ltick: Shutdown")
-	for _, sortedComponent := range GetSortedComponents(true) {
+	for _, sortedComponent := range e.GetSortedComponents(true) {
 		component, ok := sortedComponent.(ComponentInterface)
 		if !ok {
 			e.SystemLog("ltick: Shutdown component error: invalid component type")
@@ -626,70 +658,21 @@ func (e *Engine) GetContextValueString(key string) string {
 		return ""
 	}
 }
-func (e *Engine) UseComponent(componentNames ...string) (err error) {
-	e.Context, err = UseComponent(e.Context, componentNames...)
-	return err
-}
 
 // Register As Component
-func (e *Engine) RegisterUserComponent(componentName string, component ComponentInterface, forceOverwrites ...bool) (err error) {
-	e.Context, err = RegisterUserComponent(e.Context, componentName, component, forceOverwrites...)
-	return err
+func (e *Engine) RegisterComponent(componentName string, component ComponentInterface, forceOverwrites ...bool) (err error) {
+	e.Context, err = e.registerComponent(e.Context, componentName, component, forceOverwrites...)
+	if err != nil {
+		return fmt.Errorf(errRegisterComponent+": %s", err.Error())
+	}
+	return nil
 }
 
 // Unregister As Component
-func (e *Engine) UnregisterUserComponent(componentNames ...string) (err error) {
-	e.Context, err = UnregisterUserComponent(e.Context, componentNames...)
-	return err
-}
-
-func (e *Engine) GetBuiltinComponent(componentName string) (interface{}, error) {
-	return GetBuiltinComponent(componentName)
-}
-
-func (e *Engine) GetBuiltinComponents() map[string]interface{} {
-	return GetBuiltinComponents()
-}
-
-func (e *Engine) GetComponent(componentName string) (interface{}, error) {
-	return GetComponent(componentName)
-}
-
-func (e *Engine) GetComponents() map[string]interface{} {
-	return GetComponents()
-}
-
-func (e *Engine) LoadComponentFileConfig(componentName string, configFile string, configProviders map[string]interface{}, configTag ...string) (err error) {
-	return LoadComponentFileConfig(componentName, configFile, configProviders, configTag...)
-}
-
-// Register As Component
-func (e *Engine) LoadComponentJsonConfig(componentName string, configData []byte, configProviders map[string]interface{}, configTag ...string) (err error) {
-	return LoadComponentJsonConfig(componentName, configData, configProviders, configTag...)
-}
-
-// Register As Value
-func (e *Engine) RegisterValue(key string, value interface{}, forceOverwrites ...bool) (err error) {
-	e.Context, err = RegisterValue(e.Context, key, value, forceOverwrites...)
-	return err
-}
-
-// Unregister As Value
-func (e *Engine) UnregisterValue(keys ...string) (context.Context, error) {
-	return UnregisterValue(e.Context, keys...)
-}
-
-func (e *Engine) GetValue(key string) (interface{}, error) {
-	return GetValue(key)
-}
-
-func (e *Engine) GetValues() map[string]interface{} {
-	return GetValues()
-}
-
-func (e *Engine) InjectComponent() error {
-	return InjectComponent()
-}
-func (e *Engine) InjectComponentByName(componentNames ...string) error {
-	return InjectComponentByName(componentNames)
+func (e *Engine) UnregisterComponent(componentNames ...string) (err error) {
+	e.Context, err = e.unregisterComponent(e.Context, componentNames...)
+	if err != nil {
+		return fmt.Errorf(errUnregisterComponent+": %s [components:'%v']", err.Error(), componentNames)
+	}
+	return nil
 }

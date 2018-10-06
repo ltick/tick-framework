@@ -127,7 +127,15 @@ func NewKVStore(reader io.ReadSeeker, writer io.WriteSeeker) *KVStore {
 		writer: writer,
 	}
 }
-
+func (kv *KVStore) Key() string {
+	return ""
+}
+func (kv *KVStore) Size() uint64 {
+	return 0
+}
+func (kv *KVStore) Value() uint64 {
+	return 0
+}
 func (kv *KVStore) get(offset int64) (data []byte, err error) {
 	var (
 		overheadLength uint32 = 10

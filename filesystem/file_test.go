@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ltick/tick-framework/module/config"
+	"github.com/ltick/tick-framework/config"
 )
 
 var (
@@ -21,14 +21,13 @@ func init() {
 		"FILESYSTEM_DEFRAG_CONTENT_LIFETIME": config.Option{Type: config.Duration, Default: 24 * time.Hour, EnvironmentKey: "FILESYSTEM_DEFRAG_CONTENT_LIFETIME"},
 		"FILESYSTEM_LRU_CAPACITY":            config.Option{Type: config.Int64, Default: 32 * 1024 * 1024, EnvironmentKey: "FILESYSTEM_LRU_CAPACITY"},
 	}
-
-	var config *config.Instance = config.NewInstance()
+	var config *config.Config = config.NewConfig()
 	config.Initiate(nil)
 	config.SetOptions(nil, configs)
 	handler.Initiate(nil, config)
 }
 
-func ExampleFileHandler() {
+func ExampleHandler() {
 	handler.SetContent("1", []byte{1, 2, 3})
 	fmt.Println(handler.GetContent("1"))
 	// Output:

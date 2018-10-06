@@ -8,7 +8,6 @@ import (
 
 	"github.com/jinzhu/gorm"
 	"github.com/ltick/tick-framework/config"
-	"github.com/ltick/tick-routing"
 	"github.com/tsuna/gohbase/hrpc"
 )
 
@@ -86,12 +85,6 @@ func (d *Database) OnStartup(ctx context.Context) (context.Context, error) {
 }
 func (d *Database) OnShutdown(ctx context.Context) (context.Context, error) {
 	return ctx, nil
-}
-func (d *Database) OnRequestStartup(c *routing.Context) error {
-	return nil
-}
-func (d *Database) OnRequestShutdown(c *routing.Context) error {
-	return nil
 }
 func (d *Database) HandlerName() string {
 	return d.handlerName

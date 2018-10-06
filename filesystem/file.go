@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/ltick/tick-framework/config"
-	"github.com/ltick/tick-framework/filesyste"
+	"github.com/ltick/tick-framework/filesystem/block"
 )
 
 type FileHandler struct {
@@ -18,7 +18,7 @@ func NewFileHandler() Handler {
 	}
 }
 
-func (this *FileHandler) Initiate(ctx context.Context, conf *config.Instance) (err error) {
+func (this *FileHandler) Initiate(ctx context.Context, conf *config.Config) (err error) {
 	var (
 		defragContentInterval time.Duration = conf.GetDuration("FILESYSTEM_DEFRAG_CONTENT_INTERVAL")
 		defragContentLifetime time.Duration = conf.GetDuration("FILESYSTEM_DEFRAG_CONTENT_LIFETIME")

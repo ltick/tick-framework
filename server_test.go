@@ -23,7 +23,7 @@ import (
 type ServerAppInitFunc struct{}
 
 func (f *ServerAppInitFunc) OnStartup(e *Engine) error {
-	loggerComponent, err := e.GetBuiltinComponent("logger")
+	loggerComponent, err := e.GetComponentByName("logger")
 	if err != nil {
 		return err
 	}
@@ -89,7 +89,7 @@ func TestServerCallback(t *testing.T) {
 	err := a.Startup()
 	assert.Nil(t, err)
 	assert.NotNil(t, a.Context.Value("testlogger"))
-	utilityComponent, err := a.GetBuiltinComponent("utility")
+	utilityComponent, err := a.GetComponentByName("utility")
 	assert.Nil(t, err)
 	a.SetContextValue("utility", utilityComponent)
 	accessLogFunc := func(c *routing.Context, rw *access.LogResponseWriter, elapsed float64) {
