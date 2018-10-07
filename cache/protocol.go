@@ -145,6 +145,7 @@ type CacheHandler interface {
 	Del(key interface{}) (interface{}, error)
 	Hset(key interface{}, field interface{}, value interface{}) error
 	Hmset(key interface{}, args ...interface{}) error
+	Hmget(key interface{}, args ...interface{}) (interface{}, error)
 	Hget(key interface{}, field interface{}) (interface{}, error)
 	Hdel(key interface{}, field interface{}) (interface{}, error)
 	Hgetall(key interface{}) (interface{}, error)
@@ -152,9 +153,10 @@ type CacheHandler interface {
 	ScanStruct(src []interface{}, dest interface{}) error
 	Sadd(key interface{}, args ...interface{}) error
 	Scard(key interface{}) (int64, error)
-	Zadd(key interface{}, score, value interface{}) error
-	Zrem(key interface{}, value ...interface{}) error
+	Zadd(key interface{}, args ...interface{}) error
+	Zrem(key interface{}, field interface{}) (interface{}, error)
 	Zrange(key interface{}, start interface{}, end interface{}) (interface{}, error)
+	Zscore(key interface{}, field interface{}) (interface{}, error)
 	Zcard(key interface{}) (int64, error)
 	Zscan(key interface{}, cursor string, match string, count int64) (nextCursor string, keys []string, err error)
 	Sscan(key interface{}, cursor string, match string, count int64) (interface{}, error)
