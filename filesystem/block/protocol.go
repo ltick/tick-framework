@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/ltick/tick-framework/config"
-	"github.com/ltick/tick-routing"
 )
 
 var (
@@ -23,12 +22,12 @@ var (
 
 func NewInstance() *Instance {
 	return &Instance{
-		Config: config.NewInstance(),
+		Config: config.NewConfig(),
 	}
 }
 
 type Instance struct {
-	Config      *config.Instance
+	Config      *config.Config
 	handlerName string
 	handler     BlockHandler
 }
@@ -69,12 +68,6 @@ func (this *Instance) OnStartup(ctx context.Context) (newCtx context.Context, er
 func (this *Instance) OnShutdown(ctx context.Context) (context.Context, error) {
 	return ctx, nil
 }
-func (this *Instance) OnRequestStartup(c *routing.Context) error {
-	return ctx, nil
-}
-func (this *Instance) OnRequestShutdown(c *routing.Context) error {
-	return ctx, nil
-}
 
 func (this *Instance) Use(ctx context.Context, handlerName string) (err error) {
 	var handler fileBlockHandler
@@ -89,33 +82,23 @@ func (this *Instance) Use(ctx context.Context, handlerName string) (err error) {
 	return
 }
 
-func (this *Instance) Set(key string, value []byte) (err error) {
-	return this.handler.Set(key, value)
+func (this *Instance) Read(index *Index) (data []byte, err error) {
+	return this.handler.Read(index)
 }
 
-func (this *Instance) Get(key string) (value []byte, err error) {
-	return this.handler.Get(key)
+func (this *Instance) Write(key, value []byte) (index *Index, err error) {
+	return this.handler.Write(key, value)
 }
 
-func (this *Instance) Del(key string) (err error) {
-	return this.handler.Del(key)
-}
-
-func (this *Instance) DefragContent(defragDuration time.Duration) (err error) {
-	return this.handler.DefragContent(defragDuration)
-}
-
-func (this *Instance) Range(doFunc func(key string, exist bool)) (err error) {
-	return this.handler.Range(doFunc)
+func (this *Instance) Defrag(defragLifetime time.Duration, rebuildIndex func(key string, index *Index)) {
+	this.handler.Defrag(defragLifetime, rebuildIndex)
 }
 
 type BlockHandler interface {
-	Initiate(ctx context.Context, conf *config.Instance) error
-	Set(key string, value []byte) (err error)
-	Get(key string) (value []byte, err error)
-	Del(key string) (err error)
-	DefragContent(defragDuration time.Duration) (err error)
-	Range(doFunc func(key string, exist bool)) (err error)
+	Initiate(ctx context.Context, conf *config.Config) error
+	Read(index *Index) (data []byte, err error)
+	Write(key, value []byte) (index *Index, err error)
+	Defrag(defragDuration time.Duration, rebuildIndex func(key string, index *Index))
 }
 
 type fileBlockHandler func() BlockHandler

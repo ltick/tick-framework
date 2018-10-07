@@ -160,7 +160,7 @@ func (e *Engine) NewServer(name string, port uint, gracefulStopTimeout time.Dura
 		mutex:       sync.RWMutex{},
 	}
 	middlewares := make([]MiddlewareInterface, 0)
-	for _, sortedMiddleware := range GetSortedMiddlewares() {
+	for _, sortedMiddleware := range e.GetSortedMiddlewares() {
 		middleware, ok := sortedMiddleware.(*Middleware)
 		if !ok {
 			continue

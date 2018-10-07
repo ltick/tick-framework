@@ -21,12 +21,7 @@ func InArrayString(needle string, haystack []string, caseSensitives ...bool) *in
 	}
 	return nil
 }
-func AppendDistinctiveArrayString(needle string, haystack []string) []string {
-	if InArrayString(needle, haystack, true) == nil {
-		haystack = append(haystack, needle)
-	}
-	return haystack
-}
+
 func InMapString(needle string, haystack map[string]string) bool {
 	for _, value := range haystack {
 		if needle == value {

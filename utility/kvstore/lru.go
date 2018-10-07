@@ -4,8 +4,6 @@ import (
 	"container/list"
 	"context"
 	//"fmt"
-	"bufio"
-	"encoding"
 	"io"
 	"os"
 	"path/filepath"
@@ -16,14 +14,16 @@ import (
 )
 
 type KVLruFileStore struct {
-	sync.RWMutex
+	KVStore
+
+	locker sync.RWMutex
 
 	list     *list.List
 	table    map[string]*list.Element
 	size     uint64 // 当前大小
 	capacity uint64 // 总容量
 	tempDir  string
-	saveItem chan KVStore
+	saveItem chan *KVStoreData
 }
 
 func NewKVLruFileStore() *KVLruFileStore {
@@ -31,11 +31,12 @@ func NewKVLruFileStore() *KVLruFileStore {
 		list:     list.New(),
 		table:    make(map[string]*list.Element),
 		size:     0,
-		saveItem: make(chan KVStore),
+		saveItem: make(chan *KVStoreData),
 	}
+
 }
 
-func (lru *KVLruFileStore) Initiate(ctx context.Context, conf *config.Instance) (err error) {
+func (lru *KVLruFileStore) Initiate(ctx context.Context, conf *config.Config) (err error) {
 	var (
 		tempDir      string        = conf.GetString("LRU_DIR")
 		capacity     uint64        = uint64(conf.GetInt64("LRU_CAPACITY"))
@@ -55,31 +56,30 @@ func (lru *KVLruFileStore) Initiate(ctx context.Context, conf *config.Instance) 
 	// AOF数据格式和RDB相同, 所以直接追加到文件
 	go func() {
 		var (
-			encoder EncodeCloser
-			err     error
+			fileStore *KVFileStore
+			err       error
 		)
-		if encoder, err = NewWriteFile(filepath.Join(lru.tempDir, "rdb")); err != nil {
+		if fileStore, err = NewKVFileStore(filepath.Join(lru.tempDir, "rdb")); err != nil {
 			return
 		}
 		for {
-			var item KVStore
 			select {
-			case item = <-lru.saveItem: // 追加
-				if err = encoder.Encode(item); err != nil {
+			case item := <-lru.saveItem: // 追加
+				if err = fileStore.Write(item); err != nil {
 					continue
 				}
 			case <-time.Tick(saveInterval): // 定期保存
 				// TODO 写tmp文件, 再切换句柄
 				func() {
-					lru.Lock()
-					defer lru.Unlock()
+					lru.locker.Lock()
+					defer lru.locker.Unlock()
 
-					if err = encoder.Truncate(); err != nil {
+					if err = fileStore.Truncate(); err != nil {
 						return
 					}
 					var element *list.Element
 					for element = lru.list.Back(); element != nil; element = element.Prev() { // 从后往前写
-						if err = encoder.Encode(element.Value.(KVStore)); err != nil {
+						if err = fileStore.Write(element.Value.(*KVStoreData)); err != nil {
 							continue
 						}
 					}
@@ -92,14 +92,14 @@ func (lru *KVLruFileStore) Initiate(ctx context.Context, conf *config.Instance) 
 }
 
 func (lru *KVLruFileStore) load() (err error) {
-	lru.Lock()
-	defer lru.Unlock()
+	lru.locker.Lock()
+	defer lru.locker.Unlock()
 
 	var (
-		fr    *KVStoreReader
-		value *KVStore = new(KVStore)
+		fr    *KVFileStore
+		value *KVStoreData = new(KVStoreData)
 	)
-	if fr, err = NewKVStoreReader(filepath.Join(lru.tempDir, "rdb")); err != nil {
+	if fr, err = NewKVFileStore(filepath.Join(lru.tempDir, "rdb")); err != nil {
 		if os.IsNotExist(err) {
 			err = nil
 		}
@@ -107,35 +107,36 @@ func (lru *KVLruFileStore) load() (err error) {
 	}
 	defer fr.Close()
 	for {
-		if err = fr.ReadOne(value); err != nil {
+		value, err = fr.Get(0)
+		if err != nil {
 			if err == io.EOF {
 				err = nil
 			}
 			return
 		}
-		lru.set(value.Key(), value.Value())
+		lru.Set(value.Key(), value.Value())
 	}
 	return
 }
 
 func (lru *KVLruFileStore) Peek(key string) (v []byte, ok bool) {
-	lru.RLock()
-	defer lru.RUnlock()
+	lru.locker.RLock()
+	defer lru.locker.RUnlock()
 
 	var element *list.Element
 	if element, ok = lru.table[key]; !ok {
 		return
 	}
-	v = element.Value.(KVStore).Value()
+	v = element.Value.(KVStoreData).Value()
 	return
 }
 
 func (lru *KVLruFileStore) Update(key string, value []byte) {
-	lru.Lock()
-	defer lru.Unlock()
+	lru.locker.Lock()
+	defer lru.locker.Unlock()
 
 	var (
-		item    KVStore = NewKVStore([]byte(key), value)
+		item    *KVStoreData = NewKVStoreData([]byte(key), value)
 		element *list.Element
 		ok      bool
 	)
@@ -147,30 +148,30 @@ func (lru *KVLruFileStore) Update(key string, value []byte) {
 }
 
 func (lru *KVLruFileStore) Get(key string) (v []byte, ok bool) {
-	lru.RLock()
-	defer lru.RUnlock()
+	lru.locker.RLock()
+	defer lru.locker.RUnlock()
 
 	var element *list.Element
 	if element, ok = lru.table[key]; !ok {
 		return
 	}
 	lru.moveToFront(element)
-	v = element.Value.(KVStore).Value()
+	v = element.Value.(KVStoreData).Value()
 	return
 }
 
 func (lru *KVLruFileStore) Set(key string, value []byte) {
-	lru.Lock()
-	defer lru.Unlock()
+	lru.locker.Lock()
+	defer lru.locker.Unlock()
 
 	lru.set(key, value)
 	// 追加
-	lru.saveItem <- NewKVStore([]byte(key), value)
+	lru.saveItem <- NewKVStoreData([]byte(key), value)
 }
 
 func (lru *KVLruFileStore) set(key string, value []byte) {
 	var (
-		item    KVStore = NewKVStore([]byte(key), value)
+		item    *KVStoreData = NewKVStoreData([]byte(key), value)
 		element *list.Element
 		ok      bool
 	)
@@ -183,8 +184,8 @@ func (lru *KVLruFileStore) set(key string, value []byte) {
 
 func (lru *KVLruFileStore) Delete(key string) (ok bool) {
 	// TODO 删除时, AOF没有删掉
-	lru.Lock()
-	defer lru.Unlock()
+	lru.locker.Lock()
+	defer lru.locker.Unlock()
 
 	var element *list.Element
 	if element, ok = lru.table[key]; !ok {
@@ -192,12 +193,12 @@ func (lru *KVLruFileStore) Delete(key string) (ok bool) {
 	}
 	lru.list.Remove(element)
 	delete(lru.table, key)
-	lru.size -= uint64(element.Value.(KVStore).Size())
+	lru.size -= uint64(element.Value.(KVStoreData).Size())
 	return
 }
 
-func (lru *KVLruFileStore) updateInplace(element *list.Element, other KVStore) {
-	var item KVStore = element.Value.(KVStore)
+func (lru *KVLruFileStore) updateInplace(element *list.Element, other *KVStoreData) {
+	var item *KVStoreData = element.Value.(*KVStoreData)
 	element.Value = other
 	lru.size -= uint64(item.Size())
 	lru.size += uint64(other.Size())
@@ -209,7 +210,7 @@ func (lru *KVLruFileStore) moveToFront(element *list.Element) {
 	lru.list.MoveToFront(element)
 }
 
-func (lru *KVLruFileStore) addNew(key string, item KVStore) {
+func (lru *KVLruFileStore) addNew(key string, item *KVStoreData) {
 	var element *list.Element = lru.list.PushFront(item)
 	lru.table[item.Key()] = element
 	lru.size += uint64(item.Size())
@@ -226,8 +227,7 @@ func (lru *KVLruFileStore) checkCapacity() {
 			return
 		}
 		delValue = lru.list.Remove(delElem)
-		delete(lru.table, delValue.(KVStore).Key())
-		lru.size -= uint64(delValue.(KVStore).Size())
+		delete(lru.table, delValue.(KVStoreData).Key())
+		lru.size -= uint64(delValue.(KVStoreData).Size())
 	}
 }
-
