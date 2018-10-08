@@ -42,7 +42,7 @@
         }
       }
     },
-    "testModule1": {
+    "TestComponent1": {
       "Foo": "Bar"
     }
   }

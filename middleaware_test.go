@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"testing"
 	"time"
 
 	libConfig "github.com/ltick/tick-framework/config"
@@ -78,7 +77,7 @@ func (f *testMiddleware2) OnRequestShutdown(c *routing.Context) error {
 	return nil
 }
 
-func (suite *TestSuite) TestMiddleware(t *testing.T) {
+func (suite *TestSuite) TestMiddleware() {
 	var values map[string]interface{} = map[string]interface{}{}
 	var components []*Component = []*Component{}
 	var options map[string]libConfig.Option = make(map[string]libConfig.Option, 0)
@@ -90,7 +89,7 @@ func (suite *TestSuite) TestMiddleware(t *testing.T) {
 	a.Startup()
 	srv := a.NewServer("test", 8080, 30*time.Second, 3*time.Second)
 	rg := srv.GetRouteGroup("/")
-	assert.NotNil(t, rg)
+	assert.NotNil(suite.T(), rg)
 	rg.AddRoute("GET", "/test", func(c *routing.Context) error {
 		c.ResponseWriter.Write([]byte(c.Get("Foo").(string)))
 		return nil
@@ -98,8 +97,8 @@ func (suite *TestSuite) TestMiddleware(t *testing.T) {
 	res := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/test", nil)
 	a.ServeHTTP(res, req)
-	assert.Equal(t, "Bar1", res.Body.String())
+	assert.Equal(suite.T(), "Bar1", res.Body.String())
 	a.Shutdown()
-	assert.Equal(t, "testComponent1-Register|testComponent1-Startup||testComponent1-Unregister", a.GetContextValue("output"))
+	assert.Equal(suite.T(), "testComponent1-Register|testComponent1-Startup||testComponent1-Unregister", a.GetContextValue("output"))
 }
 

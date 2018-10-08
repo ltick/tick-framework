@@ -14,10 +14,10 @@ import (
 
 type TestSuite struct {
 	suite.Suite
+	systemConfigFile *os.File
+	envConfigFile    *os.File
 }
 
-// Make sure that VariableThatShouldStartAtFive is set to five
-// before each test
 func (suite *TestSuite) SetupTest() {
 	var testSystemConfig string = `{
   "temporary_path": "/tmp",
@@ -63,7 +63,7 @@ func (suite *TestSuite) SetupTest() {
         }
       }
     },
-    "testModule1": {
+    "TestComponent1": {
       "Foo": "Bar"
     }
   }
@@ -106,20 +106,27 @@ LTICK_DEBUG_LOG_WRITER=stdout
 LTICK_SYSTEM_LOG_TYPE=console
 LTICK_SYSTEM_LOG_WRITER=stdout
 `
-	fd, err := os.OpenFile("/tmp/ltick.json", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
+	var err error
+	suite.systemConfigFile, err = os.OpenFile("/tmp/ltick.json", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
 	if err == nil {
-		_, err = fd.Write([]byte(testSystemConfig))
+		_, err = suite.systemConfigFile.Write([]byte(testSystemConfig))
+		defer suite.systemConfigFile.Close()
 		if err != nil {
 			fmt.Println("xxxx")
 		}
 	}
-	fd, err = os.OpenFile("/tmp/.env", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
+	suite.envConfigFile, err = os.OpenFile("/tmp/.env", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
 	if err == nil {
-		_, err = fd.Write([]byte(testEnvConfig))
+		_, err = suite.envConfigFile.Write([]byte(testEnvConfig))
+		defer suite.envConfigFile.Close()
 		if err != nil {
 			fmt.Println("xxxx")
 		}
 	}
+}
+func (suite *TestSuite) AfterTest() {
+	os.Remove("/tmp/ltick.json")
+	os.Remove("/tmp/.env")
 }
 
 type TestCallback struct{}
@@ -138,7 +145,7 @@ func (f *TestCallback) OnShutdown(e *Engine) error {
 	return nil
 }
 
-func (suite *TestSuite) TestAppCallback(t *testing.T) {
+func (suite *TestSuite) TestAppCallback() {
 	var values map[string]interface{} = make(map[string]interface{}, 0)
 	var components []*Component = []*Component{}
 	var configs map[string]libConfig.Option = make(map[string]libConfig.Option, 0)
@@ -146,13 +153,13 @@ func (suite *TestSuite) TestAppCallback(t *testing.T) {
 		WithCallback(&TestCallback{}).WithValues(values)
 	a.SetSystemLogWriter(ioutil.Discard)
 	err := a.Startup()
-	assert.Nil(t, err)
+	assert.Nil(suite.T(), err)
 	output := a.GetContextValueString("output")
-	assert.Equal(t, "Startup|", output)
+	assert.Equal(suite.T(), "Startup|", output)
 	err = a.Shutdown()
-	assert.Nil(t, err)
+	assert.Nil(suite.T(), err)
 	output = a.GetContextValueString("output")
-	assert.Equal(t, "Startup|Shutdown", output)
+	assert.Equal(suite.T(), "Startup|Shutdown", output)
 }
 
 func TestTestSuite(t *testing.T) {

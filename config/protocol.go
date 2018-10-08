@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -61,6 +62,9 @@ type Config struct {
 	options               map[string]Option
 	bindedEnvironmentKeys []string
 	pathPrefix            string
+
+	data  reflect.Value
+	types map[string]reflect.Value
 }
 
 func (c *Config) Initiate(ctx context.Context) (context.Context, error) {
@@ -97,6 +101,8 @@ func (c *Config) Use(ctx context.Context, handlerName string) error {
 	}
 	c.handlerName = handlerName
 	c.handler = handler()
+	c.data = reflect.Value{}
+	c.types = make(map[string]reflect.Value)
 	err = c.handler.Initiate(ctx)
 	if err != nil {
 		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), c.handlerName))
@@ -158,6 +164,7 @@ func (c *Config) LoadFromConfigPath(configName string) error {
 	if err != nil {
 		return fmt.Errorf(errLoadFromConfigPath+": %s", err.Error())
 	}
+	c.data = reflect.ValueOf(c.handler.AllSettings())
 	return nil
 }
 func (c *Config) LoadFromConfigFile(configFile string) error {
@@ -166,9 +173,10 @@ func (c *Config) LoadFromConfigFile(configFile string) error {
 	if err != nil {
 		return fmt.Errorf(errLoadFromConfigFile+": %s", err.Error())
 	}
+	c.data = reflect.ValueOf(c.handler.AllSettings())
 	return nil
 }
-func (c *Config) BindedEnvironmentKeys() []string{
+func (c *Config) BindedEnvironmentKeys() []string {
 	return c.bindedEnvironmentKeys
 }
 func (c *Config) LoadFromEnv() error {
@@ -339,6 +347,7 @@ type Handler interface {
 	BindEnv(in string) error
 	SetEnvPrefix(in string)
 	ReadInConfig() error
+	AllSettings() map[string]interface{}
 	Set(key string, value interface{})
 	Get(key string) interface{}
 	// GetString returns the value associated with the key as a string.

@@ -45,6 +45,9 @@ func (this *ViperHandler) BindEnv(in string) error {
 func (this *ViperHandler) ReadInConfig() error {
 	return this.Viper.ReadInConfig()
 }
+func (this *ViperHandler) AllSettings() map[string]interface{} {
+	return this.Viper.AllSettings()
+}
 func (this *ViperHandler) Set(key string, value interface{}) {
 	this.Viper.Set(key, value)
 }
