@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/ltick/tick-framework/config"
-	"github.com/ltick/tick-routing"
 )
 
 var (
@@ -21,19 +20,19 @@ var (
 	defaultProvider string = "file"
 )
 
-func NewInstance() *Instance {
-	return &Instance{
+func NewFilesystem() *Filesystem {
+	return &Filesystem{
 		Config: config.NewConfig(),
 	}
 }
 
-type Instance struct {
+type Filesystem struct {
 	Config      *config.Config
 	handlerName string
 	handler     Handler
 }
 
-func (this *Instance) Initiate(ctx context.Context) (newCtx context.Context, err error) {
+func (this *Filesystem) Initiate(ctx context.Context) (newCtx context.Context, err error) {
 	if newCtx, err = this.Config.Initiate(ctx); err != nil {
 		err = fmt.Errorf(errInitiate, err.Error())
 		return
@@ -58,7 +57,7 @@ func (this *Instance) Initiate(ctx context.Context) (newCtx context.Context, err
 	}
 	return
 }
-func (this *Instance) OnStartup(ctx context.Context) (newCtx context.Context, err error) {
+func (this *Filesystem) OnStartup(ctx context.Context) (newCtx context.Context, err error) {
 	newCtx = ctx
 	var provider string = this.Config.GetString("FILESYSTEM_PROVIDER")
 	if provider == "" {
@@ -70,17 +69,11 @@ func (this *Instance) OnStartup(ctx context.Context) (newCtx context.Context, er
 	}
 	return
 }
-func (this *Instance) OnShutdown(ctx context.Context) (context.Context, error) {
-	return ctx, nil
-}
-func (this *Instance) OnRequestStartup(ctx context.Context, c *routing.Context) (context.Context, error) {
-	return ctx, nil
-}
-func (this *Instance) OnRequestShutdown(ctx context.Context, c *routing.Context) (context.Context, error) {
+func (this *Filesystem) OnShutdown(ctx context.Context) (context.Context, error) {
 	return ctx, nil
 }
 
-func (this *Instance) Use(ctx context.Context, handlerName string) (err error) {
+func (this *Filesystem) Use(ctx context.Context, handlerName string) (err error) {
 	var handler storageHandler
 	if handler, err = Use(handlerName); err != nil {
 		return
@@ -93,15 +86,15 @@ func (this *Instance) Use(ctx context.Context, handlerName string) (err error) {
 	return
 }
 
-func (this *Instance) SetContent(key string, content []byte) (err error) {
+func (this *Filesystem) SetContent(key string, content []byte) (err error) {
 	return this.handler.SetContent(key, content)
 }
 
-func (this *Instance) GetContent(key string) (content []byte, err error) {
+func (this *Filesystem) GetContent(key string) (content []byte, err error) {
 	return this.handler.GetContent(key)
 }
 
-func (this *Instance) DelContent(key string) (err error) {
+func (this *Filesystem) DelContent(key string) (err error) {
 	return this.handler.DelContent(key)
 }
 
