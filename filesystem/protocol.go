@@ -18,34 +18,33 @@ var (
 )
 
 var (
-	defaultProvider string = "storage"
+	defaultProvider string = "file"
 )
 
-func NewFilesystem() *Filesystem {
-	return &Filesystem{
+func NewInstance() *Instance {
+	return &Instance{
+		Config: config.NewConfig(),
 	}
 }
 
-type Filesystem struct {
+type Instance struct {
 	Config      *config.Config
 	handlerName string
 	handler     Handler
 }
 
-func (f *Filesystem) Initiate(ctx context.Context) (newCtx context.Context, err error) {
-	if newCtx, err = f.Config.Initiate(ctx); err != nil {
+func (this *Instance) Initiate(ctx context.Context) (newCtx context.Context, err error) {
+	if newCtx, err = this.Config.Initiate(ctx); err != nil {
 		err = fmt.Errorf(errInitiate, err.Error())
 		return
 	}
 	var configs map[string]config.Option = map[string]config.Option{
-		"FILESYSTEM_PROVIDER":        config.Option{Type: config.String, Default: defaultProvider, EnvironmentKey: "FILESYSTEM_PROVIDER"},
-		"FILESYSTEM_LRU_DEFRAG_INTERVAL": config.Option{Type: config.Duration, Default: 30 * time.Minute, EnvironmentKey: "FILESYSTEM_LRU_DEFRAG_INTERVAL"},
-		"FILESYSTEM_LRU_DEFRAG_LIFETIME": config.Option{Type: config.Duration, Default: 24 * time.Hour, EnvironmentKey: "FILESYSTEM_LRU_DEFRAG_LIFETIME"},
-		"FILESYSTEM_LRU_CAPACITY":      config.Option{Type: config.Int64, Default: 32 * 1024 * 1024, EnvironmentKey: "FILESYSTEM_LRU_CAPACITY"},
-		"FILESYSTEM_LRU_DIR":           config.Option{Type: config.String, Default: "/tmp/lru", EnvironmentKey: "FILESYSTEM_LRU_DIR"},
-		"FILESYSTEM_LRU_SAVE_INTERVAL": config.Option{Type: config.Duration, Default: 5 * time.Minute, EnvironmentKey: "FILESYSTEM_LRU_SAVE_INTERVAL"},
+		"FILESYSTEM_PROVIDER":                config.Option{Type: config.String, Default: defaultProvider, EnvironmentKey: "FILESYSTEM_PROVIDER"},
+		"FILESYSTEM_DEFRAG_CONTENT_INTERVAL": config.Option{Type: config.Duration, Default: 30 * time.Minute, EnvironmentKey: "FILESYSTEM_DEFRAG_CONTENT_INTERVAL"},
+		"FILESYSTEM_DEFRAG_CONTENT_LIFETIME": config.Option{Type: config.Duration, Default: 24 * time.Hour, EnvironmentKey: "FILESYSTEM_DEFRAG_CONTENT_LIFETIME"},
+		"FILESYSTEM_LRU_CAPACITY":            config.Option{Type: config.Int64, Default: 32 * 1024 * 1024, EnvironmentKey: "FILESYSTEM_LRU_CAPACITY"},
 	}
-	if newCtx, err = f.Config.SetOptions(ctx, configs); err != nil {
+	if newCtx, err = this.Config.SetOptions(ctx, configs); err != nil {
 		err = fmt.Errorf(errInitiate, err.Error())
 		return
 	}
@@ -53,55 +52,64 @@ func (f *Filesystem) Initiate(ctx context.Context) (newCtx context.Context, err 
 		err = fmt.Errorf(errInitiate, err.Error())
 		return
 	}
+	if err = Register("lruFile", NewLRUFileHandler); err != nil {
+		err = fmt.Errorf(errInitiate, err.Error())
+		return
+	}
 	return
 }
-func (f *Filesystem) OnStartup(ctx context.Context) (newCtx context.Context, err error) {
+func (this *Instance) OnStartup(ctx context.Context) (newCtx context.Context, err error) {
 	newCtx = ctx
-	var provider string = f.Config.GetString("FILESYSTEM_PROVIDER")
+	var provider string = this.Config.GetString("FILESYSTEM_PROVIDER")
 	if provider == "" {
 		provider = defaultProvider
 	}
-	if err = f.Use(ctx, provider); err != nil {
+	if err = this.Use(ctx, provider); err != nil {
 		err = fmt.Errorf(errOnStartup, err.Error())
 		return
 	}
 	return
 }
-func (f *Filesystem) OnShutdown(ctx context.Context) (context.Context, error) {
+func (this *Instance) OnShutdown(ctx context.Context) (context.Context, error) {
 	return ctx, nil
 }
-func (f *Filesystem) OnRequestStartup(c *routing.Context) error {
-	return nil
+func (this *Instance) OnRequestStartup(ctx context.Context, c *routing.Context) (context.Context, error) {
+	return ctx, nil
 }
-func (f *Filesystem) OnRequestShutdown(c *routing.Context) error {
-	return nil
+func (this *Instance) OnRequestShutdown(ctx context.Context, c *routing.Context) (context.Context, error) {
+	return ctx, nil
 }
 
-func (f *Filesystem) Use(ctx context.Context, handlerName string) (err error) {
+func (this *Instance) Use(ctx context.Context, handlerName string) (err error) {
 	var handler storageHandler
 	if handler, err = Use(handlerName); err != nil {
 		return
 	}
-	f.handlerName = handlerName
-	f.handler = handler()
-	if err = f.handler.Initiate(ctx, f.Config); err != nil {
+	this.handlerName = handlerName
+	this.handler = handler()
+	if err = this.handler.Initiate(ctx, this.Config); err != nil {
 		return
 	}
 	return
 }
 
-func (f *Filesystem) SetContent(key string, content []byte) (err error) {
-	return f.handler.SetContent(key, content)
+func (this *Instance) SetContent(key string, content []byte) (err error) {
+	return this.handler.SetContent(key, content)
 }
 
-func (f *Filesystem) GetContent(key string) (content []byte, err error) {
-	return f.handler.GetContent(key)
+func (this *Instance) GetContent(key string) (content []byte, err error) {
+	return this.handler.GetContent(key)
+}
+
+func (this *Instance) DelContent(key string) (err error) {
+	return this.handler.DelContent(key)
 }
 
 type Handler interface {
 	Initiate(ctx context.Context, conf *config.Config) error
 	SetContent(key string, content []byte) (err error)
 	GetContent(key string) (content []byte, err error)
+	DelContent(key string) (err error)
 }
 
 type storageHandler func() Handler
