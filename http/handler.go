@@ -5,10 +5,8 @@ import (
 	"reflect"
 	"net/http"
 	"fmt"
-	"net/http/httputil"
 
 	"github.com/ltick/tick-framework/utility"
-	"github.com/ltick/tick-routing/proxy"
 )
 
 type (

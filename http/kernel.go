@@ -16,7 +16,6 @@ import (
 	"sync"
 
 	"github.com/juju/errors"
-	"github.com/ltick/ltick-validation"
 	"github.com/ltick/tick-framework/utility"
 )
 
@@ -297,40 +296,40 @@ func (a *Api) addFields(parentIndexPath []int, t reflect.Type, v reflect.Value) 
 			}
 		}
 
-		fd := &Param{
+		param := &Param{
 			apiName:   a.name,
 			indexPath: indexPath,
 			tags:      parsedTags,
 			rawTag:    field.Tag,
-			rawValue:  value,
+			rawValue:  value.Interface(),
 		}
 
-		if errStr, ok := fd.tags[KEY_ERR]; ok {
-			fd.err = errors.New(errStr)
+		if errStr, ok := param.tags[KEY_ERR]; ok {
+			param.err = errors.New(errStr)
 		}
 
-		// fmt.Printf("%#v\n", fd.tags)
+		// fmt.Printf("%#v\n", param.tags)
 
-		if fd.name, ok = parsedTags[KEY_NAME]; !ok {
-			fd.name = a.paramNameNormalizer(field.Name)
+		if param.name, ok = parsedTags[KEY_NAME]; !ok {
+			param.name = a.paramNameNormalizer(field.Name)
 		}
 		if paramPosition == "header" {
-			fd.name = textproto.CanonicalMIMEHeaderKey(fd.name)
+			param.name = textproto.CanonicalMIMEHeaderKey(param.name)
 		}
 
-		fd.isFile = paramTypeString == fileTypeString || paramTypeString == filesTypeString || paramTypeString == fileTypeString2 || paramTypeString == filesTypeString2
+		param.isFile = paramTypeString == fileTypeString || paramTypeString == filesTypeString || paramTypeString == fileTypeString2 || paramTypeString == filesTypeString2
 
-		_, fd.isRequired = parsedTags[KEY_REQUIRED]
+		_, param.isRequired = parsedTags[KEY_REQUIRED]
 		_, hasNonzero := parsedTags[KEY_NOTEMPTY]
-		if !fd.isRequired && (hasNonzero || len(parsedTags[KEY_RANGE]) > 0) {
-			fd.isRequired = true
+		if !param.isRequired && (hasNonzero || len(parsedTags[KEY_RANGE]) > 0) {
+			param.isRequired = true
 		}
 
-		if err = fd.makeVerifyRules(); err != nil {
+		if err = param.makeVerifyRules(); err != nil {
 			return errors.Trace(fmt.Errorf("%s|%s|%s", t.String(), field.Name, "initial validation failed:"+err.Error()))
 		}
 
-		a.params = append(a.params, fd)
+		a.params = append(a.params, param)
 	}
 	if maxMemoryMB > 0 {
 		a.maxMemory = maxMemoryMB * MB
@@ -399,7 +398,7 @@ func (a *Api) fieldsForBinding(structElem reflect.Value) []interface{} {
 		for _, index := range param.indexPath {
 			value = value.Field(index)
 		}
-		fields[i] = value
+		fields[i] = value.Interface()
 	}
 	return fields
 }
@@ -526,7 +525,7 @@ func (a *Api) BindFields(
 		if err = param.makeVerifyRules(); err != nil {
 			return err
 		}
-		if err = validation.Validate(value, param.rules...); err != nil {
+		if err = param.validate(value); err != nil {
 			return err
 		}
 	}

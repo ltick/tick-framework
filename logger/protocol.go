@@ -5,14 +5,119 @@ import (
 	"errors"
 	"fmt"
 	"time"
+	"strings"
 
-	"github.com/go-ozzo/ozzo-config"
 	libLogger "github.com/ltick/tick-log"
 )
 
 var (
 	errInitiate = "logger: initiate '%s' error"
 )
+
+
+// Formatter describes the formatter of a log message.
+type Formatter int
+
+const (
+	FormatterDefault Formatter = iota
+	FormatterRaw
+	FormatterSys
+)
+
+// LevelNames maps log levels to names
+var FormatterNames = map[Formatter]string{
+	FormatterDefault: "Default",
+	FormatterRaw:  "Raw",
+	FormatterSys:  "Sys",
+}
+
+// String returns the string representation of the log level
+func (w Formatter) String() string {
+	if name, ok := FormatterNames[w]; ok {
+		return name
+	}
+	return FormatterNames[FormatterDefault]
+}
+
+func StringToFormatter(name string) Formatter {
+	for formatter, formatterName := range FormatterNames {
+		if strings.ToLower(name) == strings.ToLower(formatterName) {
+			return formatter
+		}
+	}
+	return FormatterDefault
+}
+
+// Writer describes the writer of a log message.
+type Writer int
+
+const (
+	WriterUnknown Writer = iota
+	WriterStdout
+	WriterStderr
+	WriterDiscard
+)
+
+// LevelNames maps log levels to names
+var WriterNames = map[Writer]string{
+	WriterUnknown: "Unknown",
+	WriterStdout:  "Stdout",
+	WriterStderr:  "Stderr",
+	WriterDiscard: "Discard",
+}
+
+// String returns the string representation of the log level
+func (w Writer) String() string {
+	if name, ok := WriterNames[w]; ok {
+		return name
+	}
+	return WriterNames[WriterUnknown]
+}
+
+func StringToWriter(name string) Writer {
+	for writer, writerName := range WriterNames {
+		if strings.ToLower(name) == strings.ToLower(writerName) {
+			return writer
+		}
+	}
+	return WriterUnknown
+}
+
+// Type describes the type of a log message.
+type Type int
+
+const (
+	TypeUnknown Type = iota
+	TypeFile
+	TypeConsole
+)
+
+// LevelNames maps log levels to names
+var TypeNames = map[Type]string{
+	TypeUnknown: "Unknown",
+	TypeFile:    "File",
+	TypeConsole: "Console",
+}
+
+// String returns the string representation of the log level
+func (t Type) String() string {
+	if name, ok := TypeNames[t]; ok {
+		return name
+	}
+	return TypeNames[TypeUnknown]
+}
+
+func StringToType(name string) Type {
+	for typ, typeName := range TypeNames {
+		if strings.ToLower(name) == strings.ToLower(typeName) {
+			return typ
+		}
+	}
+	return TypeUnknown
+}
+
+// Level describes the level of a log message.
+type Level int
 
 // RFC5424 log message levels.
 const (
@@ -25,9 +130,6 @@ const (
 	LevelInfo
 	LevelDebug
 )
-
-// Level describes the level of a log message.
-type Level int
 
 // LevelNames maps log levels to names
 var LevelNames = map[Level]string{
@@ -89,48 +191,6 @@ func (l *Logger) Use(ctx context.Context, handlerName string) error {
 	err = l.handler.Initiate(ctx)
 	if err != nil {
 		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), l.handlerName))
-	}
-	return nil
-}
-
-func (l *Logger) LoadComponentFileConfig(configFile string, configProviders map[string]interface{}, configTag ...string) (err error) {
-	c := config.New()
-	err = c.Load(configFile)
-	if err != nil {
-		return errors.New(fmt.Sprintf("logger: handler '%s' load config file '%s' error '%s'", l.handlerName, configFile, err.Error()))
-	}
-	if len(configProviders) > 0 {
-		for configProviderName, configProvider := range configProviders {
-			err = c.Register(configProviderName, configProvider)
-			if err != nil {
-				return errors.New(fmt.Sprintf("logger: handler '%s' register config provider '%s' error '%s'", l.handlerName, configProviderName, err.Error()))
-			}
-		}
-	}
-	err = c.Configure(l.handler, configTag...)
-	if err != nil {
-		return errors.New(fmt.Sprintf("logger: handler '%s' configure error '%s'", l.handlerName, err.Error()))
-	}
-	return nil
-}
-
-func (l *Logger) LoadComponentJsonConfig(configData []byte, configProviders map[string]interface{}, configTag ...string) (err error) {
-	c := config.New()
-	err = c.LoadJSON(configData)
-	if err != nil {
-		return errors.New(fmt.Sprintf("application: handler '%s' load config '%s' error '%s'", l.handlerName, configData, err.Error()))
-	}
-	if len(configProviders) > 0 {
-		for configProviderName, configProvider := range configProviders {
-			err = c.Register(configProviderName, configProvider)
-			if err != nil {
-				return errors.New(fmt.Sprintf("application: handler '%s' register config provider '%s' error '%s'", l.handlerName, configProviderName, err.Error()))
-			}
-		}
-	}
-	err = c.Configure(l.handler, configTag...)
-	if err != nil {
-		return errors.New(fmt.Sprintf("application: handler '%s' configure error '%s'", l.handlerName, err.Error()))
 	}
 	return nil
 }

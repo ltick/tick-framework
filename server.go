@@ -314,7 +314,7 @@ func (s *Server) SetServerReuqestCors(corsOptions cors.Options) *Server {
 	}
 	return s
 }
-func (s *Server) addRoute(method string, path string, handlers ...routing.Handler) *Server {
+func (s *Server) AddRoute(method string, path string, handlers ...routing.Handler) *Server {
 	paths := strings.Split(path, "/")
 	prefix := "/"
 	for _, routePrefix := range paths {

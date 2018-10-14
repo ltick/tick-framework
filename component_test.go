@@ -3,16 +3,11 @@ package ltick
 import (
 	"context"
 	"io/ioutil"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"time"
 
 	libConfig "github.com/ltick/tick-framework/config"
-	"github.com/ltick/tick-routing"
 	"github.com/stretchr/testify/assert"
-	"fmt"
 )
 
 type testComponent1 struct {
@@ -172,7 +167,7 @@ func (suite *TestSuite) TestUseComponent() {
 	var components []*Component = []*Component{
 		&Component{Name: "testComponent2", Component: &testComponent2{}},
 	}
-	a := New(os.Args[0], filepath.Dir(os.Args[0]), "/tmp/ltick.json", "LTICK", components, options).
+	a := New(os.Args[0], filepath.Dir(os.Args[0]), suite.systemConfigFile, "LTICK", components, options).
 		WithCallback(&TestCallback{}).
 		WithValues(values)
 	a.SetSystemLogWriter(ioutil.Discard)
@@ -184,9 +179,6 @@ func (suite *TestSuite) TestUseComponent() {
 	config, err := a.GetComponentByName("Config")
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), config)
-	utility, err := a.GetComponentByName("utility")
-	assert.Nil(suite.T(), err)
-	assert.NotNil(suite.T(), utility)
 	database, err := a.GetComponentByName("database")
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), database)
@@ -199,13 +191,12 @@ func (suite *TestSuite) TestUseComponent() {
 }
 
 func (suite *TestSuite) TestComponentConfig() {
-	fmt.Println("TestComponentConfig")
 	var values map[string]interface{} = map[string]interface{}{}
 	var components []*Component = []*Component{
 		&Component{Name: "TestComponent1", Component: &testComponent1{}},
 	}
 	var options map[string]libConfig.Option = make(map[string]libConfig.Option, 0)
-	a := New(os.Args[0], filepath.Dir(os.Args[0]), "/tmp/ltick.json", "LTICK", components, options).
+	a := New(os.Args[0], filepath.Dir(os.Args[0]), suite.systemConfigFile, "LTICK", components, options).
 		WithCallback(&TestCallback{}).
 		WithValues(values)
 	a.SetSystemLogWriter(ioutil.Discard)
@@ -216,35 +207,17 @@ func (suite *TestSuite) TestComponentConfig() {
 	testComponent, err := a.GetComponentByName("testComponent1")
 	assert.Nil(suite.T(), err)
 	component, ok := testComponent.(*testComponent1)
-	fmt.Println(component)
-	assert.Equal(suite.T(), true, ok)
-	assert.Equal(suite.T(), "Foo", component.Foo)
-	err = a.LoadComponentFileConfig("testComponent1", "/tmp/ltick.json", nil, "component.TestComponent1")
-	assert.Nil(suite.T(), err)
-	a.Startup()
-	assert.Equal(suite.T(), "testComponent1-Register|testComponent1-Startup|", a.GetContextValue("output"))
-	testComponent, err = a.GetComponentByName("testComponent1")
-	assert.Nil(suite.T(), err)
-	component, ok = testComponent.(*testComponent1)
 	assert.Equal(suite.T(), true, ok)
 	assert.Equal(suite.T(), "Bar", component.Foo)
-	// Server
-	srv := a.NewServer("test", 8080, 30*time.Second, 3*time.Second)
-	rg := srv.GetRouteGroup("/")
-	assert.NotNil(suite.T(), rg)
-	rg.AddRoute("GET", "/test", func(c *routing.Context) error {
-		c.ResponseWriter.Write([]byte(c.Get("Foo").(string)))
-		return nil
-	})
-	res := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/test", nil)
-	a.ServeHTTP(res, req)
-	assert.Equal(suite.T(), "Bar1", res.Body.String())
+	err = a.LoadComponentFileConfig("testComponent1", suite.systemConfigFile, nil, "component.TestComponent1")
+	assert.Nil(suite.T(), err)
+	a.Startup()
+	assert.Equal(suite.T(), "Startup|testComponent1-Startup|", a.GetContextValue("output"))
 
 	err = a.UnregisterComponent("TestComponent1")
 	assert.Nil(suite.T(), err)
 	a.Shutdown()
-	assert.Equal(suite.T(), "testComponent1-Register|testComponent1-Startup||testComponent1-Unregister", a.GetContextValue("output"))
+	assert.Equal(suite.T(), "Startup|testComponent1-Startup|", a.GetContextValue("output"))
 }
 
 func (suite *TestSuite) TestSortComponent() {

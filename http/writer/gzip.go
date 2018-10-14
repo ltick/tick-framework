@@ -14,6 +14,18 @@ import (
 )
 
 const (
+	vary            = "Vary"
+	acceptEncoding  = "Accept-Encoding"
+	contentEncoding = "Content-Encoding"
+	contentType     = "Content-Type"
+	contentLength   = "Content-Length"
+)
+
+var (
+	errCompress = "response writer: compress error"
+)
+
+const (
 	// DefaultQValue is the default qvalue to assign to an encoding if no explicit qvalue is set.
 	// This is actually kind of ambiguous in RFC 2616, so hopefully it's correct.
 	// The examples seem to indicate that it is.

@@ -1,3 +1,17 @@
+// Copyright 2016 HenryLee. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package http
 
 import (
@@ -67,7 +81,7 @@ type (
 		tags       map[string]string // struct tags for this param
 		rules      []validation.Rule
 		rawTag     reflect.StructTag // the raw tag
-		rawValue   reflect.Value     // the raw tag value
+		rawValue   interface{}       // the raw value
 		err        error             // the custom error for binding or validating
 	}
 	// ParamNameMapper maps param name from struct param name
@@ -76,7 +90,7 @@ type (
 
 // Raw gets the param's original value
 func (param *Param) Raw() interface{} {
-	return param.rawValue.Interface()
+	return param.rawValue
 }
 
 // APIName gets ParamsAPI name
@@ -116,6 +130,23 @@ func (param *Param) Error(reason string) error {
 	return errors.Trace(fmt.Errorf("%s|%s|%s", param.apiName, param.name, reason))
 }
 
+// validate tests if the param conforms to it's validation constraints specified
+// int the KEY_REGEXP struct tag
+func (param *Param) validate(value interface{}) (err error) {
+	defer func() {
+		p := recover()
+		if p != nil {
+			err = param.Error(fmt.Sprint(p))
+		} else if err != nil {
+			err = param.Error(err.Error())
+		}
+	}()
+	if err = validation.Validate(value, param.rules...); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (param *Param) makeVerifyRules() (err error) {
 	defer func() {
 		p := recover()
@@ -141,7 +172,11 @@ func (param *Param) makeVerifyRules() (err error) {
 				return err
 			}
 		}
-		param.rules = append(param.rules, validation.Length(min, max))
+		LengthRule := validation.Length(min, max)
+		if param.err != nil {
+			LengthRule.Error(param.err.Error())
+		}
+		param.rules = append(param.rules, LengthRule)
 	}
 	// range
 	if tuple, ok := param.tags[KEY_RANGE]; ok {
@@ -160,11 +195,19 @@ func (param *Param) makeVerifyRules() (err error) {
 				return err
 			}
 		}
-		param.rules = append(param.rules, validation.Range(min, max))
+		RangeRule := validation.Range(min, max)
+		if param.err != nil {
+			RangeRule.Error(param.err.Error())
+		}
+		param.rules = append(param.rules, RangeRule)
 	}
 	// notempty
 	if _, ok := param.tags[KEY_NOTEMPTY]; ok {
-		param.rules = append(param.rules, validation.NotEmpty)
+		NotEmptyRule := validation.NotEmpty
+		if param.err != nil {
+			NotEmptyRule.Error(param.err.Error())
+		}
+		param.rules = append(param.rules, NotEmptyRule)
 	}
 	// regexp
 	if reg, ok := param.tags[KEY_REGEXP]; ok {
@@ -172,7 +215,11 @@ func (param *Param) makeVerifyRules() (err error) {
 		if err != nil {
 			return err
 		}
-		param.rules = append(param.rules, validation.Match(re))
+		MatchRule := validation.Match(re)
+		if param.err != nil {
+			MatchRule.Error(param.err.Error())
+		}
+		param.rules = append(param.rules, MatchRule)
 	}
 	return
 }

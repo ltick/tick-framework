@@ -18,9 +18,10 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	libConfig "github.com/ltick/tick-framework/config"
-	libLogger "github.com/ltick/tick-framework/logger"
-	libUtility "github.com/ltick/tick-framework/utility"
+	"github.com/ltick/tick-framework/config"
+	"github.com/ltick/tick-framework/logger"
+	"github.com/ltick/tick-framework/utility"
+	libLogger "github.com/ltick/tick-log"
 	"github.com/ltick/tick-graceful"
 )
 
@@ -66,8 +67,8 @@ type (
 		ComponentMap     map[string]interface{}
 		SortedComponents []string
 		Values           map[string]interface{}
-		Config           *libConfig.Config `inject:true`
-		Logger           *libLogger.Logger `inject:true`
+		Config           *config.Config `inject:true`
+		Logger           *logger.Logger `inject:true`
 
 		Context context.Context
 		Servers map[string]*Server
@@ -82,11 +83,11 @@ type (
 	}
 	LogHanlder struct {
 		Name      string
-		Formatter string
-		Type      string
+		Formatter logger.Formatter
+		Type      logger.Type
 		Filename  string
-		Writer    string // the writer name of writer (stdout, stderr, discard)
-		MaxLevel  libLogger.Level
+		Writer    logger.Writer // the writer name of writer (stdout, stderr, discard)
+		MaxLevel  logger.Level
 	}
 )
 
@@ -94,7 +95,7 @@ var defaultConfigPath = "etc/ltick.json"
 var defaultConfigReloadTime = 120 * time.Second
 var configPlaceholdRegExp = regexp.MustCompile(`%\w+%`)
 
-func NewClassic(components []*Component, configOptions map[string]libConfig.Option, option *Option) (engine *Engine) {
+func NewClassic(components []*Component, configOptions map[string]config.Option, option *Option) (engine *Engine) {
 	executeFile, err := exec.LookPath(os.Args[0])
 	if err != nil {
 		e := errors.Annotate(err, errNewClassic)
@@ -119,15 +120,15 @@ func NewClassic(components []*Component, configOptions map[string]libConfig.Opti
 		if ok {
 			loggerTargetType, ok := loggerTargetTypeInterface.(string)
 			if ok {
-				loggerTargetMaxLevel := libLogger.LevelDebug
-				for level, levelName := range libLogger.LevelNames {
+				loggerTargetMaxLevel := logger.LevelDebug
+				for level, levelName := range logger.LevelNames {
 					if levelName == loggerTarget["maxlevel"] {
 						loggerTargetMaxLevel = level
 						break
 					}
 				}
-				switch loggerTargetType {
-				case "file":
+				switch logger.StringToType(loggerTargetType) {
+				case logger.TypeFile:
 					loggerTargetFormatterInterface, ok := loggerTarget["formatter"]
 					if !ok {
 						continue
@@ -146,12 +147,12 @@ func NewClassic(components []*Component, configOptions map[string]libConfig.Opti
 					}
 					logHandlers = append(logHandlers, &LogHanlder{
 						Name:      loggerName,
-						Type:      loggerTargetType,
-						Formatter: loggerTargetFormatter,
+						Type:      logger.TypeFile,
+						Formatter: logger.StringToFormatter(loggerTargetFormatter),
 						Filename:  loggerTargetFilename,
 						MaxLevel:  loggerTargetMaxLevel,
 					})
-				case "console":
+				case logger.TypeConsole:
 					loggerTargetFormatterInterface, ok := loggerTarget["formatter"]
 					if !ok {
 						continue
@@ -170,9 +171,9 @@ func NewClassic(components []*Component, configOptions map[string]libConfig.Opti
 					}
 					logHandlers = append(logHandlers, &LogHanlder{
 						Name:      loggerName,
-						Type:      loggerTargetType,
-						Formatter: loggerTargetFormatter,
-						Writer:    loggerTargetWriter,
+						Type:      logger.TypeConsole,
+						Formatter: logger.StringToFormatter(loggerTargetFormatter),
+						Writer:    logger.StringToWriter(loggerTargetWriter),
 						MaxLevel:  loggerTargetMaxLevel,
 					})
 				}
@@ -183,7 +184,7 @@ func NewClassic(components []*Component, configOptions map[string]libConfig.Opti
 	return engine
 }
 
-func New(executeFile string, pathPrefix string, configPath string, envPrefix string, components []*Component, configOptions map[string]libConfig.Option) (e *Engine) {
+func New(executeFile string, pathPrefix string, configPath string, envPrefix string, components []*Component, configOptions map[string]config.Option) (e *Engine) {
 	e = &Engine{
 		option:           &Option{},
 		state:            STATE_INITIATE,
@@ -227,7 +228,7 @@ func New(executeFile string, pathPrefix string, configPath string, envPrefix str
 		fmt.Println(errors.ErrorStack(e))
 		return nil
 	}
-	config, ok := configComponent.(*libConfig.Config)
+	config, ok := configComponent.(*config.Config)
 	if !ok {
 		e := errors.Annotate(errors.Errorf("invalid 'Config' component type"), errNew)
 		fmt.Println(errors.ErrorStack(e))
@@ -240,7 +241,7 @@ func New(executeFile string, pathPrefix string, configPath string, envPrefix str
 		fmt.Println(errors.ErrorStack(e))
 		return nil
 	}
-	logger, ok := loggerComponent.(*libLogger.Logger)
+	logger, ok := loggerComponent.(*logger.Logger)
 	if !ok {
 		e := errors.Annotate(errors.Errorf("invalid 'Logger' component type"), errNew)
 		fmt.Println(errors.ErrorStack(e))
@@ -285,11 +286,7 @@ func New(executeFile string, pathPrefix string, configPath string, envPrefix str
 			fmt.Println(errors.ErrorStack(e))
 			return nil
 		}
-		fmt.Println(e.ComponentMap)
-		fmt.Println(len(e.Components))
-		fmt.Println(c)
-		fmt.Println(name)
-		e.LoadComponentFileConfig(name, configPath, make(map[string]interface{}), "component." + name)
+		e.LoadComponentFileConfig(name, configPath, make(map[string]interface{}), "component."+name)
 	}
 	return e
 }
@@ -298,7 +295,7 @@ func (e *Engine) LoadSystemConfig(configFilePath string, envPrefix string, dotEn
 	if len(dotEnvFiles) > 0 {
 		dotEnvFile = dotEnvFiles[0]
 	}
-	configCachedFile, err := libUtility.GetCachedFile(configFilePath)
+	configCachedFile, err := utility.GetCachedFile(configFilePath)
 	if err != nil {
 		e := errors.Annotate(err, errLoadSystemConfig)
 		fmt.Println(errors.ErrorStack(e))
@@ -347,7 +344,7 @@ func (e *Engine) LoadSystemConfig(configFilePath string, envPrefix string, dotEn
 	}()
 	return e
 }
-func (e *Engine) SetConfigOptions(configOptions map[string]libConfig.Option) (err error) {
+func (e *Engine) SetConfigOptions(configOptions map[string]config.Option) (err error) {
 	e.Context, err = e.Config.SetOptions(e.Context, configOptions)
 	if err != nil {
 		e := errors.Annotate(err, errSetConfigOptions)
@@ -451,7 +448,7 @@ func (e *Engine) WithCallback(callback Callback) *Engine {
 	return e
 }
 func (e *Engine) GetLogger(name string) (*libLogger.Logger, error) {
-	logger, err := e.GetLogger(name)
+	logger, err := e.Logger.GetLogger(name)
 	if err != nil {
 		return nil, errors.Annotatef(err, errGetLogger)
 	}
@@ -462,7 +459,7 @@ func (e *Engine) WithLoggers(handlers []*LogHanlder) *Engine {
 	logTargetProviderConfigs := make([]string, len(handlers))
 	for index, hanlder := range handlers {
 		switch hanlder.Type {
-		case "file":
+		case logger.TypeFile:
 			logFilename := hanlder.Filename
 			if !strings.HasPrefix(logFilename, "/") {
 				logFilename = e.option.PathPrefix + "/" + logFilename
@@ -483,16 +480,16 @@ func (e *Engine) WithLoggers(handlers []*LogHanlder) *Engine {
 				}
 			}
 			logTargetProviderName := hanlder.Name + "FileTarget"
-			logProviders[logTargetProviderName] = libLogger.NewFileTarget
+			logProviders[logTargetProviderName] = logger.NewFileTarget
 			logTargetProviderConfigs[index] = `"` + hanlder.Name + `":{"type": "` + logTargetProviderName + `","Filename":"` + logFilename + `","Rotate":true,"MaxBytes":` + strconv.Itoa(1<<22) + `}`
 			e.SystemLog("ltick: register log [name: '" + hanlder.Name + "', target: 'file', file: '" + logFilename + "']")
-		case "console":
+		case logger.TypeConsole:
 			logWriter := hanlder.Writer
 			logTargetProviderName := hanlder.Name + "ConsoleTarget"
-			logProviders[logTargetProviderName] = libLogger.NewConsoleTarget
-			logTargetProviderConfigs[index] = `"` + hanlder.Name + `":{"type": "` + logTargetProviderName + `","Writer":"` + logWriter + `"}`
+			logProviders[logTargetProviderName] = logger.NewConsoleTarget
+			logTargetProviderConfigs[index] = `"` + hanlder.Name + `":{"type": "` + logTargetProviderName + `","Writer":"` + logWriter.String() + `"}`
 			index++
-			e.SystemLog("ltick: register log [name: '" + hanlder.Name + "', target:'console', writer:'" + logWriter + "']")
+			e.SystemLog("ltick: register log [name: '" + hanlder.Name + "', target:'console', writer:'" + logWriter.String() + "']")
 		}
 	}
 	loggerConfig := `{`
@@ -500,16 +497,16 @@ func (e *Engine) WithLoggers(handlers []*LogHanlder) *Engine {
 		loggerConfig = loggerConfig + `"Targets": {` + strings.Join(logTargetProviderConfigs, ",") + `}`
 	}
 	loggerConfig = loggerConfig + `}`
-	e.Logger.LoadComponentJsonConfig([]byte(loggerConfig), logProviders)
+	e.Config.LoadComponentJsonConfig(e.Logger, "Logger", []byte(loggerConfig), logProviders)
 	for _, hanlder := range handlers {
 		e.Logger.NewLogger(hanlder.Name)
 		switch hanlder.Formatter {
-		case "raw":
-			e.Logger.SetLoggerFormatter(hanlder.Name, libLogger.RawLogFormatter())
-		case "sys":
-			e.Logger.SetLoggerFormatter(hanlder.Name, libLogger.SysLogFormatter())
-		default:
-			e.Logger.SetLoggerFormatter(hanlder.Name, libLogger.DefaultLogFormatter())
+		case logger.FormatterRaw:
+			e.Logger.SetLoggerFormatter(hanlder.Name, logger.RawLogFormatter())
+		case logger.FormatterSys:
+			e.Logger.SetLoggerFormatter(hanlder.Name, logger.SysLogFormatter())
+		case logger.FormatterDefault:
+			e.Logger.SetLoggerFormatter(hanlder.Name, logger.DefaultLogFormatter())
 		}
 		e.Logger.SetLoggerTarget(hanlder.Name, hanlder.Name)
 		e.Logger.SetLoggerMaxLevel(hanlder.Name, hanlder.MaxLevel)
@@ -558,12 +555,12 @@ func (e *Engine) Startup() (err error) {
 	for _, server := range e.Servers {
 		if server.Router.routes != nil && len(server.Router.routes) > 0 {
 			for _, route := range server.Router.routes {
-				server.addRoute(route.Method, route.Host, route.Handlers...)
+				server.AddRoute(route.Method, route.Host, route.Handlers...)
 			}
 		}
 		// proxy
 		if server.Router.proxys != nil && len(server.Router.proxys) > 0 {
-			server.addRoute("ANY", "/")
+			server.AddRoute("ANY", "/")
 		}
 		if server.RouteGroups != nil {
 			for _, routeGroup := range server.RouteGroups {
@@ -677,19 +674,19 @@ func (e *Engine) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	// server
 	if e.Servers != nil {
 		serverCount := len(e.Servers)
-		for name, server := range e.Servers {
+		for _, server := range e.Servers {
 			serverCount--
 			if serverCount == 0 {
-				e.ServerServeHTTP(name, server, res, req)
+				e.ServerServeHTTP(server, res, req)
 			} else {
-				go e.ServerServeHTTP(name, server, res, req)
+				go e.ServerServeHTTP(server, res, req)
 			}
 		}
 	} else {
 		e.SystemLog("ltick: Server not set")
 	}
 }
-func (e *Engine) ServerServeHTTP(name string, server *Server, res http.ResponseWriter, req *http.Request) {
+func (e *Engine) ServerServeHTTP(server *Server, res http.ResponseWriter, req *http.Request) {
 	server.Router.ServeHTTP(res, req)
 }
 func (e *Engine) SetContextValue(key, val interface{}) {

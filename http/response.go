@@ -13,7 +13,7 @@ import (
 
 	"encoding/json"
 	"fmt"
-	"github.com/ltick/tick-framework/writer"
+	"github.com/ltick/tick-framework/http/writer"
 	"github.com/ltick/tick-routing"
 )
 

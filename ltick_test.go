@@ -14,119 +14,20 @@ import (
 
 type TestSuite struct {
 	suite.Suite
-	systemConfigFile *os.File
-	envConfigFile    *os.File
+	systemConfigFile string
+	envConfigFile    string
 }
 
 func (suite *TestSuite) SetupTest() {
-	var testSystemConfig string = `{
-  "temporary_path": "/tmp",
-  "server": {
-    "port": 8081,
-    "max_idle_conns_per_host": 10,
-    "request_timeout": "0s",
-    "graceful_stop_timeout": "120s"
-  },
-  "router": {
-  	"proxy": {
-      "www.example.com": {
-        "rule": [
-          "(?P<prefix>test)(\/|[?])(?P<path>.*)$"
-        ],
-        "upstream": "http://127.0.0.1:8088/$prefix$path"
-      }
-    }
-  },
-  "component": {
-    "Logger": {
-      "Targets": {
-        "access": {
-          "Type": "%ACCESS_LOG_TYPE%",
-          "Writer": "%ACCESS_LOG_WRITER%",
-          "Filename": "%ACCESS_LOG_FILENAME%",
-          "MaxLevel": "%ACCESS_LOG_MAX_LEVEL%",
-          "Formatter": "%ACCESS_LOG_FORMATTER%"
-        },
-        "debug": {
-          "Type": "%DEBUG_LOG_TYPE%",
-          "Writer": "%DEBUG_LOG_WRITER%",
-          "Filename": "%DEBUG_LOG_FILENAME%",
-          "MaxLevel": "%DEBUG_LOG_MAX_LEVEL%",
-          "Formatter": "%DEBUG_LOG_FORMATTER%"
-        },
-        "system": {
-          "Type": "%SYSTEM_LOG_TYPE%",
-          "Writer": "%SYSTEM_LOG_WRITER%",
-          "Filename": "%SYSTEM_LOG_FILENAME%",
-          "MaxLevel": "%SYSTEM_LOG_MAX_LEVEL%",
-          "Formatter": "%SYSTEM_LOG_FORMATTER%"
-        }
-      }
-    },
-    "TestComponent1": {
-      "Foo": "Bar"
-    }
-  }
-}`
-	var testEnvConfig string = `LTICK_APP_ENV=docker
-LTICK_DEBUG=1
-LTICK_TMP_PATH=/tmp
-
-LTICK_ZOOKEEPER_HOST=10.30.129.204:2181
-LTICK_ZOOKEEPER_USER=
-LTICK_ZOOKEEPER_PASSWORD=
-
-LTICK_STORAGE_HBASE_HOST=10
-LTICK_STORAGE_HBASE_PORT=10
-LTICK_STORAGE_HBASE_POOL_SIZE=10
-
-LTICK_DATABASE_HOST=10.30.129.204
-LTICK_DATABASE_PORT=3306
-LTICK_DATABASE_USER=root
-LTICK_DATABASE_PASSWORD=19850402
-LTICK_DATABASE_TIMEOUT=5000ms
-LTICK_DATABASE_MAX_OPEN_CONNS=100
-LTICK_DATABASE_MAX_IDLE_CONNS=300
-
-LTICK_REDIS_HOST=10.30.129.151
-LTICK_REDIS_PORT=6379
-LTICK_REDIS_PASSWORD=
-LTICK_REDIS_MAX_IDLE=100
-LTICK_REDIS_MAX_ACTIVE=300
-
-LTICK_QUEUE_PROVIDER=kafka
-LTICK_QUEUE_KAFKA_BROKERS=127.0.0.1
-LTICK_QUEUE_KAFKA_EVENT_GROUP=
-LTICK_QUEUE_KAFKA_EVENT_TOPIC=test
-
-LTICK_ACCESS_LOG_TYPE=file
-LTICK_ACCESS_LOG_FILENAME=/tmp/access.log
-LTICK_DEBUG_LOG_TYPE=console
-LTICK_DEBUG_LOG_WRITER=stdout
-LTICK_SYSTEM_LOG_TYPE=console
-LTICK_SYSTEM_LOG_WRITER=stdout
-`
 	var err error
-	suite.systemConfigFile, err = os.OpenFile("/tmp/ltick.json", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
-	if err == nil {
-		_, err = suite.systemConfigFile.Write([]byte(testSystemConfig))
-		defer suite.systemConfigFile.Close()
-		if err != nil {
-			fmt.Println("xxxx")
-		}
+	suite.systemConfigFile, err = filepath.Abs("testdata/ltick.json")
+	if err != nil {
+		fmt.Println("xxxx")
 	}
-	suite.envConfigFile, err = os.OpenFile("/tmp/.env", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
-	if err == nil {
-		_, err = suite.envConfigFile.Write([]byte(testEnvConfig))
-		defer suite.envConfigFile.Close()
-		if err != nil {
-			fmt.Println("xxxx")
-		}
+	suite.envConfigFile, err = filepath.Abs("testdata/.env")
+	if err != nil {
+		fmt.Println("xxxx")
 	}
-}
-func (suite *TestSuite) AfterTest() {
-	os.Remove("/tmp/ltick.json")
-	os.Remove("/tmp/.env")
 }
 
 type TestCallback struct{}
@@ -149,7 +50,7 @@ func (suite *TestSuite) TestAppCallback() {
 	var values map[string]interface{} = make(map[string]interface{}, 0)
 	var components []*Component = []*Component{}
 	var configs map[string]libConfig.Option = make(map[string]libConfig.Option, 0)
-	a := New(os.Args[0], filepath.Dir(os.Args[0]), "/tmp/ltick.json", "LTICK", components, configs).
+	a := New(os.Args[0], filepath.Dir(os.Args[0]), suite.systemConfigFile, "LTICK", components, configs).
 		WithCallback(&TestCallback{}).WithValues(values)
 	a.SetSystemLogWriter(ioutil.Discard)
 	err := a.Startup()

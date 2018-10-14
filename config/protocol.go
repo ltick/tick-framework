@@ -5,13 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"reflect"
 	"strings"
 	"time"
 
+	"github.com/go-ozzo/ozzo-config"
 	"github.com/joho/godotenv"
 	_ "github.com/joho/godotenv/autoload"
-	"github.com/ltick/tick-routing"
 )
 
 var (
@@ -62,9 +61,6 @@ type Config struct {
 	options               map[string]Option
 	bindedEnvironmentKeys []string
 	pathPrefix            string
-
-	data  reflect.Value
-	types map[string]reflect.Value
 }
 
 func (c *Config) Initiate(ctx context.Context) (context.Context, error) {
@@ -85,12 +81,6 @@ func (c *Config) OnStartup(ctx context.Context) (context.Context, error) {
 func (c *Config) OnShutdown(ctx context.Context) (context.Context, error) {
 	return ctx, nil
 }
-func (c *Config) OnRequestStartup(ctx *routing.Context) error {
-	return nil
-}
-func (c *Config) OnRequestShutdown(ctx *routing.Context) error {
-	return nil
-}
 func (c *Config) HandlerName() string {
 	return c.handlerName
 }
@@ -101,15 +91,12 @@ func (c *Config) Use(ctx context.Context, handlerName string) error {
 	}
 	c.handlerName = handlerName
 	c.handler = handler()
-	c.data = reflect.Value{}
-	c.types = make(map[string]reflect.Value)
 	err = c.handler.Initiate(ctx)
 	if err != nil {
 		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), c.handlerName))
 	}
 	return nil
 }
-
 func (c *Config) AddConfigPath(in string) {
 	c.handler.AddConfigPath(in)
 }
@@ -125,7 +112,6 @@ func (c *Config) SetPathPrefix(pathPrefix string) {
 func (c *Config) GetPathPrefix() string {
 	return c.pathPrefix
 }
-
 func (c *Config) SetOptions(ctx context.Context, options map[string]Option) (context.Context, error) {
 	if options != nil {
 		keys := make([]string, 0)
@@ -158,13 +144,55 @@ func (c *Config) Callbacks(ctx context.Context, callbacks map[string]Callback) (
 	}
 	return ctx, nil
 }
+
+func (c *Config) LoadComponentFileConfig(component interface{}, componentName string, configFile string, configProviders map[string]interface{}, configTag ...string) (err error) {
+	oc := config.New()
+	err = oc.Load(configFile)
+	if err != nil {
+		return errors.New(fmt.Sprintf("config: component '%s' load config file '%s' error '%s'", componentName, configFile, err.Error()))
+	}
+	if len(configProviders) > 0 {
+		for configProviderName, configProvider := range configProviders {
+			err = oc.Register(configProviderName, configProvider)
+			if err != nil {
+				return errors.New(fmt.Sprintf("config: component '%s' register config provider '%s' error '%s'", componentName, configProviderName, err.Error()))
+			}
+		}
+	}
+	err = oc.Configure(component, configTag...)
+	if err != nil {
+		return errors.New(fmt.Sprintf("config: component '%s' configure error '%s'", componentName, err.Error()))
+	}
+	return nil
+}
+
+func (c *Config) LoadComponentJsonConfig(component interface{}, componentName string, configData []byte, configProviders map[string]interface{}, configTag ...string) (err error) {
+	oc := config.New()
+	err = oc.LoadJSON(configData)
+	if err != nil {
+		return errors.New(fmt.Sprintf("config: component '%s' load config '%s' error '%s'", componentName, configData, err.Error()))
+	}
+	if len(configProviders) > 0 {
+		for configProviderName, configProvider := range configProviders {
+			err = oc.Register(configProviderName, configProvider)
+			if err != nil {
+				return errors.New(fmt.Sprintf("config: component '%s' register config provider '%s' error '%s'", componentName, configProviderName, err.Error()))
+			}
+		}
+	}
+	err = oc.Configure(component, configTag...)
+	if err != nil {
+		return errors.New(fmt.Sprintf("config: component '%s' configure error '%s'", componentName, err.Error()))
+	}
+	return nil
+}
+
 func (c *Config) LoadFromConfigPath(configName string) error {
 	c.handler.SetConfigName(configName)
 	err := c.handler.ReadInConfig()
 	if err != nil {
 		return fmt.Errorf(errLoadFromConfigPath+": %s", err.Error())
 	}
-	c.data = reflect.ValueOf(c.handler.AllSettings())
 	return nil
 }
 func (c *Config) LoadFromConfigFile(configFile string) error {
@@ -173,7 +201,6 @@ func (c *Config) LoadFromConfigFile(configFile string) error {
 	if err != nil {
 		return fmt.Errorf(errLoadFromConfigFile+": %s", err.Error())
 	}
-	c.data = reflect.ValueOf(c.handler.AllSettings())
 	return nil
 }
 func (c *Config) BindedEnvironmentKeys() []string {

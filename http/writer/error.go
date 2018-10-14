@@ -1,12 +1,19 @@
 package writer
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
-	"encoding/json"
 
 	"github.com/ltick/tick-routing"
 )
+
+type Data struct {
+	Code    string      `json:"code" xml:"code"`
+	Status  int         `json:"status" xml:"status"`
+	Message string      `json:"message,omitempty" xml:"message,omitempty"`
+	Data    interface{} `json:"data,omitempty" xml:"data,omitempty"`
+}
 
 type ErrorData struct {
 	*Data
@@ -56,4 +63,3 @@ func (w *ErrorDataWriter) Write(res http.ResponseWriter, data interface{}) (err 
 	}
 	return err
 }
-

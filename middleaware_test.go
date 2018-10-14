@@ -81,24 +81,24 @@ func (suite *TestSuite) TestMiddleware() {
 	var values map[string]interface{} = map[string]interface{}{}
 	var components []*Component = []*Component{}
 	var options map[string]libConfig.Option = make(map[string]libConfig.Option, 0)
-	a := New(os.Args[0], filepath.Dir(os.Args[0]), "/tmp/ltick.json", "LTICK", components, options).
+	a := New(os.Args[0], filepath.Dir(os.Args[0]), suite.systemConfigFile, "LTICK", components, options).
 		WithCallback(&TestCallback{}).
 		WithValues(values)
 	a.SetSystemLogWriter(ioutil.Discard)
 	a.SetContextValue("output", "")
-	a.Startup()
 	srv := a.NewServer("test", 8080, 30*time.Second, 3*time.Second)
 	rg := srv.GetRouteGroup("/")
 	assert.NotNil(suite.T(), rg)
-	rg.AddRoute("GET", "/test", func(c *routing.Context) error {
-		c.ResponseWriter.Write([]byte(c.Get("Foo").(string)))
+	rg.AddRoute("GET", "test", func(c *routing.Context) error {
+		c.ResponseWriter.Write([]byte("Bar1"))
 		return nil
 	})
+	a.Startup()
 	res := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/test", nil)
 	a.ServeHTTP(res, req)
 	assert.Equal(suite.T(), "Bar1", res.Body.String())
 	a.Shutdown()
-	assert.Equal(suite.T(), "testComponent1-Register|testComponent1-Startup||testComponent1-Unregister", a.GetContextValue("output"))
+	assert.Equal(suite.T(), "Startup|Shutdown", a.GetContextValue("output"))
 }
 

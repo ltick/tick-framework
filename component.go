@@ -10,11 +10,11 @@ import (
 	"github.com/ltick/tick-framework/cache"
 	"github.com/ltick/tick-framework/config"
 	"github.com/ltick/tick-framework/database"
+	"github.com/ltick/tick-framework/filesystem"
 	"github.com/ltick/tick-framework/logger"
 	"github.com/ltick/tick-framework/queue"
-	"github.com/ltick/tick-framework/utility"
-	"github.com/ltick/tick-framework/filesystem"
 	"github.com/ltick/tick-framework/session"
+	"github.com/ltick/tick-framework/utility"
 )
 
 var (
@@ -209,31 +209,17 @@ func (e *Engine) GetSortedComponent(reverses ...bool) []interface{} {
 
 func (e *Engine) LoadComponentFileConfig(componentName string, configFile string, configProviders map[string]interface{}, configTag ...string) (err error) {
 	canonicalComponentName := strings.ToUpper(componentName[0:1]) + componentName[1:]
-	// create a Config object
-	fmt.Errorf(configFile)
-	err = e.Config.LoadFromConfigFile(configFile)
-	if err != nil {
-		return fmt.Errorf(errComponentLoadConfig+": %s", canonicalComponentName, err.Error())
-	}
-	if len(configProviders) > 0 {
-		for configProviderName, configProvider := range configProviders {
-			err = e.Config.Register(configProviderName, configProvider)
-			if err != nil {
-				return fmt.Errorf(errComponentRegisterConfigProvider+": %s", configProviderName, err.Error())
-			}
-		}
-	}
-	registeredComponent, err := e.GetComponentByName(canonicalComponentName)
+	component, err := e.GetComponentByName(canonicalComponentName)
 	if err != nil {
 		if !strings.Contains(err.Error(), "not exists") {
 			return err
 		}
 	}
-	err = e.Config.Configure(registeredComponent, configTag...)
+	// create a Config object
+	err = e.Config.LoadComponentFileConfig(component, componentName, configFile, configProviders, configTag...)
 	if err != nil {
-		return fmt.Errorf(errComponentConfigure+": %s", canonicalComponentName, err.Error())
+		return fmt.Errorf(errComponentLoadConfig+": %s", canonicalComponentName, err.Error())
 	}
-	e.ComponentMap[canonicalComponentName] = registeredComponent
 	return nil
 }
 
