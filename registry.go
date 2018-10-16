@@ -8,25 +8,25 @@ const INJECT_TAG = "inject"
 
 type (
 	Registry struct {
-		Components        []interface{}
-		ComponentMap      map[string]interface{}
+		Components           []interface{}
+		ComponentMap         map[string]interface{}
 		SortedComponentName  []string
-		Middlewares       []interface{}
-		MiddlewareMap     map[string]interface{}
+		Middlewares          []interface{}
+		MiddlewareMap        map[string]interface{}
 		SortedMiddlewareName []string
-		Values            map[string]interface{}
+		Values               map[string]interface{}
 	}
 )
 
-func NewRegistry(components []*Component) (r *Registry, err error) {
+func NewRegistry(components ...*Component) (r *Registry, err error) {
 	r = &Registry{
-		Components:       make([]interface{}, 0),
-		ComponentMap:     make(map[string]interface{}),
-		SortedComponentName: make([]string, 0),
-		Middlewares:       make([]interface{}, 0),
-		MiddlewareMap:     make(map[string]interface{}),
+		Components:           make([]interface{}, 0),
+		ComponentMap:         make(map[string]interface{}),
+		SortedComponentName:  make([]string, 0),
+		Middlewares:          make([]interface{}, 0),
+		MiddlewareMap:        make(map[string]interface{}),
 		SortedMiddlewareName: make([]string, 0),
-		Values:           make(map[string]interface{}),
+		Values:               make(map[string]interface{}),
 	}
 	// 注册内置模块
 	for _, component := range BuiltinComponents {
@@ -36,13 +36,11 @@ func NewRegistry(components []*Component) (r *Registry, err error) {
 			return nil, e
 		}
 	}
-	if components != nil {
-		for _, c := range components {
-			err = r.RegisterComponent(c.Name, c.Component, true)
-			if err != nil {
-				e := errors.Annotate(err, errNew)
-				return nil, e
-			}
+	for _, c := range components {
+		err = r.RegisterComponent(c.Name, c.Component, true)
+		if err != nil {
+			e := errors.Annotate(err, errNew)
+			return nil, e
 		}
 	}
 	return r, nil
