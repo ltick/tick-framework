@@ -32,10 +32,10 @@ type Filesystem struct {
 	handler     Handler
 }
 
-func (this *Filesystem) Initiate(ctx context.Context) (newCtx context.Context, err error) {
-	if newCtx, err = this.Config.Initiate(ctx); err != nil {
-		err = fmt.Errorf(errInitiate, err.Error())
-		return
+func (this *Filesystem) Initiate(ctx context.Context) (context.Context, error) {
+	ctx, err := this.Config.Initiate(ctx)
+	if err != nil {
+		return ctx, fmt.Errorf(errInitiate, err.Error())
 	}
 	var configs map[string]config.Option = map[string]config.Option{
 		"FILESYSTEM_PROVIDER":                config.Option{Type: config.String, Default: defaultProvider, EnvironmentKey: "FILESYSTEM_PROVIDER"},
@@ -43,31 +43,26 @@ func (this *Filesystem) Initiate(ctx context.Context) (newCtx context.Context, e
 		"FILESYSTEM_DEFRAG_CONTENT_LIFETIME": config.Option{Type: config.Duration, Default: 24 * time.Hour, EnvironmentKey: "FILESYSTEM_DEFRAG_CONTENT_LIFETIME"},
 		"FILESYSTEM_LRU_CAPACITY":            config.Option{Type: config.Int64, Default: 32 * 1024 * 1024, EnvironmentKey: "FILESYSTEM_LRU_CAPACITY"},
 	}
-	if newCtx, err = this.Config.SetOptions(ctx, configs); err != nil {
-		err = fmt.Errorf(errInitiate, err.Error())
-		return
+	if err = this.Config.SetOptions(configs); err != nil {
+		return ctx, fmt.Errorf(errInitiate, err.Error())
 	}
 	if err = Register(defaultProvider, NewFileHandler); err != nil {
-		err = fmt.Errorf(errInitiate, err.Error())
-		return
+		return ctx, fmt.Errorf(errInitiate, err.Error())
 	}
 	if err = Register("lruFile", NewLRUFileHandler); err != nil {
-		err = fmt.Errorf(errInitiate, err.Error())
-		return
+		return ctx, fmt.Errorf(errInitiate, err.Error())
 	}
-	return
+	return ctx, nil
 }
-func (this *Filesystem) OnStartup(ctx context.Context) (newCtx context.Context, err error) {
-	newCtx = ctx
+func (this *Filesystem) OnStartup(ctx context.Context) (context.Context, error) {
 	var provider string = this.Config.GetString("FILESYSTEM_PROVIDER")
 	if provider == "" {
 		provider = defaultProvider
 	}
-	if err = this.Use(ctx, provider); err != nil {
-		err = fmt.Errorf(errOnStartup, err.Error())
-		return
+	if err := this.Use(ctx, provider); err != nil {
+		return ctx, fmt.Errorf(errOnStartup, err.Error())
 	}
-	return
+	return ctx, nil
 }
 func (this *Filesystem) OnShutdown(ctx context.Context) (context.Context, error) {
 	return ctx, nil

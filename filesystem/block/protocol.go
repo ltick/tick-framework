@@ -33,10 +33,10 @@ type Instance struct {
 	handler     BlockHandler
 }
 
-func (this *Instance) Initiate(ctx context.Context) (newCtx context.Context, err error) {
-	if newCtx, err = this.Config.Initiate(ctx); err != nil {
-		err = fmt.Errorf(errInitiate, err.Error())
-		return
+func (this *Instance) Initiate(ctx context.Context) (context.Context, error) {
+	ctx, err := this.Config.Initiate(ctx)
+	if err != nil {
+		return ctx, fmt.Errorf(errInitiate, err.Error())
 	}
 	var configs map[string]config.Option = map[string]config.Option{
 		"FILESYSTEM_BLOCK_PROVIDER":            config.Option{Type: config.String, Default: defaultProvider, EnvironmentKey: "FILESYSTEM_BLOCK_PROVIDER"},
@@ -44,15 +44,13 @@ func (this *Instance) Initiate(ctx context.Context) (newCtx context.Context, err
 		"FILESYSTEM_BLOCK_CONTENT_SIZE":        config.Option{Type: config.Int64, Default: 64 * 1024 * 1024, EnvironmentKey: "FILESYSTEM_BLOCK_CONTENT_SIZE"},
 		"FILESYSTEM_BLOCK_INDEX_SAVE_INTERVAL": config.Option{Type: config.Duration, Default: 5 * time.Minute, EnvironmentKey: "FILESYSTEM_BLOCK_INDEX_SAVE_INTERVAL"},
 	}
-	if newCtx, err = this.Config.SetOptions(ctx, configs); err != nil {
-		err = fmt.Errorf(errInitiate, err.Error())
-		return
+	if err = this.Config.SetOptions(configs); err != nil {
+		return ctx, fmt.Errorf(errInitiate, err.Error())
 	}
 	if err = FileBlockRegister(defaultProvider, NewFileBlockHandler); err != nil {
-		err = fmt.Errorf(errInitiate, err.Error())
-		return
+		return ctx, fmt.Errorf(errInitiate, err.Error())
 	}
-	return
+	return ctx, nil
 }
 func (this *Instance) OnStartup(ctx context.Context) (newCtx context.Context, err error) {
 	newCtx = ctx

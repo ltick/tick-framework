@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/go-ozzo/ozzo-config"
@@ -60,7 +59,6 @@ type Config struct {
 
 	options               map[string]Option
 	bindedEnvironmentKeys []string
-	pathPrefix            string
 }
 
 func (c *Config) Initiate(ctx context.Context) (context.Context, error) {
@@ -106,13 +104,7 @@ func (c *Config) ConfigFileUsed() string {
 func (c *Config) SetEnvPrefix(in string) {
 	c.handler.SetEnvPrefix(in)
 }
-func (c *Config) SetPathPrefix(pathPrefix string) {
-	c.pathPrefix = pathPrefix
-}
-func (c *Config) GetPathPrefix() string {
-	return c.pathPrefix
-}
-func (c *Config) SetOptions(ctx context.Context, options map[string]Option) (context.Context, error) {
+func (c *Config) SetOptions(options map[string]Option) error {
 	if options != nil {
 		keys := make([]string, 0)
 		for key, option := range options {
@@ -127,7 +119,7 @@ func (c *Config) SetOptions(ctx context.Context, options map[string]Option) (con
 			}
 		}
 	}
-	return ctx, nil
+	return nil
 }
 func (c *Config) Callbacks(ctx context.Context, callbacks map[string]Callback) (context.Context, error) {
 	if callbacks != nil {
@@ -220,9 +212,6 @@ func (c *Config) LoadFromEnv() error {
 }
 func (c *Config) LoadFromEnvFile(dotEnvFile string) error {
 	if dotEnvFile != "" {
-		if !strings.HasPrefix(dotEnvFile, "/") {
-			dotEnvFile = strings.TrimRight(c.pathPrefix, "/") + "/" + dotEnvFile
-		}
 		_, err := os.Stat(dotEnvFile)
 		if err != nil {
 			if os.IsNotExist(err) {

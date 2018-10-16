@@ -55,7 +55,7 @@ var systemLog libUtility.LogFunc
 
 type Session struct {
 	Database *libDatabase.Database `inject:"true"`
-	Cache    *libCache.Cache    `inject:"true"`
+	Cache    *libCache.Cache       `inject:"true"`
 
 	Config      *config.Config
 	DebugLog    libUtility.LogFunc `inject:"true"`
@@ -86,7 +86,7 @@ func NewSession() *Session {
 	return &Session{}
 }
 
-func (s *Session) Initiate(ctx context.Context) (newCtx context.Context, err error) {
+func (s *Session) Initiate(ctx context.Context) (context.Context, error) {
 	gob.Register([]interface{}{})
 	gob.Register(map[int]interface{}{})
 	gob.Register(map[string]interface{}{})
@@ -103,9 +103,9 @@ func (s *Session) Initiate(ctx context.Context) (newCtx context.Context, err err
 		"MEDIA_SESSION_MAX_AGE":          config.Option{Type: config.Int64, EnvironmentKey: "MEDIA_SESSION_MAX_AGE"},
 		"MEDIA_SESSION_MYSQL_DATABASE":   config.Option{Type: config.Int64, EnvironmentKey: "MEDIA_SESSION_MYSQL_DATABASE"},
 	}
-	newCtx, err = s.Config.SetOptions(ctx, configs)
+	err := s.Config.SetOptions(configs)
 	if err != nil {
-		return newCtx, fmt.Errorf(errInitiate+": %s", err.Error())
+		return ctx, fmt.Errorf(errInitiate+": %s", err.Error())
 	}
 	err = Register("mysql", NewMysqlHandler)
 	if err != nil {

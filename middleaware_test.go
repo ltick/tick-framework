@@ -5,26 +5,47 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"time"
 
-	libConfig "github.com/ltick/tick-framework/config"
+	"github.com/ltick/tick-framework/config"
 	"github.com/ltick/tick-routing"
 	"github.com/stretchr/testify/assert"
 )
 
+
+type TestRequestCallback struct{
+	Config *config.Config `inject:"true"`
+}
+
+func (f *TestRequestCallback) OnRequestStartup(c *routing.Context) error {
+	if c.Context.Value("output") != nil {
+		output := c.Context.Value("output").(string)
+		output = output + "RequestStartup|"
+		c.Context = context.WithValue(c.Context, "output", output)
+	}
+	return nil
+}
+
+func (f *TestRequestCallback) OnRequestShutdown(c *routing.Context) error {
+	if c.Context.Value("output") != nil {
+		output := c.Context.Value("output").(string)
+		output = output + "|RequestShutdown"
+		c.Context = context.WithValue(c.Context, "output", output)
+	}
+	return nil
+}
+
 type testMiddleware1 struct {
-	Config *libConfig.Config
+	Config *config.Config `inject:"true"`
 	Foo    string
 	Foo1   string
 }
 
-func (f *testMiddleware1) Initiate(ctx context.Context) (newCtx context.Context, err error) {
-	var options map[string]libConfig.Option = map[string]libConfig.Option{}
-	newCtx, err = f.Config.SetOptions(ctx, options)
+func (f *testMiddleware1) Initiate(ctx context.Context) (context.Context, error) {
+	var options map[string]config.Option = map[string]config.Option{}
+	err := f.Config.SetOptions(options)
 	if err != nil {
-		return newCtx, err
+		return ctx, err
 	}
 	return ctx, nil
 }
@@ -53,8 +74,17 @@ func (f *testMiddleware1) OnRequestShutdown(c *routing.Context) error {
 }
 
 type testMiddleware2 struct {
-	Config *libConfig.Config
+	Config *config.Config
 	Test   *testMiddleware1 `inject:"true"`
+}
+
+func (f *testMiddleware2) Initiate(ctx context.Context) (newCtx context.Context, err error) {
+	var options map[string]config.Option = map[string]config.Option{}
+	err = f.Config.SetOptions(options)
+	if err != nil {
+		return newCtx, err
+	}
+	return ctx, nil
 }
 
 func (f *testMiddleware2) OnRequestStartup(c *routing.Context) error {
@@ -80,14 +110,36 @@ func (f *testMiddleware2) OnRequestShutdown(c *routing.Context) error {
 func (suite *TestSuite) TestMiddleware() {
 	var values map[string]interface{} = map[string]interface{}{}
 	var components []*Component = []*Component{}
-	var options map[string]libConfig.Option = make(map[string]libConfig.Option, 0)
-	a := New(os.Args[0], filepath.Dir(os.Args[0]), suite.systemConfigFile, "LTICK", components, options).
+	var options map[string]config.Option = make(map[string]config.Option, 0)
+	r, err := NewRegistry(components)
+	assert.Nil(suite.T(), err)
+	configComponent, err := r.GetComponentByName("Config")
+	assert.Nil(suite.T(), err)
+	assert.NotNil(suite.T(), configComponent)
+	configer, ok := configComponent.(*config.Config)
+	assert.True(suite.T(), ok)
+	err = configer.SetOptions(options)
+	assert.Nil(suite.T(), err)
+	err = r.RegisterMiddleware("testMiddleware1", &testMiddleware1{})
+	assert.Nil(suite.T(), err)
+	err = r.RegisterMiddleware("testMiddleware2", &testMiddleware2{})
+	assert.Nil(suite.T(), err)
+	a := New(suite.configFile, suite.dotenvFile, "LTICK", r).
 		WithCallback(&TestCallback{}).
 		WithValues(values)
 	a.SetSystemLogWriter(ioutil.Discard)
 	a.SetContextValue("output", "")
-	srv := a.NewServer("test", 8080, 30*time.Second, 3*time.Second)
-	rg := srv.GetRouteGroup("/")
+
+	router := &ServerRouter{
+		Router: routing.New(a.Context).Timeout(3*time.Second, func(c *routing.Context) error {
+			a.Context = context.WithValue(a.Context, "output", "Timeout")
+			return routing.NewHTTPError(http.StatusRequestTimeout)
+		}),
+		routes: make([]*ServerRouterRoute, 0),
+		proxys: make([]*ServerRouterProxy, 0),
+	}
+	srv := a.NewServer("test", 8080, 30*time.Second, router)
+	rg := srv.GetRouteGroup("/").WithCallback(&TestRequestCallback{})
 	assert.NotNil(suite.T(), rg)
 	rg.AddRoute("GET", "test", func(c *routing.Context) error {
 		c.ResponseWriter.Write([]byte("Bar1"))
@@ -99,6 +151,5 @@ func (suite *TestSuite) TestMiddleware() {
 	a.ServeHTTP(res, req)
 	assert.Equal(suite.T(), "Bar1", res.Body.String())
 	a.Shutdown()
-	assert.Equal(suite.T(), "Startup|Shutdown", a.GetContextValue("output"))
+	assert.Equal(suite.T(), "Startup||Shutdown", a.GetContextValue("output"))
 }
-

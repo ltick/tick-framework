@@ -1,4 +1,4 @@
-package logger
+package log
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"time"
 	"strings"
 
-	libLogger "github.com/ltick/tick-log"
+	libLog "github.com/ltick/tick-log"
 )
 
 var (
@@ -195,13 +195,13 @@ func (l *Logger) Use(ctx context.Context, handlerName string) error {
 	return nil
 }
 
-func (l *Logger) NewLogger(name string) *libLogger.Logger {
+func (l *Logger) NewLogger(name string) *libLog.Logger {
 	return l.handler.NewLogger(name)
 }
-func (l *Logger) GetLogger(name string) (*libLogger.Logger, error) {
+func (l *Logger) GetLogger(name string) (*libLog.Logger, error) {
 	return l.handler.GetLogger(name)
 }
-func (l *Logger) GetLoggerTarget(name string) (libLogger.Target, error) {
+func (l *Logger) GetLoggerTarget(name string) (libLog.Target, error) {
 	return l.handler.GetLoggerTarget(name)
 }
 func (l *Logger) RegisterLoggerTarget(name string, targetType string, targetConfig string) error {
@@ -213,23 +213,23 @@ func (l *Logger) SetLoggerTarget(name string, targetName string) error {
 func (l *Logger) SetLoggerMaxLevel(name string, level Level) error {
 	switch level {
 	case LevelEmergency:
-		return l.handler.SetLoggerMaxLevel(name, libLogger.LevelEmergency)
+		return l.handler.SetLoggerMaxLevel(name, libLog.LevelEmergency)
 	case LevelAlert:
-		return l.handler.SetLoggerMaxLevel(name, libLogger.LevelAlert)
+		return l.handler.SetLoggerMaxLevel(name, libLog.LevelAlert)
 	case LevelCritical:
-		return l.handler.SetLoggerMaxLevel(name, libLogger.LevelCritical)
+		return l.handler.SetLoggerMaxLevel(name, libLog.LevelCritical)
 	case LevelError:
-		return l.handler.SetLoggerMaxLevel(name, libLogger.LevelError)
+		return l.handler.SetLoggerMaxLevel(name, libLog.LevelError)
 	case LevelWarning:
-		return l.handler.SetLoggerMaxLevel(name, libLogger.LevelWarning)
+		return l.handler.SetLoggerMaxLevel(name, libLog.LevelWarning)
 	case LevelNotice:
-		return l.handler.SetLoggerMaxLevel(name, libLogger.LevelNotice)
+		return l.handler.SetLoggerMaxLevel(name, libLog.LevelNotice)
 	case LevelInfo:
-		return l.handler.SetLoggerMaxLevel(name, libLogger.LevelInfo)
+		return l.handler.SetLoggerMaxLevel(name, libLog.LevelInfo)
 	case LevelDebug:
-		return l.handler.SetLoggerMaxLevel(name, libLogger.LevelDebug)
+		return l.handler.SetLoggerMaxLevel(name, libLog.LevelDebug)
 	default:
-		return l.handler.SetLoggerMaxLevel(name, libLogger.LevelDebug)
+		return l.handler.SetLoggerMaxLevel(name, libLog.LevelDebug)
 	}
 	return nil
 }
@@ -239,7 +239,7 @@ func (l *Logger) SetLoggerCallStackDepth(name string, d int) error {
 func (l *Logger) SetLoggerCallStackFilter(name string, f string) error {
 	return l.handler.SetLoggerCallStackFilter(name, f)
 }
-func (l *Logger) SetLoggerFormatter(name string, f libLogger.Formatter) error {
+func (l *Logger) SetLoggerFormatter(name string, f libLog.Formatter) error {
 	return l.handler.SetLoggerFormatter(name, f)
 }
 func (l *Logger) SetLoggerBufferSize(name string, b int) error {
@@ -252,26 +252,26 @@ func (l *Logger) CloseLogger(name string) error {
 	return l.handler.CloseLogger(name)
 }
 
-func DefaultLogFormatter() libLogger.Formatter {
-	return func(l *libLogger.Logger, e *libLogger.Entry) string {
+func DefaultLogFormatter() libLog.Formatter {
+	return func(l *libLog.Logger, e *libLog.Entry) string {
 		return fmt.Sprintf("%s|%s|%v%v", e.Time.Format(time.RFC3339), e.Level, e.Message, e.CallStack)
 	}
 }
-func RawLogFormatter() libLogger.Formatter {
-	return func(l *libLogger.Logger, e *libLogger.Entry) string {
+func RawLogFormatter() libLog.Formatter {
+	return func(l *libLog.Logger, e *libLog.Entry) string {
 		return fmt.Sprintf("%v%v", e.Message, e.CallStack)
 	}
 }
-func SysLogFormatter() libLogger.Formatter {
-	return func(l *libLogger.Logger, e *libLogger.Entry) string {
+func SysLogFormatter() libLog.Formatter {
+	return func(l *libLog.Logger, e *libLog.Entry) string {
 		return fmt.Sprintf(`%s %s`, e.Time.Format("2006/01/02 15:04:05"), e.Message)
 	}
 }
-func NewConsoleTarget() *libLogger.ConsoleTarget {
-	return libLogger.NewConsoleTarget()
+func NewConsoleTarget() *libLog.ConsoleTarget {
+	return libLog.NewConsoleTarget()
 }
-func NewFileTarget() *libLogger.FileTarget {
-	return libLogger.NewFileTarget()
+func NewFileTarget() *libLog.FileTarget {
+	return libLog.NewFileTarget()
 }
 
 type logHandler func() Handler
@@ -296,15 +296,15 @@ func Use(name string) (logHandler, error) {
 
 type Handler interface {
 	Initiate(ctx context.Context) error
-	NewLogger(name string) *libLogger.Logger
-	GetLogger(name string) (*libLogger.Logger, error)
-	GetLoggerTarget(name string) (libLogger.Target, error)
+	NewLogger(name string) *libLog.Logger
+	GetLogger(name string) (*libLog.Logger, error)
+	GetLoggerTarget(name string) (libLog.Target, error)
 	RegisterLoggerTarget(name string, targetType string, targetConfig string) error
 	SetLoggerTarget(name string, targetName string) error
-	SetLoggerMaxLevel(name string, level libLogger.Level) error
+	SetLoggerMaxLevel(name string, level libLog.Level) error
 	SetLoggerCallStackDepth(name string, d int) error
 	SetLoggerCallStackFilter(name string, f string) error
-	SetLoggerFormatter(name string, f libLogger.Formatter) error
+	SetLoggerFormatter(name string, f libLog.Formatter) error
 	SetLoggerBufferSize(name string, b int) error
 	OpenLogger(name string) error
 	CloseLogger(name string) error

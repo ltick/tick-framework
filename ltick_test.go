@@ -2,29 +2,29 @@ package ltick
 
 import (
 	"io/ioutil"
-	"os"
 	"path/filepath"
 	"testing"
 
 	"fmt"
-	libConfig "github.com/ltick/tick-framework/config"
+	"github.com/ltick/tick-framework/config"
 	"github.com/stretchr/testify/assert"
+	"github.com/juju/errors"
 	"github.com/stretchr/testify/suite"
 )
 
 type TestSuite struct {
 	suite.Suite
-	systemConfigFile string
-	envConfigFile    string
+	configFile string
+	dotenvFile string
 }
 
 func (suite *TestSuite) SetupTest() {
 	var err error
-	suite.systemConfigFile, err = filepath.Abs("testdata/ltick.json")
+	suite.configFile, err = filepath.Abs("testdata/ltick.json")
 	if err != nil {
 		fmt.Println("xxxx")
 	}
-	suite.envConfigFile, err = filepath.Abs("testdata/.env")
+	suite.dotenvFile, err = filepath.Abs("testdata/.env")
 	if err != nil {
 		fmt.Println("xxxx")
 	}
@@ -41,7 +41,7 @@ func (f *TestCallback) OnStartup(e *Engine) error {
 
 func (f *TestCallback) OnShutdown(e *Engine) error {
 	output := e.GetContextValueString("output")
-	output = output + "Shutdown"
+	output = output + "|Shutdown"
 	e.SetContextValue("output", output)
 	return nil
 }
@@ -49,18 +49,54 @@ func (f *TestCallback) OnShutdown(e *Engine) error {
 func (suite *TestSuite) TestAppCallback() {
 	var values map[string]interface{} = make(map[string]interface{}, 0)
 	var components []*Component = []*Component{}
-	var configs map[string]libConfig.Option = make(map[string]libConfig.Option, 0)
-	a := New(os.Args[0], filepath.Dir(os.Args[0]), suite.systemConfigFile, "LTICK", components, configs).
-		WithCallback(&TestCallback{}).WithValues(values)
+	r, err := NewRegistry(components)
+	assert.Nil(suite.T(), err)
+	a := New(suite.configFile, suite.dotenvFile, "LTICK", r).
+		WithCallback(&TestCallback{}).
+		WithValues(values)
 	a.SetSystemLogWriter(ioutil.Discard)
-	err := a.Startup()
+	a.SetContextValue("output", "")
+	err = a.Startup()
 	assert.Nil(suite.T(), err)
 	output := a.GetContextValueString("output")
 	assert.Equal(suite.T(), "Startup|", output)
 	err = a.Shutdown()
 	assert.Nil(suite.T(), err)
 	output = a.GetContextValueString("output")
-	assert.Equal(suite.T(), "Startup|Shutdown", output)
+	assert.Equal(suite.T(), "Startup||Shutdown", output)
+}
+
+func (suite *TestSuite) TestComponentCallback() {
+	var values map[string]interface{} = make(map[string]interface{}, 0)
+	var components []*Component = []*Component{
+		&Component{Name: "TestComponent1", Component: &testComponent1{}},
+	}
+	var options map[string]config.Option = make(map[string]config.Option, 0)
+	r, err := NewRegistry(components)
+	assert.Nil(suite.T(), err)
+	err = r.RegisterValue("Foo", "Bar")
+	assert.Nil(suite.T(), err)
+	err = r.RegisterValue("Foo1", "Bar1")
+	assert.Nil(suite.T(), err)
+	configComponent, err := r.GetComponentByName("Config")
+	assert.Nil(suite.T(), err)
+	assert.NotNil(suite.T(), configComponent)
+	configer, ok := configComponent.(*config.Config)
+	assert.True(suite.T(), ok)
+	err = configer.SetOptions(options)
+	assert.Nil(suite.T(), err)
+
+	a := New(suite.configFile, suite.dotenvFile, "LTICK", r).
+		WithCallback(&TestCallback{}).
+		WithValues(values)
+	a.SetSystemLogWriter(ioutil.Discard)
+	a.SetContextValue("output", "")
+	err = a.Startup()
+	assert.Nil(suite.T(), err, errors.ErrorStack(err))
+	assert.Equal(suite.T(), "Startup|testComponent1-Startup|", a.GetContextValue("output"))
+	err = a.Shutdown()
+	assert.Nil(suite.T(), err, errors.ErrorStack(err))
+	assert.Equal(suite.T(), "Startup|testComponent1-Startup||testComponent1-Shutdown|Shutdown", a.GetContextValue("output"))
 }
 
 func TestTestSuite(t *testing.T) {

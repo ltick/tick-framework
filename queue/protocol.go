@@ -27,16 +27,16 @@ type Queue struct {
 	handler     Handler
 }
 
-func (q *Queue) Initiate(ctx context.Context) (newCtx context.Context, err error) {
+func (q *Queue) Initiate(ctx context.Context) (context.Context, error) {
 	var configs map[string]config.Option = map[string]config.Option{
 		"QUEUE_PROVIDER":          config.Option{Type: config.String, Default: "kafka", EnvironmentKey: "QUEUE_PROVIDER"},
 		"QUEUE_KAFKA_BROKERS":     config.Option{Type: config.String, EnvironmentKey: "QUEUE_KAFKA_BROKERS"},
 		"QUEUE_KAFKA_EVENT_GROUP": config.Option{Type: config.String, EnvironmentKey: "QUEUE_KAFKA_EVENT_GROUP"},
 		"QUEUE_KAFKA_EVENT_TOPIC": config.Option{Type: config.String, EnvironmentKey: "QUEUE_KAFKA_EVENT_TOPIC"},
 	}
-	newCtx, err = q.Config.SetOptions(ctx, configs)
+	err := q.Config.SetOptions( configs)
 	if err != nil {
-		return newCtx, fmt.Errorf(errInitiate+": %s", err.Error())
+		return ctx, fmt.Errorf(errInitiate+": %s", err.Error())
 	}
 	err = Register("kafka", NewKafkaHandler)
 	if err != nil {

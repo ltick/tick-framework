@@ -2,12 +2,10 @@ package ltick
 
 import (
 	"context"
-	"io/ioutil"
-	"os"
-	"path/filepath"
 
-	libConfig "github.com/ltick/tick-framework/config"
+	"github.com/ltick/tick-framework/config"
 	"github.com/stretchr/testify/assert"
+	"github.com/juju/errors"
 )
 
 type testComponent1 struct {
@@ -109,40 +107,35 @@ func (f *testComponent4) OnShutdown(ctx context.Context) (context.Context, error
 	return ctx, nil
 }
 func (suite *TestSuite) TestComponentInjection() {
-	e := &Engine{
-		Context:          context.Background(),
-		Components:       make([]interface{}, 0),
-		ComponentMap:     make(map[string]interface{}),
-		SortedComponents: make([]string, 0),
-		Values:           make(map[string]interface{}),
-	}
-	err := e.RegisterComponent("TestComponent1", &testComponent1{})
-	assert.Nil(suite.T(), err)
-	testComponent, err := e.GetComponentByName("TestComponent1")
-	assert.Nil(suite.T(), err)
-	err = e.RegisterValue("Foo", "Bar")
-	err = e.RegisterValue("Foo1", "Bar1")
-	assert.Nil(suite.T(), err)
+	r, err := NewRegistry([]*Component{})
+	assert.Nil(suite.T(), err, errors.ErrorStack(err))
+	err = r.RegisterComponent("TestComponent1", &testComponent1{})
+	assert.Nil(suite.T(), err, errors.ErrorStack(err))
+	testComponent, err := r.GetComponentByName("TestComponent1")
+	assert.Nil(suite.T(), err, errors.ErrorStack(err))
+	err = r.RegisterValue("Foo", "Bar")
+	err = r.RegisterValue("Foo1", "Bar1")
+	assert.Nil(suite.T(), err, errors.ErrorStack(err))
 	if testComponent != nil {
 		testComponent1, ok := testComponent.(*testComponent1)
 		assert.Equal(suite.T(), true, ok)
-		err = e.RegisterComponent("TestComponent2", &testComponent2{})
-		assert.Nil(suite.T(), err)
-		testComponent, err = e.GetComponentByName("TestComponent2")
-		assert.Nil(suite.T(), err)
+		err = r.RegisterComponent("TestComponent2", &testComponent2{})
+		assert.Nil(suite.T(), err, errors.ErrorStack(err))
+		testComponent, err = r.GetComponentByName("TestComponent2")
+		assert.Nil(suite.T(), err, errors.ErrorStack(err))
 		if testComponent != nil {
 			testComponent2, ok := testComponent.(*testComponent2)
 			assert.Equal(suite.T(), true, ok)
-			err = e.RegisterComponent("TestComponent3", &testComponent3{})
-			assert.Nil(suite.T(), err)
-			testComponent, err = e.GetComponentByName("TestComponent3")
-			assert.Nil(suite.T(), err)
+			err = r.RegisterComponent("TestComponent3", &testComponent3{})
+			assert.Nil(suite.T(), err, errors.ErrorStack(err))
+			testComponent, err = r.GetComponentByName("TestComponent3")
+			assert.Nil(suite.T(), err, errors.ErrorStack(err))
 			if testComponent != nil {
 				testComponent3, ok := testComponent.(*testComponent3)
 				assert.Equal(suite.T(), true, ok)
 
-				err = e.InjectComponentByName([]string{"TestComponent1", "TestComponent2", "TestComponent3"})
-				assert.Nil(suite.T(), err)
+				err = r.InjectComponentByName([]string{"TestComponent1", "TestComponent2", "TestComponent3"})
+				assert.Nil(suite.T(), err, errors.ErrorStack(err))
 				assert.NotNil(suite.T(), testComponent1, "testComponent1 is nil")
 				assert.NotNil(suite.T(), testComponent2, "testComponent2 is nil")
 				assert.NotNil(suite.T(), testComponent3, "testComponent3 is nil")
@@ -162,62 +155,64 @@ func (suite *TestSuite) TestComponentInjection() {
 }
 
 func (suite *TestSuite) TestUseComponent() {
-	var options map[string]libConfig.Option = map[string]libConfig.Option{}
-	var values map[string]interface{} = make(map[string]interface{}, 0)
 	var components []*Component = []*Component{
 		&Component{Name: "testComponent2", Component: &testComponent2{}},
 	}
-	a := New(os.Args[0], filepath.Dir(os.Args[0]), suite.systemConfigFile, "LTICK", components, options).
-		WithCallback(&TestCallback{}).
-		WithValues(values)
-	a.SetSystemLogWriter(ioutil.Discard)
-	err := a.UseComponent("Database", "Cache", "queue")
-	assert.Nil(suite.T(), err)
-	logger, err := a.GetComponentByName("logger")
-	assert.Nil(suite.T(), err)
-	assert.NotNil(suite.T(), logger)
-	config, err := a.GetComponentByName("Config")
-	assert.Nil(suite.T(), err)
-	assert.NotNil(suite.T(), config)
-	database, err := a.GetComponentByName("database")
-	assert.Nil(suite.T(), err)
-	assert.NotNil(suite.T(), database)
-	cache, err := a.GetComponentByName("cache")
-	assert.Nil(suite.T(), err)
-	assert.NotNil(suite.T(), cache)
-	queue, err := a.GetComponentByName("queue")
-	assert.Nil(suite.T(), err)
-	assert.NotNil(suite.T(), queue)
+	r, err := NewRegistry(components)
+	assert.Nil(suite.T(), err, errors.ErrorStack(err))
+	logComponent, err := r.GetComponentByName("log")
+	assert.Nil(suite.T(), err, errors.ErrorStack(err))
+	assert.NotNil(suite.T(), logComponent)
+	configComponent, err := r.GetComponentByName("Config")
+	assert.Nil(suite.T(), err, errors.ErrorStack(err))
+	assert.NotNil(suite.T(), configComponent)
+	err = r.UseComponent("Database", "Cache", "queue")
+	assert.Nil(suite.T(), err, errors.ErrorStack(err))
+	databaseComponent, err := r.GetComponentByName("database")
+	assert.Nil(suite.T(), err, errors.ErrorStack(err))
+	assert.NotNil(suite.T(), databaseComponent)
+	cacheComponent, err := r.GetComponentByName("cache")
+	assert.Nil(suite.T(), err, errors.ErrorStack(err))
+	assert.NotNil(suite.T(), cacheComponent)
+	queueComponent, err := r.GetComponentByName("queue")
+	assert.Nil(suite.T(), err, errors.ErrorStack(err))
+	assert.NotNil(suite.T(), queueComponent)
 }
 
 func (suite *TestSuite) TestComponentConfig() {
-	var values map[string]interface{} = map[string]interface{}{}
 	var components []*Component = []*Component{
 		&Component{Name: "TestComponent1", Component: &testComponent1{}},
+		&Component{Name: "TestComponent2", Component: &testComponent2{}},
+		&Component{Name: "TestComponent3", Component: &testComponent3{}},
 	}
-	var options map[string]libConfig.Option = make(map[string]libConfig.Option, 0)
-	a := New(os.Args[0], filepath.Dir(os.Args[0]), suite.systemConfigFile, "LTICK", components, options).
-		WithCallback(&TestCallback{}).
-		WithValues(values)
-	a.SetSystemLogWriter(ioutil.Discard)
-	a.SetContextValue("output", "")
-	err := a.RegisterComponent("TestComponent1", &testComponent1{})
-	assert.NotNil(suite.T(), err)
+	var options map[string]config.Option = make(map[string]config.Option, 0)
+	r, err := NewRegistry(components)
+	assert.Nil(suite.T(), err, errors.ErrorStack(err))
+	err = r.RegisterValue("Foo", "Bar")
+	assert.Nil(suite.T(), err, errors.ErrorStack(err))
+	err = r.RegisterValue("Foo1", "Bar1")
+	assert.Nil(suite.T(), err, errors.ErrorStack(err))
+	configComponent, err := r.GetComponentByName("Config")
+	assert.Nil(suite.T(), err, errors.ErrorStack(err))
+	assert.NotNil(suite.T(), configComponent)
+	configer, ok := configComponent.(*config.Config)
+	assert.True(suite.T(), ok)
+	err = configer.SetOptions(options)
+	assert.Nil(suite.T(), err, errors.ErrorStack(err))
+	err = r.RegisterComponent("TestComponent1", &testComponent1{})
+	assert.NotNil(suite.T(), err, errors.ErrorStack(err))
 	assert.Equal(suite.T(), "ltick: component 'TestComponent1' exists", err.Error())
-	testComponent, err := a.GetComponentByName("testComponent1")
-	assert.Nil(suite.T(), err)
+	err = r.InjectComponent()
+	assert.Nil(suite.T(), err, errors.ErrorStack(err))
+	testComponent, err := r.GetComponentByName("testComponent1")
+	assert.Nil(suite.T(), err, errors.ErrorStack(err))
 	component, ok := testComponent.(*testComponent1)
 	assert.Equal(suite.T(), true, ok)
 	assert.Equal(suite.T(), "Bar", component.Foo)
-	err = a.LoadComponentFileConfig("testComponent1", suite.systemConfigFile, nil, "component.TestComponent1")
-	assert.Nil(suite.T(), err)
-	a.Startup()
-	assert.Equal(suite.T(), "Startup|testComponent1-Startup|", a.GetContextValue("output"))
-
-	err = a.UnregisterComponent("TestComponent1")
-	assert.Nil(suite.T(), err)
-	a.Shutdown()
-	assert.Equal(suite.T(), "Startup|testComponent1-Startup|", a.GetContextValue("output"))
+	err = r.LoadComponentFileConfig("testComponent1", suite.configFile, nil, "component.TestComponent1")
+	assert.Nil(suite.T(), err, errors.ErrorStack(err))
+	err = r.UnregisterComponent("TestComponent2")
+	assert.Nil(suite.T(), err, errors.ErrorStack(err))
 }
 
 func (suite *TestSuite) TestSortComponent() {

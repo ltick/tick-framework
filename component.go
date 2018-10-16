@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/fatih/structs"
+	"github.com/juju/errors"
 	"github.com/ltick/tick-framework/cache"
 	"github.com/ltick/tick-framework/config"
 	"github.com/ltick/tick-framework/database"
@@ -20,10 +21,6 @@ import (
 var (
 	errComponentExists                 = "ltick: component '%s' exists"
 	errComponentNotExists              = "ltick: component '%s' not exists"
-	errComponentInvaildType            = "ltick: component '%s' invalid type"
-	errComponentLoadConfig             = "ltick: component '%s' load config error"
-	errComponentRegisterConfigProvider = "ltick: component '%s' register config provider error"
-	errComponentConfigure              = "ltick: component '%s' configure error"
 	errRegisterComponent               = "ltick: register component '%s' error"
 	errUnregisterComponent             = "ltick: unregister component '%s' error"
 	errInjectComponent                 = "ltick: inject component '%s' field '%s' error"
@@ -33,7 +30,9 @@ var (
 	errValueNotExists                  = "ltick: value '%s' not exists"
 )
 
-const INJECT_TAG = "inject"
+func (r *Registry) GetComponentMap() map[string]interface{} {
+	return r.ComponentMap
+}
 
 type ComponentInterface interface {
 	Initiate(ctx context.Context) (context.Context, error)
@@ -49,7 +48,7 @@ type Component struct {
 
 var (
 	BuiltinComponents = []*Component{
-		&Component{Name: "Logger", Component: &logger.Logger{}},
+		&Component{Name: "Log", Component: &log.Logger{}},
 		&Component{Name: "Config", Component: &config.Config{}},
 	}
 	Components = []*Component{
@@ -61,95 +60,7 @@ var (
 	}
 )
 
-/**************** Component ****************/
-// Register As Component
-func (e *Engine) registerComponent(ctx context.Context, componentName string, component ComponentInterface, ignoreIfExistses ...bool) (context.Context, error) {
-	canonicalComponentName := strings.ToUpper(componentName[0:1]) + componentName[1:]
-	ignoreIfExists := false
-	if len(ignoreIfExistses) > 0 {
-		ignoreIfExists = ignoreIfExistses[0]
-	}
-	if _, ok := e.ComponentMap[canonicalComponentName]; ok {
-		if !ignoreIfExists {
-			return ctx, fmt.Errorf(errComponentExists, canonicalComponentName)
-		}
-		ctx, err := e.unregisterComponent(ctx, canonicalComponentName)
-		if err != nil {
-			return ctx, fmt.Errorf(errRegisterComponent+": %s", canonicalComponentName, err.Error())
-		}
-	}
-	e.Components = append(e.Components, component)
-	e.ComponentMap[canonicalComponentName] = component
-	e.SortedComponents = append(e.SortedComponents, canonicalComponentName)
-	return ctx, nil
-}
-
-// Unregister As Component
-func (e *Engine) unregisterComponent(ctx context.Context, componentNames ...string) (context.Context, error) {
-	if len(componentNames) > 0 {
-		for _, componentName := range componentNames {
-			canonicalComponentName := strings.ToUpper(componentName[0:1]) + componentName[1:]
-			// e.ComponentMap
-			delete(e.ComponentMap, canonicalComponentName)
-			// e.SortedComponents
-			for index, sortedComponentName := range e.SortedComponents {
-				if canonicalComponentName == sortedComponentName {
-					e.SortedComponents = append(e.SortedComponents[:index], e.SortedComponents[index+1:]...)
-				}
-			}
-			// e.Components
-			for index, c := range e.Components {
-				if component, ok := c.(*Component); ok {
-					if canonicalComponentName == component.Name {
-						e.Components = append(e.Components[:index], e.Components[index+1:]...)
-					}
-				}
-			}
-		}
-	}
-	return ctx, nil
-}
-
-func (e *Engine) GetComponentByName(componentName string) (interface{}, error) {
-	canonicalComponentName := strings.ToUpper(componentName[0:1]) + componentName[1:]
-	if _, ok := e.ComponentMap[canonicalComponentName]; !ok {
-		return nil, fmt.Errorf(errComponentNotExists, canonicalComponentName)
-	}
-	return e.ComponentMap[canonicalComponentName], nil
-}
-
-func (e *Engine) GetComponentMap() map[string]interface{} {
-	return e.ComponentMap
-}
-
-func (e *Engine) GetSortedComponents(reverses ...bool) []interface{} {
-	components := make([]interface{}, len(e.Components))
-	if len(e.SortedComponents) > 0 {
-		index := 0
-		reverse := false
-		if len(reverses) > 0 {
-			reverse = reverses[0]
-		}
-		if reverse {
-			for i := len(e.SortedComponents) - 1; i >= 0; i-- {
-				if component, ok := e.ComponentMap[e.SortedComponents[i]]; ok {
-					components[index] = component
-					index++
-				}
-			}
-		} else {
-			for i := 0; i < len(e.SortedComponents); i++ {
-				if component, ok := e.ComponentMap[e.SortedComponents[i]]; ok {
-					components[index] = component
-					index++
-				}
-			}
-		}
-	}
-	return components
-}
-
-func (e *Engine) UseComponent(componentNames ...string) error {
+func (r *Registry) UseComponent(componentNames ...string) error {
 	var err error
 	// 内置模块注册
 	components := make([]*Component, 0)
@@ -161,11 +72,9 @@ func (e *Engine) UseComponent(componentNames ...string) error {
 			if canonicalComponentName == canonicalExistsComponentName {
 				componentExists = true
 				components = append(components, component)
-				e.ComponentMap[component.Name] = component.Component
-				e.Components = append(e.Components, component.Component)
-				e.Context, err = e.registerComponent(e.Context, strings.ToLower(component.Name[0:1])+component.Name[1:], component.Component, true)
+				err = r.RegisterComponent(strings.ToLower(component.Name[0:1])+component.Name[1:], component.Component, true)
 				if err != nil {
-					return fmt.Errorf(errRegisterComponent+": %s", component.Name, err.Error())
+					return fmt.Errorf(errUseComponent+": %s", component.Name, err.Error())
 				}
 			}
 		}
@@ -175,31 +84,95 @@ func (e *Engine) UseComponent(componentNames ...string) error {
 	}
 	sortedComponents := SortComponent(components)
 	for _, name := range sortedComponents {
-		err = e.InjectComponentTo([]interface{}{e.ComponentMap[name]})
+		component, err := r.GetComponentByName(name)
 		if err != nil {
-			return fmt.Errorf(errInjectComponent+": %s", name, err.Error())
+			return fmt.Errorf(errUseComponent+": %s", name, err.Error())
+		}
+		err = r.InjectComponentTo([]interface{}{component})
+		if err != nil {
+			return fmt.Errorf(errUseComponent+": %s", name, err.Error())
 		}
 	}
 	return nil
 }
 
-func (e *Engine) GetSortedComponent(reverses ...bool) []interface{} {
-	components := make([]interface{}, 0)
-	if len(e.SortedComponents) > 0 {
+/**************** Component ****************/
+// Register As Component
+func (r *Registry) RegisterComponent(componentName string, component ComponentInterface, ignoreIfExistses ...bool) error {
+	canonicalComponentName := strings.ToUpper(componentName[0:1]) + componentName[1:]
+	ignoreIfExists := false
+	if len(ignoreIfExistses) > 0 {
+		ignoreIfExists = ignoreIfExistses[0]
+	}
+	if _, ok := r.ComponentMap[canonicalComponentName]; ok {
+		if !ignoreIfExists {
+			return fmt.Errorf(errComponentExists, canonicalComponentName)
+		}
+		err := r.UnregisterComponent(canonicalComponentName)
+		if err != nil {
+			return fmt.Errorf(errRegisterComponent+": %s", canonicalComponentName, err.Error())
+		}
+	}
+	r.Components = append(r.Components, component)
+	r.ComponentMap[canonicalComponentName] = component
+	r.SortedComponentName = append(r.SortedComponentName, canonicalComponentName)
+	return nil
+}
+
+// Unregister As Component
+func (r *Registry) UnregisterComponent(componentNames ...string) error {
+	if len(componentNames) > 0 {
+		for _, componentName := range componentNames {
+			canonicalComponentName := strings.ToUpper(componentName[0:1]) + componentName[1:]
+			// r.ComponentMap
+			delete(r.ComponentMap, canonicalComponentName)
+			// r.SortedComponentName
+			for index, sortedComponentName := range r.SortedComponentName {
+				if canonicalComponentName == sortedComponentName {
+					r.SortedComponentName = append(r.SortedComponentName[:index], r.SortedComponentName[index+1:]...)
+				}
+			}
+			// r.Components
+			for index, c := range r.Components {
+				if component, ok := c.(*Component); ok {
+					if canonicalComponentName == component.Name {
+						r.Components = append(r.Components[:index], r.Components[index+1:]...)
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (r *Registry) GetComponentByName(componentName string) (interface{}, error) {
+	canonicalComponentName := strings.ToUpper(componentName[0:1]) + componentName[1:]
+	if _, ok := r.ComponentMap[canonicalComponentName]; !ok {
+		return nil, fmt.Errorf(errComponentNotExists, canonicalComponentName)
+	}
+	return r.ComponentMap[canonicalComponentName], nil
+}
+
+func (r *Registry) GetSortedComponents(reverses ...bool) []interface{} {
+	components := make([]interface{}, len(r.Components))
+	if len(r.SortedComponentName) > 0 {
+		index := 0
 		reverse := false
 		if len(reverses) > 0 {
 			reverse = reverses[0]
 		}
 		if reverse {
-			for i := len(e.SortedComponents) - 1; i >= 0; i-- {
-				if component, ok := e.ComponentMap[e.SortedComponents[i]]; ok {
-					components = append(components, component)
+			for i := len(r.SortedComponentName) - 1; i >= 0; i-- {
+				if component, ok := r.ComponentMap[r.SortedComponentName[i]]; ok {
+					components[index] = component
+					index++
 				}
 			}
 		} else {
-			for i := 0; i < len(e.SortedComponents); i++ {
-				if component, ok := e.ComponentMap[e.SortedComponents[i]]; ok {
-					components = append(components, component)
+			for i := 0; i < len(r.SortedComponentName); i++ {
+				if component, ok := r.ComponentMap[r.SortedComponentName[i]]; ok {
+					components[index] = component
+					index++
 				}
 			}
 		}
@@ -207,68 +180,56 @@ func (e *Engine) GetSortedComponent(reverses ...bool) []interface{} {
 	return components
 }
 
-func (e *Engine) LoadComponentFileConfig(componentName string, configFile string, configProviders map[string]interface{}, configTag ...string) (err error) {
-	canonicalComponentName := strings.ToUpper(componentName[0:1]) + componentName[1:]
-	component, err := e.GetComponentByName(canonicalComponentName)
-	if err != nil {
-		if !strings.Contains(err.Error(), "not exists") {
-			return err
-		}
-	}
-	// create a Config object
-	err = e.Config.LoadComponentFileConfig(component, componentName, configFile, configProviders, configTag...)
-	if err != nil {
-		return fmt.Errorf(errComponentLoadConfig+": %s", canonicalComponentName, err.Error())
-	}
-	return nil
+func (r *Registry) GetSortedComponentName() []string {
+	return r.SortedComponentName
 }
 
 // Register As Value
-func (e *Engine) RegisterValue(key string, value interface{}, forceOverwrites ...bool) error {
+func (r *Registry) RegisterValue(key string, value interface{}, forceOverwrites ...bool) error {
 	Key := strings.ToUpper(key[0:1]) + key[1:]
 	forceOverwrite := false
 	if len(forceOverwrites) > 0 {
 		forceOverwrite = forceOverwrites[0]
 	}
-	if _, ok := e.Values[Key]; ok && !forceOverwrite {
+	if _, ok := r.Values[Key]; ok && !forceOverwrite {
 		return fmt.Errorf(errValueExists, Key)
 	}
-	e.Values[Key] = value
+	r.Values[Key] = value
 	return nil
 }
 
 // Unregister As Value
-func (e *Engine) UnregisterValue(ctx context.Context, keys ...string) (context.Context, error) {
+func (r *Registry) UnregisterValue(keys ...string) error {
 	if len(keys) > 0 {
 		for _, key := range keys {
 			Key := strings.ToUpper(key[0:1]) + key[1:]
-			if _, ok := e.Values[Key]; !ok {
-				return ctx, fmt.Errorf(errValueNotExists, Key)
+			if _, ok := r.Values[Key]; !ok {
+				return fmt.Errorf(errValueNotExists, Key)
 			}
-			delete(e.Values, Key)
+			delete(r.Values, Key)
 		}
 	}
-	return ctx, nil
+	return nil
 }
 
-func (e *Engine) GetValue(key string) (interface{}, error) {
+func (r *Registry) GetValue(key string) (interface{}, error) {
 	Key := strings.ToUpper(key[0:1]) + key[1:]
-	if _, ok := e.Values[Key]; !ok {
+	if _, ok := r.Values[Key]; !ok {
 		return nil, fmt.Errorf(errValueNotExists, Key)
 	}
-	return e.Values[Key], nil
+	return r.Values[Key], nil
 }
 
-func (e *Engine) GetValues() map[string]interface{} {
-	return e.Values
+func (r *Registry) GetValues() map[string]interface{} {
+	return r.Values
 }
 
-func (e *Engine) InjectComponent() error {
-	return e.InjectComponentTo(e.GetSortedComponents())
+func (r *Registry) InjectComponent() error {
+	return r.InjectComponentTo(r.GetSortedComponents())
 }
 
-func (e *Engine) InjectComponentByName(componentNames []string) error {
-	componentMap := e.GetComponentMap()
+func (r *Registry) InjectComponentByName(componentNames []string) error {
+	componentMap := r.GetComponentMap()
 	injectTargets := make([]interface{}, 0)
 	for _, componentName := range componentNames {
 		canonicalComponentName := strings.ToUpper(componentName[0:1]) + componentName[1:]
@@ -276,10 +237,10 @@ func (e *Engine) InjectComponentByName(componentNames []string) error {
 			injectTargets = append(injectTargets, injectTarget)
 		}
 	}
-	return e.InjectComponentTo(injectTargets)
+	return r.InjectComponentTo(injectTargets)
 }
 
-func (e *Engine) InjectComponentTo(injectTargets []interface{}) error {
+func (r *Registry) InjectComponentTo(injectTargets []interface{}) error {
 	for _, injectTarget := range injectTargets {
 		injectTargetValue := reflect.ValueOf(injectTarget)
 		for injectTargetValue.Kind() == reflect.Ptr {
@@ -289,28 +250,59 @@ func (e *Engine) InjectComponentTo(injectTargets []interface{}) error {
 			continue
 		}
 		s := structs.New(injectTarget)
+		componentType := reflect.TypeOf((*ComponentInterface)(nil)).Elem()
 		for _, f := range s.Fields() {
 			if f.IsExported() && f.Tag(INJECT_TAG) == "true" {
-				fieldInjected := false
-				if _, ok := e.ComponentMap[f.Name()]; ok {
-					err := f.Set(e.ComponentMap[f.Name()])
+				if reflect.TypeOf(f.Value()).Implements(componentType) {
+					if _, ok := f.Value().(ComponentInterface); ok {
+						fieldInjected := false
+						if _, ok := r.ComponentMap[f.Name()]; ok {
+							err := f.Set(r.ComponentMap[f.Name()])
+							if err != nil {
+								return fmt.Errorf(errInjectComponentTo+": %s", injectTargetValue.String(), f.Name(), err.Error())
+							}
+							fieldInjected = true
+						}
+						if !fieldInjected {
+							return fmt.Errorf(errInjectComponentTo+": component or key not exists", injectTargetValue.String(), f.Name())
+						}
+					}
+				}
+				if _, ok := r.Values[f.Name()]; ok {
+					err := f.Set(r.Values[f.Name()])
 					if err != nil {
 						return fmt.Errorf(errInjectComponentTo+": %s", injectTargetValue.String(), f.Name(), err.Error())
 					}
-					fieldInjected = true
-				}
-				if _, ok := e.Values[f.Name()]; ok {
-					err := f.Set(e.Values[f.Name()])
-					if err != nil {
-						return fmt.Errorf(errInjectComponentTo+": %s", injectTargetValue.String(), f.Name(), err.Error())
-					}
-					fieldInjected = true
-				}
-				if !fieldInjected {
-					return fmt.Errorf(errInjectComponentTo+": component or key not exists", injectTargetValue.String(), f.Name())
 				}
 			}
 		}
+	}
+	return nil
+}
+
+func (r *Registry) LoadComponentFileConfig(componentName string, configFile string, configProviders map[string]interface{}, configTag ...string) (err error) {
+	canonicalComponentName := strings.ToUpper(componentName[0:1]) + componentName[1:]
+	component, err := r.GetComponentByName(canonicalComponentName)
+	if err != nil {
+		if !strings.Contains(err.Error(), "not exists") {
+			return err
+		}
+	}
+	// configer
+	configComponent, err := r.GetComponentByName("Config")
+	if err != nil {
+		e := errors.Annotate(err, errLoadComponentFileConfig)
+		fmt.Println(errors.ErrorStack(e))
+	}
+	configer, ok := configComponent.(*config.Config)
+	if !ok {
+		e := errors.Annotate(errors.Errorf("invalid 'Config' component type"), errLoadComponentFileConfig)
+		fmt.Println(errors.ErrorStack(e))
+	}
+	// create a Config object
+	err = configer.LoadComponentFileConfig(component, componentName, configFile, configProviders, configTag...)
+	if err != nil {
+		return fmt.Errorf(errLoadComponentFileConfig+": %s", canonicalComponentName, err.Error())
 	}
 	return nil
 }

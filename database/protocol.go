@@ -32,7 +32,7 @@ type Database struct {
 	nosqlHandler     NosqlHandler
 }
 
-func (d *Database) Initiate(ctx context.Context) (newCtx context.Context, err error) {
+func (d *Database) Initiate(ctx context.Context) (context.Context, error) {
 	var configs map[string]config.Option = map[string]config.Option{
 		"DATABASE_PROVIDER":             config.Option{Type: config.String, EnvironmentKey: "DATABASE_PROVIDER"},
 		"DATABASE_MYSQL_HOST":           config.Option{Type: config.String, EnvironmentKey: "DATABASE_MYSQL_HOST"},
@@ -48,27 +48,27 @@ func (d *Database) Initiate(ctx context.Context) (newCtx context.Context, err er
 		"DATABASE_HBASE_TIMEOUT":    config.Option{Type: config.String, EnvironmentKey: "DATABASE_HBASE_TIMEOUT"},
 		"DATABASE_HBASE_MAX_ACTIVE": config.Option{Type: config.Int, EnvironmentKey: "DATABASE_HBASE_MAX_ACTIVE"},
 	}
-	newCtx, err = d.Config.SetOptions(ctx, configs)
+	err := d.Config.SetOptions(configs)
 	if err != nil {
-		return newCtx, fmt.Errorf(errInitiate+": %s", err.Error())
+		return ctx, fmt.Errorf(errInitiate+": %s", err.Error())
 	}
 	err = Register("mysql", NewMysqlHandler)
 	if err != nil {
-		return newCtx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.handlerName))
 	}
-	err = d.Use(newCtx, "mysql")
+	err = d.Use(ctx, "mysql")
 	if err != nil {
-		return newCtx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.handlerName))
 	}
 	err = NosqlRegister("hbase", NewHbaseHandler)
 	if err != nil {
-		return newCtx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.handlerName))
 	}
-	err = d.NosqlUse(newCtx, "hbase")
+	err = d.NosqlUse(ctx, "hbase")
 	if err != nil {
-		return newCtx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.handlerName))
 	}
-	return newCtx, nil
+	return ctx, nil
 }
 func (d *Database) OnStartup(ctx context.Context) (context.Context, error) {
 	var err error

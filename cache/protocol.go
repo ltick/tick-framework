@@ -28,7 +28,7 @@ type Cache struct {
 	handler     Handler
 }
 
-func (c *Cache) Initiate(ctx context.Context) (newCtx context.Context, err error) {
+func (c *Cache) Initiate(ctx context.Context) (context.Context, error) {
 	var configs map[string]config.Option = map[string]config.Option{
 		"CACHE_PROVIDER":         config.Option{Type: config.String, EnvironmentKey: "CACHE_PROVIDER"},
 		"CACHE_REDIS_HOST":       config.Option{Type: config.String, EnvironmentKey: "CACHE_REDIS_HOST"},
@@ -39,11 +39,11 @@ func (c *Cache) Initiate(ctx context.Context) (newCtx context.Context, err error
 		"CACHE_REDIS_MAX_ACTIVE": config.Option{Type: config.Int, EnvironmentKey: "CACHE_REDIS_MAX_ACTIVE"},
 		"CACHE_REDIS_KEY_PREFIX": config.Option{Type: config.String, EnvironmentKey: "CACHE_REDIS_KEY_PREFIX"},
 	}
-	newCtx, err = c.Config.SetOptions(ctx, configs)
+	err := c.Config.SetOptions(configs)
 	if err != nil {
-		return newCtx, fmt.Errorf(errInitiate+": %s", err.Error())
+		return ctx, fmt.Errorf(errInitiate+": %s", err.Error())
 	}
-	return newCtx, nil
+	return ctx, nil
 }
 func (c *Cache) OnStartup(ctx context.Context) (context.Context, error) {
 	var err error
