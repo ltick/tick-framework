@@ -36,11 +36,13 @@ func NewRegistry(components []*Component) (r *Registry, err error) {
 			return nil, e
 		}
 	}
-	for _, c := range components {
-		err = r.RegisterComponent(c.Name, c.Component, true)
-		if err != nil {
-			e := errors.Annotate(err, errNew)
-			return nil, e
+	if components != nil {
+		for _, c := range components {
+			err = r.RegisterComponent(c.Name, c.Component, true)
+			if err != nil {
+				e := errors.Annotate(err, errNew)
+				return nil, e
+			}
 		}
 	}
 	return r, nil
