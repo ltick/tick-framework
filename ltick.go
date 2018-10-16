@@ -84,11 +84,10 @@ type (
 
 var defaultConfigPath = "etc/ltick.json"
 var defaultDotenvPath = ".env"
-var defaultEnvPrefix = "LTICK"
 var defaultConfigReloadTime = 120 * time.Second
 var configPlaceholdRegExp = regexp.MustCompile(`%\w+%`)
 
-func NewDefault(registry *Registry, configs map[string]config.Option) (engine *Engine) {
+func NewDefault(envPrefix string, registry *Registry, options map[string]config.Option) (engine *Engine) {
 	defaultConfigFile, err := filepath.Abs(defaultConfigPath)
 	if err != nil {
 		e := errors.Annotatef(err, errNewDefault)
@@ -101,7 +100,7 @@ func NewDefault(registry *Registry, configs map[string]config.Option) (engine *E
 		fmt.Println(errors.ErrorStack(e))
 		return nil
 	}
-	engine = New(defaultConfigFile, defaultDotenvFile, defaultEnvPrefix, registry)
+	engine = New(defaultConfigFile, defaultDotenvFile, envPrefix, registry)
 	// configer
 	configComponent, err := engine.Registry.GetComponentByName("Config")
 	if err != nil {
@@ -115,7 +114,7 @@ func NewDefault(registry *Registry, configs map[string]config.Option) (engine *E
 		fmt.Println(errors.ErrorStack(e))
 		return nil
 	}
-	err = configer.SetOptions(configs)
+	err = configer.SetOptions(options)
 	if err != nil {
 		e := errors.Annotate(err, errNewDefault)
 		fmt.Println(errors.ErrorStack(e))

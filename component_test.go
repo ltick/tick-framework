@@ -107,7 +107,7 @@ func (f *testComponent4) OnShutdown(ctx context.Context) (context.Context, error
 	return ctx, nil
 }
 func (suite *TestSuite) TestComponentInjection() {
-	r, err := NewRegistry([]*Component{})
+	r, err := NewRegistry([]*Component{}...)
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))
 	err = r.RegisterComponent("TestComponent1", &testComponent1{})
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))
@@ -158,7 +158,7 @@ func (suite *TestSuite) TestUseComponent() {
 	var components []*Component = []*Component{
 		&Component{Name: "testComponent2", Component: &testComponent2{}},
 	}
-	r, err := NewRegistry(components)
+	r, err := NewRegistry(components...)
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))
 	logComponent, err := r.GetComponentByName("log")
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))
@@ -186,7 +186,7 @@ func (suite *TestSuite) TestComponentConfig() {
 		&Component{Name: "TestComponent3", Component: &testComponent3{}},
 	}
 	var options map[string]config.Option = make(map[string]config.Option, 0)
-	r, err := NewRegistry(components)
+	r, err := NewRegistry(components...)
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))
 	err = r.RegisterValue("Foo", "Bar")
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))
