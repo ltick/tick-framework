@@ -84,6 +84,7 @@ type (
 
 var defaultConfigPath = "etc/ltick.json"
 var defaultDotenvPath = ".env"
+var defaultEnvPrefix = "LTICK"
 var defaultConfigReloadTime = 120 * time.Second
 var configPlaceholdRegExp = regexp.MustCompile(`%\w+%`)
 
@@ -100,7 +101,7 @@ func NewDefault(registry *Registry, configs map[string]config.Option) (engine *E
 		fmt.Println(errors.ErrorStack(e))
 		return nil
 	}
-	engine = New(defaultConfigFile, defaultDotenvFile, "LTICK", registry)
+	engine = New(defaultConfigFile, defaultDotenvFile, defaultEnvPrefix, registry)
 	// configer
 	configComponent, err := engine.Registry.GetComponentByName("Config")
 	if err != nil {
@@ -240,31 +241,34 @@ func New(configPath string, dotenvFile string, envPrefix string, registry *Regis
 		}
 	}
 	// 加载系统配置
-	if configPath != "" {
-		if !path.IsAbs(configPath) {
-			e := errors.Annotate(fmt.Errorf("'%s' is not a valid config path", configPath), errNew)
-			fmt.Println(errors.ErrorStack(e))
-			return nil
-		}
-		if dotenvFile != "" {
-			if !path.IsAbs(dotenvFile) {
-				e := errors.Annotate(fmt.Errorf("'%s' is not a valid dotenv path", dotenvFile), errNew)
-				fmt.Println(errors.ErrorStack(e))
-				return nil
-			}
-			e.LoadSystemConfig(configPath, envPrefix, dotenvFile)
-		} else {
-			e.LoadSystemConfig(configPath, envPrefix)
-		}
+	if dotenvFile != "" {
+		e.LoadSystemConfig(configPath, envPrefix, dotenvFile)
+	} else {
+		e.LoadSystemConfig(configPath, envPrefix)
 	}
 	return e
 }
-func (e *Engine) LoadSystemConfig(configFilePath string, envPrefix string, dotEnvFiles ...string) *Engine {
-	var dotEnvFile string
-	if len(dotEnvFiles) > 0 {
-		dotEnvFile = dotEnvFiles[0]
+func (e *Engine) LoadSystemConfig(configPath string, envPrefix string, dotenvFiles ...string) *Engine {
+	if configPath == "" {
+		e := errors.Annotate(fmt.Errorf("'%s' is a empty config path", configPath), errNew)
+		fmt.Println(errors.ErrorStack(e))
+		return nil
 	}
-	configCachedFile, err := utility.GetCachedFile(configFilePath)
+	if !path.IsAbs(configPath) {
+		e := errors.Annotate(fmt.Errorf("'%s' is not a valid config path", configPath), errNew)
+		fmt.Println(errors.ErrorStack(e))
+		return nil
+	}
+	var dotenvFile string
+	if len(dotenvFiles) > 0 {
+		dotenvFile = dotenvFiles[0]
+	}
+	if !path.IsAbs(dotenvFile) {
+		e := errors.Annotate(fmt.Errorf("'%s' is not a valid dotenv path", dotenvFile), errNew)
+		fmt.Println(errors.ErrorStack(e))
+		return nil
+	}
+	configCachedFile, err := utility.GetCachedFile(configPath)
 	if err != nil {
 		e := errors.Annotate(err, errLoadSystemConfig)
 		fmt.Println(errors.ErrorStack(e))
@@ -272,12 +276,12 @@ func (e *Engine) LoadSystemConfig(configFilePath string, envPrefix string, dotEn
 	}
 	defer configCachedFile.Close()
 	cachedConfigFilePath := configCachedFile.Name()
-	if dotEnvFile != "" {
-		e.LoadEnvFile(envPrefix, dotEnvFile)
+	if dotenvFile != "" {
+		e.LoadEnvFile(envPrefix, dotenvFile)
 	} else {
 		e.LoadEnv(envPrefix)
 	}
-	e.LoadCachedConfig(configFilePath, cachedConfigFilePath)
+	e.LoadCachedConfig(configPath, cachedConfigFilePath)
 	go func() {
 		// 刷新缓存
 		for {
@@ -287,26 +291,26 @@ func (e *Engine) LoadSystemConfig(configFilePath string, envPrefix string, dotEn
 				fmt.Println(errors.ErrorStack(e))
 				return
 			}
-			if dotEnvFile != "" {
-				dotEnvFileInfo, err := os.Stat(dotEnvFile)
+			if dotenvFile != "" {
+				dotenvFileInfo, err := os.Stat(dotenvFile)
 				if err != nil {
 					e := errors.Annotate(err, errLoadSystemConfig)
 					fmt.Println(errors.ErrorStack(e))
 					return
 				}
-				if cachedConfigFileInfo.ModTime().Before(dotEnvFileInfo.ModTime()) {
-					e.LoadEnvFile(envPrefix, dotEnvFile)
-					e.LoadCachedConfig(configFilePath, cachedConfigFilePath)
+				if cachedConfigFileInfo.ModTime().Before(dotenvFileInfo.ModTime()) {
+					e.LoadEnvFile(envPrefix, dotenvFile)
+					e.LoadCachedConfig(configPath, cachedConfigFilePath)
 				}
 			}
-			configFileInfo, err := os.Stat(configFilePath)
+			configFileInfo, err := os.Stat(configPath)
 			if err != nil {
 				e := errors.Annotate(err, errLoadSystemConfig)
 				fmt.Println(errors.ErrorStack(e))
 				return
 			}
 			if cachedConfigFileInfo.ModTime().Before(configFileInfo.ModTime()) {
-				e.LoadCachedConfig(configFilePath, cachedConfigFilePath)
+				e.LoadCachedConfig(configPath, cachedConfigFilePath)
 			}
 			time.Sleep(defaultConfigReloadTime)
 		}
@@ -314,8 +318,8 @@ func (e *Engine) LoadSystemConfig(configFilePath string, envPrefix string, dotEn
 	return e
 }
 
-func (e *Engine) LoadCachedConfig(configFilePath string, cachedConfigFilePath string) {
-	configFile, err := os.OpenFile(configFilePath, os.O_RDONLY, 0644)
+func (e *Engine) LoadCachedConfig(configPath string, cachedConfigFilePath string) {
+	configFile, err := os.OpenFile(configPath, os.O_RDONLY, 0644)
 	if err != nil {
 		e := errors.Annotate(err, errLoadCachedConfig)
 		fmt.Println(errors.ErrorStack(e))
@@ -414,7 +418,7 @@ func (e *Engine) LoadEnv(envPrefix string) *Engine {
 	}
 	return nil
 }
-func (e *Engine) LoadEnvFile(envPrefix string, dotEnvFile string) *Engine {
+func (e *Engine) LoadEnvFile(envPrefix string, dotenvFile string) *Engine {
 	// configer
 	configComponent, err := e.Registry.GetComponentByName("Config")
 	if err != nil {
@@ -427,7 +431,7 @@ func (e *Engine) LoadEnvFile(envPrefix string, dotEnvFile string) *Engine {
 		fmt.Println(errors.ErrorStack(e))
 	}
 	configer.SetEnvPrefix(envPrefix)
-	err = configer.LoadFromEnvFile(dotEnvFile)
+	err = configer.LoadFromEnvFile(dotenvFile)
 	if err != nil {
 		e := errors.Annotatef(err, errLoadEnvFile)
 		fmt.Println(errors.ErrorStack(e))
