@@ -23,7 +23,6 @@ import (
 	"github.com/ltick/tick-framework/utility"
 	"github.com/ltick/tick-graceful"
 	libLog "github.com/ltick/tick-log"
-	"git.lianjia.com/PlatRD/nebula/src/nebula/configer"
 )
 
 var (
