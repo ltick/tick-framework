@@ -22,7 +22,7 @@ func NewQueue() *Queue {
 }
 
 type Queue struct {
-	Config      *config.Config `inject:true`
+	Config      *config.Config `inject:"true"`
 	handlerName string
 	handler     Handler
 }

@@ -207,6 +207,13 @@ func New(configPath string, dotenvFile string, envPrefix string, registry *Regis
 		Context:         context.Background(),
 		ServerMap:       make(map[string]*Server, 0),
 	}
+	// 注入模块
+	err = e.Registry.InjectComponent()
+	if err != nil {
+		e := errors.Annotate(err, errNew)
+		fmt.Println(errors.ErrorStack(e))
+		return nil
+	}
 	// 模块初始化
 	componentMap := e.Registry.GetComponentMap()
 	for _, name := range e.Registry.GetSortedComponentName() {
