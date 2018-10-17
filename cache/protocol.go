@@ -142,10 +142,10 @@ type CacheHandler interface {
 	Get(key interface{}) (interface{}, error)
 	Keys(key interface{}) (interface{}, error)
 	Expire(key interface{}, expire int64) error
+	Hmset(key interface{}, value ...interface{}) error
+	Hmget(key interface{}, value ...interface{}) (interface{}, error)
 	Del(key interface{}) (interface{}, error)
 	Hset(key interface{}, field interface{}, value interface{}) error
-	Hmset(key interface{}, args ...interface{}) error
-	Hmget(key interface{}, args ...interface{}) (interface{}, error)
 	Hget(key interface{}, field interface{}) (interface{}, error)
 	Hdel(key interface{}, field interface{}) (interface{}, error)
 	Hgetall(key interface{}) (interface{}, error)
