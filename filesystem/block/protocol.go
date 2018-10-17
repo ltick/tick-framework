@@ -28,7 +28,7 @@ func NewInstance() *Instance {
 }
 
 type Instance struct {
-	Config      *config.Config
+	Config      *config.Config `inject:"true"`
 	handlerName string
 	handler     BlockHandler
 }

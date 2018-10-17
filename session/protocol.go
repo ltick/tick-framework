@@ -57,7 +57,7 @@ type Session struct {
 	Database *libDatabase.Database `inject:"true"`
 	Cache    *libCache.Cache       `inject:"true"`
 
-	Config      *config.Config
+	Config      *config.Config `inject:"true"`
 	DebugLog    libUtility.LogFunc `inject:"true"`
 	SystemLog   libUtility.LogFunc `inject:"true"`
 	handlerName string

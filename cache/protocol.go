@@ -23,7 +23,7 @@ func NewCache() *Cache {
 }
 
 type Cache struct {
-	Config      *config.Config
+	Config      *config.Config `inject:"true"`
 	handlerName string
 	handler     Handler
 }
