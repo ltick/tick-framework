@@ -192,6 +192,7 @@ func (e *Engine) NewServer(name string, port uint, gracefulStopTimeout time.Dura
 		}
 		middlewares = append(middlewares, middleware)
 	}
+
 	startupHandlers := combineHandlers(server.Router.GetStartupHandlers(), server.Router.GetAnteriorHandlers())
 	shutdownHandlers := combineHandlers(server.Router.GetPosteriorHandlers(), server.Router.GetShutdownHandlers())
 	server.RouteGroups["/"] = server.Router.AddRouteGroup("/", middlewares, startupHandlers, shutdownHandlers)
@@ -491,8 +492,10 @@ func (r *ServerRouter) NewFileHandler(pathMap file.PathMap, opts ...file.ServerO
 }
 
 func (r *ServerRouter) WithCallback(callback RouterCallback) *ServerRouter {
-	r.PrependStartupHandler(callback.OnRequestStartup)
-	r.AppendShutdownHandler(callback.OnRequestShutdown)
+	if callback != nil {
+		r.PrependStartupHandler(callback.OnRequestStartup)
+		r.AppendShutdownHandler(callback.OnRequestShutdown)
+	}
 	return r
 }
 
@@ -508,8 +511,10 @@ func (r *ServerRouter) AddRouteGroup(groupName string, middlewares []MiddlewareI
 }
 
 func (g *ServerRouteGroup) WithCallback(callback RouterCallback) *ServerRouteGroup {
-	g.PrependStartupHandler(callback.OnRequestStartup)
-	g.AppendShutdownHandler(callback.OnRequestShutdown)
+	if callback != nil {
+		g.PrependStartupHandler(callback.OnRequestStartup)
+		g.AppendShutdownHandler(callback.OnRequestShutdown)
+	}
 	return g
 }
 
