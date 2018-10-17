@@ -3,7 +3,9 @@ package ltick
 import (
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"net/http/pprof"
 	"net/url"
 	"os"
 	"regexp"
@@ -11,7 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ltick/tick-framework/module"
+	"github.com/juju/errors"
+	"github.com/ltick/tick-framework/config"
+	"github.com/ltick/tick-framework/utility"
 	"github.com/ltick/tick-routing"
 	"github.com/ltick/tick-routing/access"
 	"github.com/ltick/tick-routing/content"
@@ -43,13 +47,11 @@ type (
 	}
 	ServerRouter struct {
 		*routing.Router
-		proxys   []*ServerRouterProxy
-		routes   []*ServerRouterRoute
-		callback RouterCallback
+		proxys []*ServerRouterProxy
+		routes []*ServerRouterRoute
 	}
 	ServerRouteGroup struct {
 		*routing.RouteGroup
-		callback RouterCallback
 	}
 	RouterCallback interface {
 		OnRequestStartup(*routing.Context) error
@@ -104,16 +106,43 @@ func (sp *ServerRouterProxy) MatchProxy(r *http.Request) (*url.URL, error) {
 	return nil, nil
 }
 
-func (e *Engine) NewClassicServer(name string, requestTimeoutHandlers ...routing.Handler) (server *Server) {
-	port := uint(e.Config.GetInt("server.port"))
+func (e *Engine) NewDefaultServer(name string, routerCallback RouterCallback, requestTimeoutHandlers ...routing.Handler) (server *Server) {
+	// configer
+	configComponent, err := e.Registry.GetComponentByName("Config")
+	if err != nil {
+		e := errors.Annotate(err, errLoadCachedConfig)
+		fmt.Println(errors.ErrorStack(e))
+	}
+	configer, ok := configComponent.(*config.Config)
+	if !ok {
+		e := errors.Annotate(errors.Errorf("invalid 'Config' component type"), errLoadCachedConfig)
+		fmt.Println(errors.ErrorStack(e))
+	}
+	port := uint(configer.GetInt("server.port"))
 	if port == 0 {
 		fmt.Printf("ltick: new classic server [error: 'server port is empty']\n")
 		os.Exit(1)
 	}
-	gracefulStopTimeout := e.Config.GetDuration("server.graceful_stop_timeout")
-	requestTimeout := e.Config.GetDuration("server.request_timeout")
-	server = e.NewServer(name, port, gracefulStopTimeout, requestTimeout, requestTimeoutHandlers...)
-	proxyMaps := e.Config.GetStringMap("router.proxy")
+	gracefulStopTimeout := configer.GetDuration("server.graceful_stop_timeout")
+	requestTimeout := configer.GetDuration("server.request_timeout")
+	router := &ServerRouter{
+		Router: routing.New(e.Context),
+		routes: make([]*ServerRouterRoute, 0),
+		proxys: make([]*ServerRouterProxy, 0),
+	}
+	if len(requestTimeoutHandlers) > 0 {
+		router.Router.Timeout(requestTimeout, requestTimeoutHandlers[0])
+	}
+	router.WithAccessLogger(utility.DefaultAccessLogFunc).
+		WithErrorHandler(log.Printf, utility.DefaultErrorLogFunc).
+		WithPanicLogger(log.Printf).
+		WithTypeNegotiator(JSON, XML, XML2, HTML).
+		WithSlashRemover(http.StatusMovedPermanently).
+		WithLanguageNegotiator("zh-CN", "en-US").
+		WithCors(CorsAllowAll).
+		WithCallback(routerCallback)
+	server = e.NewServer(name, port, gracefulStopTimeout, router)
+	proxyMaps := configer.GetStringMap("router.proxy")
 	if proxyMaps != nil {
 		if len(proxyMaps) != 0 {
 			for proxyHost, proxyMap := range proxyMaps {
@@ -143,8 +172,8 @@ func (e *Engine) NewClassicServer(name string, requestTimeoutHandlers ...routing
 	}
 	return server
 }
-func (e *Engine) NewServer(name string, port uint, gracefulStopTimeout time.Duration, requestTimeout time.Duration, requestTimeoutHandlers ...routing.Handler) (server *Server) {
-	if _, ok := e.Servers[name]; ok {
+func (e *Engine) NewServer(name string, port uint, gracefulStopTimeout time.Duration, router *ServerRouter) (server *Server) {
+	if _, ok := e.ServerMap[name]; ok {
 		fmt.Printf(errNewServer+": server '%s' already exists\r\n", name)
 		os.Exit(1)
 	}
@@ -152,25 +181,30 @@ func (e *Engine) NewServer(name string, port uint, gracefulStopTimeout time.Dura
 		systemLogWriter:     e.systemLogWriter,
 		Port:                port,
 		gracefulStopTimeout: gracefulStopTimeout,
-		Router: &ServerRouter{
-			Router: routing.New(e.Context).Timeout(requestTimeout, requestTimeoutHandlers...),
-			routes: make([]*ServerRouterRoute, 0),
-			proxys: make([]*ServerRouterProxy, 0),
-		},
-		RouteGroups: map[string]*ServerRouteGroup{},
-		mutex:       sync.RWMutex{},
+		Router:              router,
+		RouteGroups:         map[string]*ServerRouteGroup{},
+		mutex:               sync.RWMutex{},
 	}
-	modules := make([]module.ModuleInterface, 0)
-	for _, sortedModule := range e.Module.GetSortedModules() {
-		module, ok := sortedModule.(*module.Module)
+	middlewares := make([]MiddlewareInterface, 0)
+	for _, sortedMiddleware := range e.Registry.GetSortedMiddlewares() {
+		middleware, ok := sortedMiddleware.(MiddlewareInterface)
 		if !ok {
 			continue
 		}
-		modules = append(modules, module.Module)
+		middlewares = append(middlewares, middleware)
 	}
-	server.RouteGroups["/"] = server.Router.AddRouteGroup("/", modules)
-	e.Servers[name] = server
-	e.SystemLog(fmt.Sprintf("ltick: new server [name:'%s', port:'%d', gracefulStopTimeout:'%.fs', requestTimeout:'%.fs']", name, port, gracefulStopTimeout.Seconds(), requestTimeout.Seconds()))
+
+	startupHandlers := combineHandlers(server.Router.GetStartupHandlers(), server.Router.GetAnteriorHandlers())
+	shutdownHandlers := combineHandlers(server.Router.GetPosteriorHandlers(), server.Router.GetShutdownHandlers())
+	server.RouteGroups["/"] = server.Router.AddRouteGroup("/", middlewares, startupHandlers, shutdownHandlers)
+	server.RouteGroups["/debug"] = server.Router.AddRouteGroup("/debug", nil, nil, nil)
+	server.RouteGroups["/debug"].AddRoute("*", "/pprof", routing.HTTPHandlerFunc(pprof.Index))
+	server.RouteGroups["/debug"].AddRoute("*", "/pprof/cmdline", routing.HTTPHandlerFunc(pprof.Cmdline))
+	server.RouteGroups["/debug"].AddRoute("*", "/pprof/profile", routing.HTTPHandlerFunc(pprof.Profile))
+	server.RouteGroups["/debug"].AddRoute("*", "/pprof/symbol", routing.HTTPHandlerFunc(pprof.Symbol))
+	server.RouteGroups["/debug"].AddRoute("*", "/pprof/trace", routing.HTTPHandlerFunc(pprof.Trace))
+	e.ServerMap[name] = server
+	e.SystemLog(fmt.Sprintf("ltick: new server [name:'%s', port:'%d', gracefulStopTimeout:'%.fs', requestTimeout:'%.fs']", name, port, gracefulStopTimeout.Seconds(), router.TimeoutDuration.Seconds()))
 	return server
 }
 func (e *Engine) SetServerLogFunc(name string, accessLogFunc access.LogWriterFunc, faultLogFunc fault.LogFunc, recoveryHandler ...fault.ConvertErrorFunc) *Engine {
@@ -180,13 +214,7 @@ func (e *Engine) SetServerLogFunc(name string, accessLogFunc access.LogWriterFun
 	}
 	return e
 }
-func (e *Engine) SetServerReuqestCallback(name string, reuqestCallback RouterCallback) *Engine {
-	server := e.GetServer(name)
-	if server != nil {
-		server.SetReuqestCallback(reuqestCallback)
-	}
-	return e
-}
+
 func (e *Engine) SetServerReuqestSlashRemover(name string, status int) *Engine {
 	server := e.GetServer(name)
 	if server != nil {
@@ -206,10 +234,13 @@ func (e *Engine) SetServerReuqestCors(name string, corsOptions cors.Options) *En
 	return e
 }
 func (e *Engine) GetServer(name string) *Server {
-	if _, ok := e.Servers[name]; ok {
-		return e.Servers[name]
+	if _, ok := e.ServerMap[name]; ok {
+		return e.ServerMap[name]
 	}
 	return nil
+}
+func (e *Engine) GetServerMap() map[string]*Server {
+	return e.ServerMap
 }
 func (s *Server) Get(host string, route string, handlers ...routing.Handler) *Server {
 	s.Router.routes = append(s.Router.routes, &ServerRouterRoute{
@@ -296,10 +327,6 @@ func (s *Server) SetLogFunc(accessLogFunc access.LogWriterFunc, faultLogFunc fau
 		WithRecoveryHandler(faultLogFunc, recoveryHandler...)
 	return s
 }
-func (s *Server) SetReuqestCallback(reuqestCallback RouterCallback) *Server {
-	s.Router.WithCallback(reuqestCallback)
-	return s
-}
 func (s *Server) SetReuqestSlashRemover(status int) *Server {
 	switch status {
 	case http.StatusMovedPermanently, http.StatusFound:
@@ -315,7 +342,7 @@ func (s *Server) SetServerReuqestCors(corsOptions cors.Options) *Server {
 	}
 	return s
 }
-func (s *Server) addRoute(method string, path string, handlers ...routing.Handler) *Server {
+func (s *Server) AddRoute(method string, path string, handlers ...routing.Handler) *Server {
 	paths := strings.Split(path, "/")
 	prefix := "/"
 	for _, routePrefix := range paths {
@@ -472,16 +499,18 @@ func (r *ServerRouter) NewFileHandler(pathMap file.PathMap, opts ...file.ServerO
 }
 
 func (r *ServerRouter) WithCallback(callback RouterCallback) *ServerRouter {
-	r.PrependStartupHandler(callback.OnRequestStartup)
-	r.AppendShutdownHandler(callback.OnRequestShutdown)
+	if callback != nil {
+		r.PrependStartupHandler(callback.OnRequestStartup)
+		r.AppendShutdownHandler(callback.OnRequestShutdown)
+	}
 	return r
 }
 
-func (r *ServerRouter) AddRouteGroup(groupName string, modules []module.ModuleInterface, handlers ...routing.Handler) *ServerRouteGroup {
+func (r *ServerRouter) AddRouteGroup(groupName string, middlewares []MiddlewareInterface, startupHandlers []routing.Handler, shutdownHandlers []routing.Handler) *ServerRouteGroup {
 	g := &ServerRouteGroup{
-		RouteGroup: r.Router.Group(groupName, handlers, nil),
+		RouteGroup: r.Group(groupName, startupHandlers, shutdownHandlers),
 	}
-	for _, m := range modules {
+	for _, m := range middlewares {
 		g.AppendAnteriorHandler(m.OnRequestStartup)
 		g.PrependPosteriorHandler(m.OnRequestShutdown)
 	}
@@ -489,8 +518,10 @@ func (r *ServerRouter) AddRouteGroup(groupName string, modules []module.ModuleIn
 }
 
 func (g *ServerRouteGroup) WithCallback(callback RouterCallback) *ServerRouteGroup {
-	g.PrependStartupHandler(callback.OnRequestStartup)
-	g.AppendShutdownHandler(callback.OnRequestShutdown)
+	if callback != nil {
+		g.PrependStartupHandler(callback.OnRequestStartup)
+		g.AppendShutdownHandler(callback.OnRequestShutdown)
+	}
 	return g
 }
 
@@ -519,4 +550,12 @@ func (g *ServerRouteGroup) AddRoute(method string, path string, handlers ...rout
 	default:
 		g.To(method, path, handlers...)
 	}
+}
+
+// combineHandlers merges two lists of handlers into a new list.
+func combineHandlers(h1 []routing.Handler, h2 []routing.Handler) []routing.Handler {
+	hh := make([]routing.Handler, len(h1)+len(h2))
+	copy(hh, h1)
+	copy(hh[len(h1):], h2)
+	return hh
 }

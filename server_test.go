@@ -2,137 +2,211 @@ package ltick
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/ltick/tick-framework/module"
-	libConfig "github.com/ltick/tick-framework/module/config"
-	"github.com/ltick/tick-framework/module/logger"
-	"github.com/ltick/tick-framework/module/utility"
-	"github.com/ltick/tick-log"
+	"github.com/ltick/tick-framework/config"
+	"github.com/ltick/tick-framework/logger"
+	"github.com/ltick/tick-framework/utility"
+	libLog "github.com/ltick/tick-log"
 	"github.com/ltick/tick-routing"
 	"github.com/ltick/tick-routing/access"
 	"github.com/stretchr/testify/assert"
 )
 
-type ServerAppInitFunc struct{}
+var infoLogFunc utility.LogFunc
+var systemLogFunc utility.LogFunc
+var debugLogFunc utility.LogFunc
+var traceLogFunc utility.LogFunc
+var accessLogFunc access.LogWriterFunc
 
-func (f *ServerAppInitFunc) OnStartup(e *Engine) error {
-	loggerModule, err := e.GetBuiltinModule("logger")
-	if err != nil {
-		return err
-	}
-	logger, ok := loggerModule.(*logger.Instance)
-	if !ok {
-		return errors.New("logger type error")
-	}
-	configProviders := make(map[string]interface{}, 2)
-	// register the target types to allow configuring Logger.Targets.
-	configProviders["ConsoleTarget"] = log.NewConsoleTarget
-	configProviders["FileTarget"] = log.NewFileTarget
-	configPath, err := filepath.Abs("testdata/services.json")
-	if err != nil {
-		return err
-	}
-	err = logger.LoadModuleFileConfig(configPath, configProviders, "modules.Logger")
-	if err != nil {
-		return err
-	}
-	e.SetContextValue("testlogger", logger.NewLogger("test"))
+type ServerAppCallback struct{}
 
+func (f *ServerAppCallback) OnStartup(e *Engine) error {
 	return nil
 }
-func (f *ServerAppInitFunc) OnShutdown(e *Engine) error {
+func (f *ServerAppCallback) OnShutdown(e *Engine) error {
 	return nil
 }
 
-type ServerRequestInitFunc struct{}
+type ServerRequestCallback struct{}
 
-func (f *ServerRequestInitFunc) OnRequestStartup(ctx context.Context, c *routing.Context) (context.Context, error) {
-	testlogger := ctx.Value("testlogger").(*log.Logger)
-	testlogger.Info("OnRequestStartup")
-	return ctx, nil
+func (f *ServerRequestCallback) OnRequestStartup(c *routing.Context) error {
+	systemLogger := c.Context.Value("systemLogger").(*libLog.Logger)
+	systemLogger.Info("OnRequestStartup")
+	return nil
 }
 
-func (f *ServerRequestInitFunc) OnRequestShutdown(ctx context.Context, c *routing.Context) (context.Context, error) {
-	testlogger := ctx.Value("testlogger").(*log.Logger)
-	testlogger.Info("OnRequestStartup")
-	return ctx, nil
+func (f *ServerRequestCallback) OnRequestShutdown(c *routing.Context) error {
+	systemLogger := c.Context.Value("systemLogger").(*libLog.Logger)
+	systemLogger.Info("OnRequestStartup")
+	return nil
 }
 
-type ServerGroupRequestInitFunc struct{}
+type ServerGroupRequestCallback struct{}
 
-func (f *ServerGroupRequestInitFunc) OnRequestStartup(ctx context.Context, c *routing.Context) (context.Context, error) {
-	testlogger := ctx.Value("testlogger").(*log.Logger)
-	testlogger.Info("GroupOnRequestStartup")
-	return ctx, nil
+func (f *ServerGroupRequestCallback) OnRequestStartup(c *routing.Context) error {
+	systemLogger := c.Context.Value("systemLogger").(*libLog.Logger)
+	systemLogger.Info("OnRequestStartup")
+	return nil
 }
 
-func (f *ServerGroupRequestInitFunc) OnRequestShutdown(ctx context.Context, c *routing.Context) (context.Context, error) {
-	testlogger := ctx.Value("testlogger").(*log.Logger)
-	testlogger.Info("GroupOnRequestStartup")
-	return ctx, nil
+func (f *ServerGroupRequestCallback) OnRequestShutdown(c *routing.Context) error {
+	systemLogger := c.Context.Value("systemLogger").(*libLog.Logger)
+	systemLogger.Info("OnRequestStartup")
+	return nil
 }
 
 func TestServerCallback(t *testing.T) {
-	var options map[string]libConfig.Option = map[string]libConfig.Option{}
+	var testAppLog string
+	testAppLog, _ = filepath.Abs("testdata/app.log")
+	var options map[string]config.Option = map[string]config.Option{}
 	var values map[string]interface{} = make(map[string]interface{}, 0)
-	var modules []*module.Module = []*module.Module{}
-	a := New(os.Args[0], filepath.Dir(filepath.Dir(os.Args[0])), "ltick.json", "LTICK", modules, options).
-		WithCallback(&ServerAppInitFunc{}).WithValues(values)
+	configFile, err := filepath.Abs("testdata/ltick.json")
+	assert.Nil(t, err)
+	dotenvFile, err := filepath.Abs("testdata/.env")
+	assert.Nil(t, err)
+	registry, err := NewRegistry()
+	assert.Nil(t, err)
+	configComponent, err := registry.GetComponentByName("Config")
+	assert.Nil(t, err)
+	assert.NotNil(t, configComponent)
+	configer, ok := configComponent.(*config.Config)
+	assert.True(t, ok)
+	err = configer.SetOptions(options)
+	assert.Nil(t, err)
+
+	a := New(configFile, dotenvFile, "LTICK", registry).
+		WithCallback(&ServerAppCallback{}).WithValues(values).WithLoggers([]*LogHanlder{
+		&LogHanlder{Name: "access", Formatter: log.FormatterRaw, Type: log.TypeConsole, Writer: log.WriterStdout, MaxLevel: log.LevelDebug},
+		&LogHanlder{Name: "app", Formatter: log.FormatterDefault, Type: log.TypeFile, Filename: testAppLog, MaxLevel: log.LevelInfo},
+		&LogHanlder{Name: "system", Formatter: log.FormatterSys, Type: log.TypeConsole, Writer: log.WriterStdout, MaxLevel: log.LevelInfo},
+	})
 	a.SetSystemLogWriter(ioutil.Discard)
-	err := a.Startup()
+	accessLogger, err := a.GetLogger("access")
 	assert.Nil(t, err)
-	assert.NotNil(t, a.Context.Value("testlogger"))
-	utilityModule, err := a.GetBuiltinModule("utility")
+	assert.NotNil(t, accessLogger)
+	appLogger, err := a.GetLogger("app")
 	assert.Nil(t, err)
-	a.SetContextValue("utility", utilityModule)
-	accessLogFunc := func(ctx context.Context, c *routing.Context, rw *access.LogResponseWriter, elapsed float64) {
-		testlogger := ctx.Value("testlogger").(*log.Logger)
-		utility := ctx.Value("utility").(*utility.Instance)
-		clientIP := utility.GetClientIP(c.Request)
-		requestLine := fmt.Sprintf("%s %s %s", c.Request.Method, c.Request.URL.String(), c.Request.Proto)
-		testlogger.Info(`%s - %s [%s] "%s" %d %d %d %.3f "%s" "%s" %s "-" "-"`, clientIP, c.Request.Host, time.Now().Format("2/Jan/2006:15:04:05 -0700"), requestLine, c.Request.ContentLength, rw.Status, rw.BytesWritten, elapsed/1e3, c.Request.Header.Get("Referer"), c.Request.Header.Get("User-Agent"), c.Request.RemoteAddr)
+	assert.NotNil(t, appLogger)
+	systemLogger, err := a.GetLogger("system")
+	assert.Nil(t, err)
+	assert.NotNil(t, systemLogger)
+	a.SetContextValue("systemLogger", systemLogger)
+	GetLogContext := func(ctx context.Context) (forwardRequestId string, requestId string, clientIP string, serverAddress string) {
+		if ctx.Value("forwardRequestId") != nil {
+			forwardRequestId = ctx.Value("forwardRequestId").(string)
+		}
+		if ctx.Value("requestId") != nil {
+			requestId = ctx.Value("requestId").(string)
+		}
+		if ctx.Value("clientIP") != nil {
+			clientIP = ctx.Value("clientIP").(string)
+		}
+		if ctx.Value("serverAddress") != nil {
+			serverAddress = ctx.Value("serverAddress").(string)
+		}
+		return forwardRequestId, requestId, clientIP, serverAddress
 	}
-	errorLogHandler := func(ctx context.Context, c *routing.Context, err error) error {
-		testlogger := ctx.Value("testlogger").(*log.Logger)
-		testlogger.Info(`%s|%s|%s|%s|%s|%s`, time.Now().Format("2016-04-20T17:40:12+08:00"), log.LevelError, "", c.Get("c.RequestuestId"), err.Error(), c.Get("errorStack"))
+	systemLogFunc = func(ctx context.Context, format string, data ...interface{}) {
+		if systemLogger == nil {
+			return
+		}
+		systemLogger.Info(format, data...)
+	}
+	debugLogFunc = func(ctx context.Context, format string, data ...interface{}) {
+		if appLogger == nil {
+			return
+		}
+		forwardRequestId, requestId, _, serverAddress := GetLogContext(ctx)
+		logData := make([]interface{}, len(data)+3)
+		logData[0] = forwardRequestId
+		logData[1] = requestId
+		logData[2] = serverAddress
+		copy(logData[3:], data)
+		appLogger.Debug("TEST|%s|%s|%s|"+format, logData...)
+	}
+	infoLogFunc = func(ctx context.Context, format string, data ...interface{}) {
+		if appLogger == nil {
+			return
+		}
+		forwardRequestId, requestId, _, serverAddress := GetLogContext(ctx)
+		logData := make([]interface{}, len(data)+3)
+		logData[0] = forwardRequestId
+		logData[1] = requestId
+		logData[2] = serverAddress
+		copy(logData[3:], data)
+		appLogger.Info("TEST|%s|%s|%s|"+format, logData...)
+	}
+	accessLogFunc = func(c *routing.Context, rw *access.LogResponseWriter, elapsed float64) {
+		if appLogger == nil || accessLogger == nil {
+			return
+		}
+		//来源请求ID
+		forwardRequestId := c.Get("uniqid")
+		//请求ID
+		requestId := c.Get("requestId")
+		//客户端IP
+		clientIP := c.Get("clientIP")
+		//服务端IP
+		serverAddress := c.Get("serverAddress")
+		requestLine := fmt.Sprintf("%s %s %s", c.Request.Method, c.Request.RequestURI, c.Request.Proto)
+		debug := new(bool)
+		if c.Get("DEBUG") != nil {
+			*debug = c.Get("DEBUG").(bool)
+		}
+		if *debug {
+			appLogger.Info(`TEST_ACCESS|%s|%s|%s|%s - %s [%s] "%s" %d %d %d %.3f "%s" "%s" %s %s "%v" "%v"`, forwardRequestId, requestId, serverAddress, clientIP, c.Request.Host, time.Now().Format("2/Jan/2006:15:04:05 -0700"), requestLine, c.Request.ContentLength, rw.Status, rw.BytesWritten, elapsed/1e3, c.Request.Header.Get("Referer"), c.Request.Header.Get("User-Agent"), c.Request.RemoteAddr, serverAddress, c.Request.Header, rw.Header())
+		} else {
+			appLogger.Info(`TEST_ACCESS|%s|%s|%s|%s - %s [%s] "%s" %d %d %d %.3f "%s" "%s" %s %s "-" "-"`, forwardRequestId, requestId, serverAddress, clientIP, c.Request.Host, time.Now().Format("2/Jan/2006:15:04:05 -0700"), requestLine, c.Request.ContentLength, rw.Status, rw.BytesWritten, elapsed/1e3, c.Request.Header.Get("Referer"), c.Request.Header.Get("User-Agent"), c.Request.RemoteAddr, serverAddress)
+		}
+		if *debug {
+			accessLogger.Info(`%s - %s [%s] "%s" %d %d %d %.3f "%s" "%s" %s %s "%v" "%v"`, clientIP, c.Request.Host, time.Now().Format("2/Jan/2006:15:04:05 -0700"), requestLine, c.Request.ContentLength, rw.Status, rw.BytesWritten, elapsed/1e3, c.Request.Header.Get("Referer"), c.Request.Header.Get("User-Agent"), c.Request.RemoteAddr, serverAddress, c.Request.Header, rw.Header())
+		} else {
+			accessLogger.Info(`%s - %s [%s] "%s" %d %d %d %.3f "%s" "%s" %s %s "-" "-"`, clientIP, c.Request.Host, time.Now().Format("2/Jan/2006:15:04:05 -0700"), requestLine, c.Request.ContentLength, rw.Status, rw.BytesWritten, elapsed/1e3, c.Request.Header.Get("Referer"), c.Request.Header.Get("User-Agent"), c.Request.RemoteAddr, serverAddress)
+		}
+	}
+	errorLogHandler := func(c *routing.Context, err error) error {
+		appLogger.Info(`TEST|%s|%s|%s|%s|%s`, c.Get("forwardRequestId"), c.Get("requestId"), c.Get("serverAddress"), err.Error(), c.Get("errorStack"))
 		return nil
 	}
 	// server
-	testlogger := a.Context.Value("testlogger").(*log.Logger)
 	a.SetContextValue("Foo", "Bar")
-	a.NewServer("test", 8080, 30*time.Second, 3*time.Second)
-	s := a.GetServer("test")
-	r := s.Router.WithAccessLogger(accessLogFunc).
-		WithErrorHandler(testlogger.Error, errorLogHandler).
-		WithPanicLogger(testlogger.Emergency).
+	router := &ServerRouter{
+		Router: routing.New(a.Context).Timeout(3*time.Second),
+		routes: make([]*ServerRouterRoute, 0),
+		proxys: make([]*ServerRouterProxy, 0),
+	}
+	router.WithAccessLogger(accessLogFunc).
+		WithErrorHandler(systemLogger.Error, errorLogHandler).
+		WithPanicLogger(systemLogger.Emergency).
 		WithTypeNegotiator(JSON, XML, XML2, HTML).
 		WithSlashRemover(http.StatusMovedPermanently).
 		WithLanguageNegotiator("zh-CN", "en-US").
 		WithCors(CorsAllowAll).
-		WithCallback(&ServerRequestInitFunc{})
-	assert.NotNil(t, r)
-	rg := s.GetRouteGroup("/")
-	assert.NotNil(t, rg)
-	rg.WithCallback(&ServerGroupRequestInitFunc{})
-	rg.AddRoute("GET", "test/<id>", func(ctx context.Context, c *routing.Context) (context.Context, error) {
-		c.Response.Write([]byte(c.Param("id")))
-		return ctx, nil
-	})
-	rg.AddRoute("GET", "Foo", func(ctx context.Context, c *routing.Context) (context.Context, error) {
-		c.Response.Write([]byte(a.Context.Value("Foo").(string)))
-		return ctx, nil
-	})
+		WithCallback(&ServerRequestCallback{})
+	a.NewServer("test", 8080, 30*time.Second, router)
+	s := a.GetServer("test")
 
-	a.SetSystemLogWriter(ioutil.Discard)
+	assert.NotNil(t, router)
+	rg := s.GetRouteGroup("/").WithCallback(&ServerGroupRequestCallback{})
+	assert.NotNil(t, rg)
+	//rg.WithCallback(&ServerGroupRequestCallback{})
+	rg.AddRoute("GET", "test/<id>", func(c *routing.Context) error {
+		c.ResponseWriter.Write([]byte(c.Param("id")))
+		return nil
+	})
+	rg.AddRoute("GET", "Foo", func(c *routing.Context) error {
+		c.ResponseWriter.Write([]byte(c.Context.Value("Foo").(string)))
+		return nil
+	})
+	err = a.Startup()
+	assert.Nil(t, err)
 	res := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/test/1", nil)
 	a.ServeHTTP(res, req)

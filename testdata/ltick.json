@@ -1,0 +1,49 @@
+{
+  "temporary_path": "/tmp",
+  "server": {
+    "port": 8081,
+    "max_idle_conns_per_host": 10,
+    "request_timeout": "0s",
+    "graceful_stop_timeout": "120s"
+  },
+  "router": {
+    "proxy": {
+      "www.example.com": {
+        "rule": [
+          "(?P<prefix>test)(\/|[?])(?P<path>.*)$"
+        ],
+        "upstream": "http://127.0.0.1:8088/$prefix$path"
+      }
+    }
+  },
+  "component": {
+    "Logger": {
+      "Targets": {
+        "access": {
+          "Type": "%ACCESS_LOG_TYPE%",
+          "Writer": "%ACCESS_LOG_WRITER%",
+          "Filename": "%ACCESS_LOG_FILENAME%",
+          "MaxLevel": "%ACCESS_LOG_MAX_LEVEL%",
+          "Formatter": "%ACCESS_LOG_FORMATTER%"
+        },
+        "debug": {
+          "Type": "%DEBUG_LOG_TYPE%",
+          "Writer": "%DEBUG_LOG_WRITER%",
+          "Filename": "%DEBUG_LOG_FILENAME%",
+          "MaxLevel": "%DEBUG_LOG_MAX_LEVEL%",
+          "Formatter": "%DEBUG_LOG_FORMATTER%"
+        },
+        "system": {
+          "Type": "%SYSTEM_LOG_TYPE%",
+          "Writer": "%SYSTEM_LOG_WRITER%",
+          "Filename": "%SYSTEM_LOG_FILENAME%",
+          "MaxLevel": "%SYSTEM_LOG_MAX_LEVEL%",
+          "Formatter": "%SYSTEM_LOG_FORMATTER%"
+        }
+      }
+    },
+    "TestComponent1": {
+      "Foo": "Bar"
+    }
+  }
+}
