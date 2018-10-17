@@ -3,17 +3,19 @@ package ltick
 import (
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"net/http/pprof"
 	"net/url"
 	"os"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
-	"log"
 
 	"github.com/juju/errors"
 	"github.com/ltick/tick-framework/config"
+	"github.com/ltick/tick-framework/utility"
 	"github.com/ltick/tick-routing"
 	"github.com/ltick/tick-routing/access"
 	"github.com/ltick/tick-routing/content"
@@ -21,7 +23,6 @@ import (
 	"github.com/ltick/tick-routing/fault"
 	"github.com/ltick/tick-routing/file"
 	"github.com/ltick/tick-routing/slash"
-	"github.com/ltick/tick-framework/utility"
 )
 
 type (
@@ -196,6 +197,12 @@ func (e *Engine) NewServer(name string, port uint, gracefulStopTimeout time.Dura
 	startupHandlers := combineHandlers(server.Router.GetStartupHandlers(), server.Router.GetAnteriorHandlers())
 	shutdownHandlers := combineHandlers(server.Router.GetPosteriorHandlers(), server.Router.GetShutdownHandlers())
 	server.RouteGroups["/"] = server.Router.AddRouteGroup("/", middlewares, startupHandlers, shutdownHandlers)
+	server.RouteGroups["/debug"] = server.Router.AddRouteGroup("/debug", nil, nil, nil)
+	server.RouteGroups["/debug"].AddRoute("*", "/pprof", routing.HTTPHandlerFunc(pprof.Index))
+	server.RouteGroups["/debug"].AddRoute("*", "/pprof/cmdline", routing.HTTPHandlerFunc(pprof.Cmdline))
+	server.RouteGroups["/debug"].AddRoute("*", "/pprof/profile", routing.HTTPHandlerFunc(pprof.Profile))
+	server.RouteGroups["/debug"].AddRoute("*", "/pprof/symbol", routing.HTTPHandlerFunc(pprof.Symbol))
+	server.RouteGroups["/debug"].AddRoute("*", "/pprof/trace", routing.HTTPHandlerFunc(pprof.Trace))
 	e.ServerMap[name] = server
 	e.SystemLog(fmt.Sprintf("ltick: new server [name:'%s', port:'%d', gracefulStopTimeout:'%.fs', requestTimeout:'%.fs']", name, port, gracefulStopTimeout.Seconds(), router.TimeoutDuration.Seconds()))
 	return server
