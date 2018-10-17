@@ -23,6 +23,7 @@ import (
 	"github.com/ltick/tick-framework/utility"
 	"github.com/ltick/tick-graceful"
 	libLog "github.com/ltick/tick-log"
+	"git.lianjia.com/PlatRD/nebula/src/nebula/configer"
 )
 
 var (
@@ -100,9 +101,8 @@ func NewDefault(envPrefix string, registry *Registry, options map[string]config.
 		fmt.Println(errors.ErrorStack(e))
 		return nil
 	}
-	engine = New(defaultConfigFile, defaultDotenvFile, envPrefix, registry)
 	// configer
-	configComponent, err := engine.Registry.GetComponentByName("Config")
+	configComponent, err := registry.GetComponentByName("Config")
 	if err != nil {
 		e := errors.Annotate(err, errNewDefault)
 		fmt.Println(errors.ErrorStack(e))
@@ -120,6 +120,7 @@ func NewDefault(envPrefix string, registry *Registry, options map[string]config.
 		fmt.Println(errors.ErrorStack(e))
 		return nil
 	}
+	engine = New(defaultConfigFile, defaultDotenvFile, envPrefix, registry)
 	logHandlers := make([]*LogHanlder, 0)
 	logTargetsConfig := configer.GetStringMap("components.log.targets")
 	for logName, logTargetInterface := range logTargetsConfig {
