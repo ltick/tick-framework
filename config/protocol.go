@@ -62,7 +62,9 @@ type Config struct {
 }
 
 func (c *Config) Initiate(ctx context.Context) (context.Context, error) {
-	c.options = make(map[string]Option)
+	if c.options == nil {
+		c.options = make(map[string]Option)
+	}
 	err := Register("viper", NewViperHandler)
 	if err != nil {
 		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), c.handlerName))

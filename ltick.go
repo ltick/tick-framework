@@ -223,13 +223,23 @@ func New(configPath string, dotenvFile string, envPrefix string, registry *Regis
 			fmt.Println(errors.ErrorStack(e))
 			return nil
 		}
-		e.Context, err = ci.Initiate(e.Context)
-		if err != nil {
-			e := errors.Annotate(err, errNew)
-			fmt.Println(errors.ErrorStack(e))
-			return nil
+		isBuiltinComponent := false
+		canonicalName := strings.ToUpper(name[0:1]) + name[1:]
+		for _, builtinComponent := range BuiltinComponents {
+			if canonicalName == builtinComponent.Name {
+				isBuiltinComponent = true
+				break
+			}
 		}
-		e.Registry.LoadComponentFileConfig(name, configPath, make(map[string]interface{}), "component."+name)
+		if !isBuiltinComponent {
+			e.Context, err = ci.Initiate(e.Context)
+			if err != nil {
+				e := errors.Annotate(err, errNew)
+				fmt.Println(errors.ErrorStack(e))
+				return nil
+			}
+			e.Registry.LoadComponentFileConfig(name, configPath, make(map[string]interface{}), "components."+name)
+		}
 	}
 	// 中间件初始化
 	for _, m := range e.Registry.GetMiddlewareMap() {

@@ -2,6 +2,7 @@ package ltick
 
 import (
 	"github.com/juju/errors"
+	"context"
 )
 
 const INJECT_TAG = "inject"
@@ -31,6 +32,11 @@ func NewRegistry(components ...*Component) (r *Registry, err error) {
 	// 注册内置模块
 	for _, component := range BuiltinComponents {
 		err = r.RegisterComponent(component.Name, component.Component, true)
+		if err != nil {
+			e := errors.Annotate(err, errNew)
+			return nil, e
+		}
+		_, err = component.Component.Initiate(context.Background())
 		if err != nil {
 			e := errors.Annotate(err, errNew)
 			return nil, e

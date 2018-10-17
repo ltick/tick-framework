@@ -60,6 +60,8 @@ var (
 	}
 )
 
+/**************** Component ****************/
+
 func (r *Registry) UseComponent(componentNames ...string) error {
 	var err error
 	// 内置模块注册
@@ -96,7 +98,6 @@ func (r *Registry) UseComponent(componentNames ...string) error {
 	return nil
 }
 
-/**************** Component ****************/
 // Register As Component
 func (r *Registry) RegisterComponent(componentName string, component ComponentInterface, ignoreIfExistses ...bool) error {
 	canonicalComponentName := strings.ToUpper(componentName[0:1]) + componentName[1:]
