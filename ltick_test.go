@@ -48,8 +48,7 @@ func (f *TestCallback) OnShutdown(e *Engine) error {
 
 func (suite *TestSuite) TestAppCallback() {
 	var values map[string]interface{} = make(map[string]interface{}, 0)
-	var components []*Component = []*Component{}
-	r, err := NewRegistry(components...)
+	r, err := NewRegistry()
 	assert.Nil(suite.T(), err)
 	a := New(suite.configFile, suite.dotenvFile, "LTICK", r).
 		WithCallback(&TestCallback{}).
@@ -72,12 +71,16 @@ func (suite *TestSuite) TestComponentCallback() {
 		&Component{Name: "TestComponent1", Component: &testComponent1{}},
 	}
 	var options map[string]config.Option = make(map[string]config.Option, 0)
-	r, err := NewRegistry(components...)
+	r, err := NewRegistry()
 	assert.Nil(suite.T(), err)
 	err = r.RegisterValue("Foo", "Bar")
 	assert.Nil(suite.T(), err)
 	err = r.RegisterValue("Foo1", "Bar1")
 	assert.Nil(suite.T(), err)
+	for _, c := range components {
+		err = r.RegisterComponent(c.Name, c.Component, true)
+		assert.Nil(suite.T(), err)
+	}
 	configComponent, err := r.GetComponentByName("Config")
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), configComponent)

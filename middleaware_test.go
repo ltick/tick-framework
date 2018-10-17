@@ -109,9 +109,8 @@ func (f *testMiddleware2) OnRequestShutdown(c *routing.Context) error {
 
 func (suite *TestSuite) TestMiddleware() {
 	var values map[string]interface{} = map[string]interface{}{}
-	var components []*Component = []*Component{}
 	var options map[string]config.Option = make(map[string]config.Option, 0)
-	r, err := NewRegistry(components...)
+	r, err := NewRegistry()
 	assert.Nil(suite.T(), err)
 	configComponent, err := r.GetComponentByName("Config")
 	assert.Nil(suite.T(), err)

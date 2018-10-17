@@ -19,7 +19,7 @@ type (
 	}
 )
 
-func NewRegistry(components ...*Component) (r *Registry, err error) {
+func NewRegistry() (r *Registry, err error) {
 	r = &Registry{
 		Components:           make([]interface{}, 0),
 		ComponentMap:         make(map[string]interface{}),
@@ -37,13 +37,6 @@ func NewRegistry(components ...*Component) (r *Registry, err error) {
 			return nil, e
 		}
 		_, err = component.Component.Initiate(context.Background())
-		if err != nil {
-			e := errors.Annotate(err, errNew)
-			return nil, e
-		}
-	}
-	for _, c := range components {
-		err = r.RegisterComponent(c.Name, c.Component, true)
 		if err != nil {
 			e := errors.Annotate(err, errNew)
 			return nil, e

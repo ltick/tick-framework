@@ -67,12 +67,11 @@ func TestServerCallback(t *testing.T) {
 	testAppLog, _ = filepath.Abs("testdata/app.log")
 	var options map[string]config.Option = map[string]config.Option{}
 	var values map[string]interface{} = make(map[string]interface{}, 0)
-	var components []*Component = []*Component{}
 	configFile, err := filepath.Abs("testdata/ltick.json")
 	assert.Nil(t, err)
 	dotenvFile, err := filepath.Abs("testdata/.env")
 	assert.Nil(t, err)
-	registry, err := NewRegistry(components...)
+	registry, err := NewRegistry()
 	assert.Nil(t, err)
 	configComponent, err := registry.GetComponentByName("Config")
 	assert.Nil(t, err)
