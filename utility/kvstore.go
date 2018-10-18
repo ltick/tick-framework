@@ -1,4 +1,4 @@
-package kvstore
+package utility
 
 import (
 	"bytes"
@@ -26,7 +26,7 @@ var (
 	}
 )
 
-type KVStoreData struct {
+type KvstoreData struct {
 	magicNumber  uint16 // MagicNumber
 	keyLength    uint32 // Key长度
 	valueLength  uint32 // Value长度
@@ -34,8 +34,8 @@ type KVStoreData struct {
 	valueContent []byte // Value内容
 }
 
-func NewKVStoreData(key []byte, value []byte) *KVStoreData {
-	return &KVStoreData{
+func NewKvstoreData(key []byte, value []byte) *KvstoreData {
+	return &KvstoreData{
 		magicNumber:  KVSTORE_MAGIC_NUM,
 		keyLength:    uint32(len(key)),
 		valueLength:  uint32(len(value)),
@@ -44,31 +44,31 @@ func NewKVStoreData(key []byte, value []byte) *KVStoreData {
 	}
 }
 
-func (kvData *KVStoreData) KeyLength() uint32 {
+func (kvData *KvstoreData) KeyLength() uint32 {
 	return kvData.keyLength
 }
 
-func (kvData *KVStoreData) Key() string {
+func (kvData *KvstoreData) Key() string {
 	return string(kvData.keyContent)
 }
 
-func (kvData *KVStoreData) ValueOffset() uint32 {
+func (kvData *KvstoreData) ValueOffset() uint32 {
 	return 10 + kvData.keyLength
 }
 
-func (kvData *KVStoreData) ValueLength() uint32 {
+func (kvData *KvstoreData) ValueLength() uint32 {
 	return kvData.valueLength
 }
 
-func (kvData *KVStoreData) Value() []byte {
+func (kvData *KvstoreData) Value() []byte {
 	return kvData.valueContent
 }
 
-func (kvData *KVStoreData) Size() uint32 {
+func (kvData *KvstoreData) Size() uint32 {
 	return 10 + kvData.keyLength + kvData.valueLength
 }
 
-func (kvData *KVStoreData) MarshalBinary() (data []byte, err error) {
+func (kvData *KvstoreData) MarshalBinary() (data []byte, err error) {
 	if kvData.magicNumber != KVSTORE_MAGIC_NUM {
 		return nil, errIllegalMagicNumber
 	}
@@ -95,7 +95,7 @@ func (kvData *KVStoreData) MarshalBinary() (data []byte, err error) {
 	return
 }
 
-func (kvData *KVStoreData) UnmarshalBinary(data []byte) (err error) {
+func (kvData *KvstoreData) UnmarshalBinary(data []byte) (err error) {
 	if len(data) < 10 {
 		return errInvalidLength
 	}
@@ -116,19 +116,19 @@ func (kvData *KVStoreData) UnmarshalBinary(data []byte) (err error) {
 	return
 }
 
-type KVStore struct {
+type Kvstore struct {
 	reader io.ReadSeeker
 	writer io.WriteSeeker
 }
 
-func NewKVStore(reader io.ReadSeeker, writer io.WriteSeeker) *KVStore {
-	return &KVStore{
+func NewKvstore(reader io.ReadSeeker, writer io.WriteSeeker) *Kvstore {
+	return &Kvstore{
 		reader: reader,
 		writer: writer,
 	}
 }
 
-func (kv *KVStore) get(offset int64) (data []byte, err error) {
+func (kv *Kvstore) get(offset int64) (data []byte, err error) {
 	var (
 		overheadLength uint32 = 10
 		buf            []byte = make([]byte, overheadLength)
@@ -157,19 +157,19 @@ func (kv *KVStore) get(offset int64) (data []byte, err error) {
 	return
 }
 
-func (kv *KVStore) Get(offset int64) (kvData *KVStoreData, err error) {
+func (kv *Kvstore) Get(offset int64) (kvData *KvstoreData, err error) {
 	var data []byte
 	if data, err = kv.get(offset); err != nil {
 		return
 	}
-	kvData = &KVStoreData{}
+	kvData = &KvstoreData{}
 	if err = kvData.UnmarshalBinary(data); err != nil {
 		return
 	}
 	return
 }
 
-func (kv *KVStore) Set(kvData *KVStoreData) (err error) {
+func (kv *Kvstore) Set(kvData *KvstoreData) (err error) {
 	var data []byte
 	if data, err = kvData.MarshalBinary(); err != nil {
 		return

@@ -43,7 +43,7 @@ type (
 		sync.RWMutex
 	}
 
-	ParamsKVStore interface {
+	ParamsKvstore interface {
 		Get(k string) (v string, found bool)
 	}
 	// ApiParam is a single URL parameter, consisting of a key and a value.
@@ -64,7 +64,7 @@ func (m Map) Get(k string) (string, bool) {
 	return v, found
 }
 
-var _ ParamsKVStore = ApiParams{}
+var _ ParamsKvstore = ApiParams{}
 
 // ByName returns the value of the first ApiParam which key matches the given name.
 // If no matching ApiParam is found, an empty string is returned.
@@ -78,7 +78,7 @@ func (ps ApiParams) ByName(name string) string {
 }
 
 // Get returns the value of the first ApiParam which key matches the given name.
-// It implements the ParamsKVStore interface.
+// It implements the ParamsKvstore interface.
 func (ps ApiParams) Get(name string) (string, bool) {
 	for i := range ps {
 		if ps[i].Key == name {
@@ -349,7 +349,7 @@ func (a *Api) Number() int {
 func (a *Api) BindAt(
 	structPointer interface{},
 	req *http.Request,
-	apiParams ParamsKVStore,
+	apiParams ParamsKvstore,
 ) error {
 	name := reflect.TypeOf(structPointer).String()
 	if name != a.name {
@@ -365,7 +365,7 @@ func (a *Api) BindAt(
 // BindNew binds the net/http api params to a struct pointer and validate it.
 func (a *Api) BindNew(
 	req *http.Request,
-	apiParams ParamsKVStore,
+	apiParams ParamsKvstore,
 ) (
 	interface{},
 	error,
@@ -408,7 +408,7 @@ func (a *Api) fieldsForBinding(structElem reflect.Value) []interface{} {
 func (a *Api) BindFields(
 	fields []interface{},
 	req *http.Request,
-	apiParams ParamsKVStore,
+	apiParams ParamsKvstore,
 ) (
 	err error,
 ) {
@@ -541,7 +541,7 @@ func (a *Api) Params() []*Param {
 func BindByName(
 	apiName string,
 	req *http.Request,
-	apiParams ParamsKVStore,
+	apiParams ParamsKvstore,
 ) (
 	interface{},
 	error,
@@ -558,7 +558,7 @@ func BindByName(
 func Bind(
 	structPointer interface{},
 	req *http.Request,
-	apiParams ParamsKVStore,
+	apiParams ParamsKvstore,
 ) error {
 	api, err := GetApi(reflect.TypeOf(structPointer).String())
 	if err != nil {

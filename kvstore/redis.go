@@ -1,4 +1,4 @@
-package cache
+package kvstore
 
 import (
 	"context"
@@ -12,8 +12,7 @@ import (
 )
 
 var (
-	errRedisRegister              = "cache(redis): register error"
-	errRedisNewCache              = "cache(redis): new pool error"
+	errRedisNewConnection              = "cache(redis): new pool error"
 	errRedisPoolNotExists         = "cache(redis): pool '%s' not exists"
 	errRedisZscanCursorTypeError  = "cache(redis): zscan cursor type error"
 	errRedisZscanValueTypeError   = "cache(redis): zscan value type error"
@@ -33,7 +32,7 @@ func (this *RedisHandler) Initiate(ctx context.Context) error {
 	return nil
 }
 
-func (this *RedisHandler) NewCache(ctx context.Context, name string, config map[string]interface{}) (CacheHandler, error) {
+func (this *RedisHandler) NewConnection(ctx context.Context, name string, config map[string]interface{}) (KvstoreHandler, error) {
 	pool := &RedisPool{}
 	configHost := config["CACHE_REDIS_HOST"]
 	if configHost != nil {
@@ -41,7 +40,7 @@ func (this *RedisHandler) NewCache(ctx context.Context, name string, config map[
 		if ok {
 			pool.Host = host
 		} else {
-			return nil, errors.New(errRedisNewCache + ": CACHE_REDIS_HOST data type must be string")
+			return nil, errors.New(errRedisNewConnection + ": CACHE_REDIS_HOST data type must be string")
 		}
 	}
 	configPort := config["CACHE_REDIS_PORT"]
@@ -50,7 +49,7 @@ func (this *RedisHandler) NewCache(ctx context.Context, name string, config map[
 		if ok {
 			pool.Port = port
 		} else {
-			return nil, errors.New(errRedisNewCache + ": CACHE_REDIS_PORT data type must be string")
+			return nil, errors.New(errRedisNewConnection + ": CACHE_REDIS_PORT data type must be string")
 		}
 	}
 	configPassword := config["CACHE_REDIS_PASSWORD"]
@@ -59,7 +58,7 @@ func (this *RedisHandler) NewCache(ctx context.Context, name string, config map[
 		if ok {
 			pool.Password = password
 		} else {
-			return nil, errors.New(errRedisNewCache + ": CACHE_REDIS_PASSWORD data type must be string")
+			return nil, errors.New(errRedisNewConnection + ": CACHE_REDIS_PASSWORD data type must be string")
 		}
 	}
 	configDatabase := config["CACHE_REDIS_DATABASE"]
@@ -68,7 +67,7 @@ func (this *RedisHandler) NewCache(ctx context.Context, name string, config map[
 		if ok {
 			pool.Database = database
 		} else {
-			return nil, errors.New(errRedisNewCache + ": CACHE_REDIS_DATABASE data type must be int")
+			return nil, errors.New(errRedisNewConnection + ": CACHE_REDIS_DATABASE data type must be int")
 		}
 	}
 	configKeyPrefix := config["CACHE_REDIS_KEY_PREFIX"]
@@ -77,7 +76,7 @@ func (this *RedisHandler) NewCache(ctx context.Context, name string, config map[
 		if ok {
 			pool.KeyPrefix = keyPrefix
 		} else {
-			return nil, errors.New(errRedisNewCache + ": CACHE_REDIS_KEY_PREFIX data type must be string")
+			return nil, errors.New(errRedisNewConnection + ": CACHE_REDIS_KEY_PREFIX data type must be string")
 		}
 	}
 	configMaxActive := config["CACHE_REDIS_MAX_ACTIVE"]
@@ -86,7 +85,7 @@ func (this *RedisHandler) NewCache(ctx context.Context, name string, config map[
 		if ok {
 			pool.MaxActive = maxActive
 		} else {
-			return nil, errors.New(errRedisNewCache + ": CACHE_REDIS_MAX_ACTIVE data type must be int")
+			return nil, errors.New(errRedisNewConnection + ": CACHE_REDIS_MAX_ACTIVE data type must be int")
 		}
 	}
 	configMaxIdle := config["CACHE_REDIS_MAX_IDLE"]
@@ -95,7 +94,7 @@ func (this *RedisHandler) NewCache(ctx context.Context, name string, config map[
 		if ok {
 			pool.MaxIdle = maxIdle
 		} else {
-			return nil, errors.New(errRedisNewCache + ": CACHE_REDIS_MAX_IDLE data type must be int")
+			return nil, errors.New(errRedisNewConnection + ": CACHE_REDIS_MAX_IDLE data type must be int")
 		}
 	}
 	if pool.Host != "" {
@@ -123,7 +122,7 @@ func (this *RedisHandler) NewCache(ctx context.Context, name string, config map[
 	return nil, nil
 }
 
-func (this *RedisHandler) GetCache(name string) (CacheHandler, error) {
+func (this *RedisHandler) GetConnection(name string) (KvstoreHandler, error) {
 	if this.pools == nil {
 		return nil, errors.New(fmt.Sprintf(errRedisPoolNotExists, name))
 	}
@@ -135,14 +134,12 @@ func (this *RedisHandler) GetCache(name string) (CacheHandler, error) {
 }
 
 type RedisPool struct {
+	*redis.Pool
 	Host      string
 	Port      string
 	Password  string
 	Database  int
-	MaxActive int
-	MaxIdle   int
 	KeyPrefix string
-	Pool      *redis.Pool
 }
 
 func (this *RedisPool) GetConfig() map[string]interface{} {

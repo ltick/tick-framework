@@ -19,9 +19,9 @@ import (
 	"strings"
 	"time"
 
-	libCache "github.com/ltick/tick-framework/cache"
 	"github.com/ltick/tick-framework/config"
 	libDatabase "github.com/ltick/tick-framework/database"
+	"github.com/ltick/tick-framework/kvstore"
 	libUtility "github.com/ltick/tick-framework/utility"
 )
 
@@ -55,9 +55,9 @@ var systemLog libUtility.LogFunc
 
 type Session struct {
 	Database *libDatabase.Database `inject:"true"`
-	Cache    *libCache.Cache       `inject:"true"`
+	Cache    *kvstore.Kvstore      `inject:"true"`
 
-	Config      *config.Config `inject:"true"`
+	Config      *config.Config     `inject:"true"`
 	DebugLog    libUtility.LogFunc `inject:"true"`
 	SystemLog   libUtility.LogFunc `inject:"true"`
 	handlerName string

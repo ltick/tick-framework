@@ -8,7 +8,7 @@ import (
 
 	"github.com/fatih/structs"
 	"github.com/juju/errors"
-	"github.com/ltick/tick-framework/cache"
+	"github.com/ltick/tick-framework/kvstore"
 	"github.com/ltick/tick-framework/config"
 	"github.com/ltick/tick-framework/database"
 	"github.com/ltick/tick-framework/filesystem"
@@ -53,7 +53,7 @@ var (
 	}
 	Components = []*Component{
 		&Component{Name: "Database", Component: &database.Database{}},
-		&Component{Name: "Cache", Component: &cache.Cache{}},
+		&Component{Name: "Kvstore", Component: &kvstore.Kvstore{}},
 		&Component{Name: "Queue", Component: &queue.Queue{}},
 		&Component{Name: "Filesystem", Component: &filesystem.Filesystem{}},
 		&Component{Name: "Session", Component: &session.Session{}},
