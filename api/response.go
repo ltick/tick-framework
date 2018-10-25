@@ -1,9 +1,11 @@
-package http
+package api
 
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -11,9 +13,6 @@ import (
 	"strings"
 	"syscall"
 
-	"encoding/json"
-	"fmt"
-	"github.com/ltick/tick-framework/http/writer"
 	"github.com/ltick/tick-routing"
 )
 
@@ -68,28 +67,53 @@ var responseOptions = map[string]map[string]interface{}{
 	},
 }
 
-func NewResponseWriter(c *routing.Context, w routing.DataWriter) (r *Response) {
-	r = &Response{}
+type DefaultResponse struct {
+	Code    string      `json:"code" xml:"code"`
+	Status  int         `json:"status" xml:"status"`
+	Message string      `json:"message,omitempty" xml:"message,omitempty"`
+	Data    interface{} `json:"data,omitempty" xml:"data,omitempty"`
+}
+
+type DefaultErrorResponse struct {
+	*DefaultResponse
+}
+
+func (this *DefaultErrorResponse) Error() string {
+	return this.Message
+}
+func (this *DefaultErrorResponse) StatusCode() int {
+	return this.Status
+}
+func (this *DefaultErrorResponse) ErrorCode() string {
+	return this.Code
+}
+
+func NewResponseCustomWriter(rw http.ResponseWriter, w routing.DataWriter) (r *Response) {
+	r = &Response{
+		httpResponseWriter: rw,
+	}
 	r.SetDataWriter(w)
 	return r
 }
-func NewResponse(c *routing.Context, w routing.DataWriter) (r *Response) {
-	r = &Response{}
-	r.SetDataWriter(&ResponseWriter{})
+func NewResponse(rw http.ResponseWriter) (r *Response) {
+	r = &Response{
+		httpResponseWriter: rw,
+	}
+	r.SetDataWriter(&DefaultResponseWriter{})
 	return r
 }
 
 // Response wraps an http.ResponseWriter and implements its interface to be used
 // by an HTTP handler to construct an HTTP response.
-// See [http.ResponseWriter](https://golang.org/pkg/net/http/#ResponseWriter)
-type ResponseWriter struct {
+// See [http.ResponseWriter](https://golang.org/pkg/net/http/#DefaultResponseWriter)
+type DefaultResponseWriter struct {
 }
 
-func (rw *ResponseWriter) SetHeader(w http.ResponseWriter) {
+func (rw *DefaultResponseWriter) SetHeader(w http.ResponseWriter) {
 
 }
 
-func (rw *ResponseWriter) Write(w http.ResponseWriter, data interface{}) (size int, err error) {
+func (rw *DefaultResponseWriter) Write(w http.ResponseWriter, data interface{}) (size int, err error) {
 	switch data.(type) {
 	case []byte:
 		byte := data.([]byte)
@@ -97,17 +121,17 @@ func (rw *ResponseWriter) Write(w http.ResponseWriter, data interface{}) (size i
 	case string:
 		byte := []byte(data.(string))
 		size, err = w.Write(byte)
-	case *writer.ErrorData:
-		errorData, ok := data.(*writer.ErrorData)
+	case *DefaultErrorResponse:
+		errorResponse, ok := data.(*DefaultErrorResponse)
 		if !ok {
 			return 0, routing.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("get audio: data type error"))
 		}
-		errorDataBody, err := json.Marshal(errorData)
+		errorResponseBody, err := json.Marshal(errorResponse)
 		if err != nil {
-			return 0, routing.NewHTTPError(errorData.StatusCode(), errorData.ErrorCode()+":"+errorData.Error())
+			return 0, routing.NewHTTPError(errorResponse.StatusCode(), errorResponse.ErrorCode()+":"+errorResponse.Error())
 		}
 		rw.SetHeader(w)
-		return 0, routing.NewHTTPError(errorData.StatusCode(), string(errorDataBody))
+		return 0, routing.NewHTTPError(errorResponse.StatusCode(), string(errorResponseBody))
 	default:
 		if data != nil {
 			size, err = fmt.Fprint(w, data)
@@ -131,7 +155,7 @@ type Response struct {
 
 func (r *Response) reset(w http.ResponseWriter) {
 	r.httpResponseWriter = w
-	r.responseWriter = &ResponseWriter{}
+	r.responseWriter = &DefaultResponseWriter{}
 	r.status = 0
 	r.wrote = false
 }
@@ -184,55 +208,13 @@ func (r *Response) Write(data interface{}) (n int, err error) {
 		b := data.([]byte)
 		n, err = r.httpResponseWriter.Write(b)
 	}
+	if err != nil {
+		if ConnectionResetByPeer(err) || Timeout(err) || NetworkUnreachable(err) {
+			return 0, routing.NewHTTPError(499, "Response write error: "+err.Error())
+		}
+		return 0, routing.NewHTTPError(http.StatusInternalServerError, "Response write error: "+err.Error())
+	}
 	return n, err
-}
-
-func (r *Response) NewResponse(c *routing.Context, code string, data interface{}, messages ...string) error {
-	responseData := r.NewResponseData(c, code, data, messages...)
-	_, err := r.Write(responseData)
-	if err != nil {
-		if ConnectionResetByPeer(err) || Timeout(err) || NetworkUnreachable(err) {
-			return routing.NewHTTPError(499, "Response write error: "+err.Error())
-		}
-		return routing.NewHTTPError(http.StatusInternalServerError, "Response write error: "+err.Error())
-	}
-	return nil
-}
-func (r *Response) NewErrorResponse(c *routing.Context, code string, messages ...string) error {
-	responseData := r.NewErrorResponseData(c, code, messages...)
-	_, err := r.Write(responseData)
-	if err != nil {
-		if ConnectionResetByPeer(err) || Timeout(err) || NetworkUnreachable(err) {
-			return routing.NewHTTPError(499, "Response write error: "+err.Error())
-		}
-		return routing.NewHTTPError(http.StatusInternalServerError, "Response write error: "+err.Error())
-	}
-	return nil
-}
-func (r *Response) NewResponseData(c *routing.Context, code string, data interface{}, messages ...string) *writer.Data {
-	config := make(map[string]interface{})
-	responseConfig, ok := responseOptions[code]
-	if ok {
-		config = responseConfig
-	} else {
-		config["message"] = "error code not exists"
-		config["status"] = http.StatusInternalServerError
-	}
-	message := config["message"].(string)
-	if len(messages) > 0 {
-		message = messages[0]
-	}
-	return &writer.Data{
-		Code:    code,
-		Status:  config["status"].(int),
-		Message: message,
-		Data:    data,
-	}
-}
-func (r *Response) NewErrorResponseData(c *routing.Context, code string, messages ...string) *writer.ErrorData {
-	return &writer.ErrorData{
-		Data: r.NewResponseData(c, code, nil, messages...),
-	}
 }
 
 // AddCookie adds a Set-Cookie header.

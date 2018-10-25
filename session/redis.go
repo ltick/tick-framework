@@ -7,19 +7,19 @@ import (
 	"sync"
 	"net/http"
 
-	libCache "github.com/ltick/tick-framework/cache"
+	"github.com/ltick/tick-framework/kvstore"
 )
 type RedisStore struct {
 	sessionMaxAge int64
-	sessionCacheProvider libCache.CacheHandler
+	sessionCacheProvider kvstore.KvstoreHandler
 	sessionId               string
 	lock                    sync.RWMutex
 	sessionData             map[interface{}]interface{}
 }
 type RedisHandler struct {
-	Cache *libCache.Cache
+	Cache *kvstore.Kvstore
 
-	sessionCacheProvider libCache.CacheHandler
+	sessionCacheProvider kvstore.KvstoreHandler
 	sessionMaxAge        int64
 	sessionId            string
 }
@@ -43,7 +43,7 @@ func (m *RedisHandler) Initiate(ctx context.Context, maxAge int64, config map[st
 	if !ok {
 		return errors.New(errMysqlInitiate + ": empty cache instance")
 	}
-	m.Cache, ok = cacheInstance.(*libCache.Cache)
+	m.Cache, ok = cacheInstance.(*kvstore.Kvstore)
 	if !ok {
 		return errors.New(errMysqlInitiate + ": invaild cache instance")
 	}
@@ -51,7 +51,7 @@ func (m *RedisHandler) Initiate(ctx context.Context, maxAge int64, config map[st
 	if err != nil {
 		return errors.New(errStartup + ": " + err.Error())
 	}
-	m.sessionCacheProvider, err = m.Cache.NewCache(ctx, "redis", map[string]interface{}{
+	m.sessionCacheProvider, err = m.Cache.NewConnection(ctx, "redis", map[string]interface{}{
 		"CACHE_REDIS_DATABASE":   config["CACHE_REDIS_DATABASE"],
 		"CACHE_REDIS_KEY_PREFIX": config["CACHE_REDIS_KEY_PREFIX"],
 	})
@@ -92,7 +92,7 @@ func (m *RedisHandler) SessionExist(ctx context.Context, sessionId string) (bool
 	//获取cookie验证是否登录
 	_, err := m.sessionCacheProvider.Get(sessionId)
 	if err != nil {
-		if libCache.ErrNil(err) {
+		if kvstore.ErrNil(err) {
 			return false, nil
 		}
 		return false, errors.New(fmt.Sprintf(errRedisSessionExists+": [sessionId:'%s', error:'%s']", sessionId, err.Error()))
@@ -102,7 +102,7 @@ func (m *RedisHandler) SessionExist(ctx context.Context, sessionId string) (bool
 func (m *RedisHandler) SessionRegenerate(ctx context.Context, oldSessionId, sessionId string) (Store, error) {
 	sessionStoreData, err := m.sessionCacheProvider.Get(oldSessionId)
 	if err != nil {
-		if libCache.ErrNil(err) {
+		if kvstore.ErrNil(err) {
 			err := m.sessionCacheProvider.Set(sessionId, "")
 			debugLog(ctx, "receive: set session [sessionId:'%s', error:'%v']", sessionId, err)
 			if err != nil {

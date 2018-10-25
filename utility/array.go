@@ -1,6 +1,8 @@
 package utility
 
-import "strings"
+import (
+	"strings"
+)
 
 // inArray 判断字符串是否存在数组中
 func InArrayString(needle string, haystack []string, caseSensitives ...bool) *int {

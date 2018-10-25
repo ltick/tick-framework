@@ -1,4 +1,4 @@
-package http
+package api
 
 import (
 	"bytes"
@@ -17,6 +17,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ltick/tick-framework/utility"
+	"github.com/ltick/tick-routing"
 )
 
 type (
@@ -43,28 +44,71 @@ type (
 		sync.RWMutex
 	}
 
-	ParamsKVStore interface {
-		Get(k string) (v string, found bool)
+	ParamsKvstore interface {
+		Get(k string) (v interface{}, found bool)
 	}
 	// ApiParam is a single URL parameter, consisting of a key and a value.
 	ApiParam struct {
 		Key   string
 		Value string
 	}
-	// ApiParams is a Param-slice, as returned by the routea.
+	// ApiParams is a Param-slice, as returned by the route.
 	// The slice is ordered, the first URL parameter is also the first slice value.
 	// It is therefore safe to read values by the index.
 	ApiParams []ApiParam
 	// Map is just a conversion for a map[string]string
-	Map map[string]string
+	Map map[string]interface{}
+
+	// APIHandler is the Faygo Handler interface,
+	// which is implemented by a struct with API descriptor information.
+	// It is an intelligent Handler of binding parameters.
+	APIHandler interface {
+		Handler
+		APIDoc
+	}
+	// APIDoc provides the API's note, result or parameters information.
+	APIDoc interface {
+		Doc() Doc
+	}
+	// APIParam is the api parameter information
+	APIParam struct {
+		Name     string      // Parameter name
+		In       string      // The position of the parameter
+		Required bool        // Is a required parameter
+		Model    interface{} // A parameter value that is used to infer a value type and as a default value
+		Desc     string      // Description
+	}
+	// Doc api information
+	Doc struct {
+		Note   string      `json:"note" xml:"note"`
+		Return interface{} `json:"return,omitempty" xml:"return,omitempty"`
+		// MoreParams extra added parameters definition
+		MoreParams []APIParam `json:"more_params,omitempty" xml:"more_params,omitempty"`
+	}
+	// Notes implementation notes of a response
+	Notes struct {
+		Note   string      `json:"note" xml:"note"`
+		Return interface{} `json:"return,omitempty" xml:"return,omitempty"`
+	}
+	// JSONMsg is commonly used to return JSON format response.
+	JSONMsg struct {
+		Code int         `json:"code" xml:"code"`                     // the status code of the business process (required)
+		Info interface{} `json:"info,omitempty" xml:"info,omitempty"` // response's apiMap and example value (optional)
+	}
+	// apiHandler is an intelligent Handler of binding parameters.
+	apiHandler struct {
+		api *Api
+	}
 )
 
-func (m Map) Get(k string) (string, bool) {
+var _ APIDoc = new(apiHandler)
+
+func (m Map) Get(k string) (interface{}, bool) {
 	v, found := m[k]
 	return v, found
 }
 
-var _ ParamsKVStore = ApiParams{}
+var _ ParamsKvstore = ApiParams{}
 
 // ByName returns the value of the first ApiParam which key matches the given name.
 // If no matching ApiParam is found, an empty string is returned.
@@ -78,8 +122,8 @@ func (ps ApiParams) ByName(name string) string {
 }
 
 // Get returns the value of the first ApiParam which key matches the given name.
-// It implements the ParamsKVStore interface.
-func (ps ApiParams) Get(name string) (string, bool) {
+// It implements the ParamsKvstore interface.
+func (ps ApiParams) Get(name string) (interface{}, bool) {
 	for i := range ps {
 		if ps[i].Key == name {
 			return ps[i].Value, true
@@ -191,6 +235,7 @@ func NewApi(
 func (a *Api) Raw() interface{} {
 	return a.rawStructPointer
 }
+
 func (a *Api) addFields(parentIndexPath []int, t reflect.Type, v reflect.Value) error {
 	var err error
 	var maxMemoryMB int64
@@ -308,7 +353,7 @@ func (a *Api) addFields(parentIndexPath []int, t reflect.Type, v reflect.Value) 
 			param.err = errors.New(errStr)
 		}
 
-		// fmt.Printf("%#v\n", param.tags)
+		//fmt.Printf("%#v\n", param.tags)
 
 		if param.name, ok = parsedTags[KEY_NAME]; !ok {
 			param.name = a.paramNameNormalizer(field.Name)
@@ -328,7 +373,6 @@ func (a *Api) addFields(parentIndexPath []int, t reflect.Type, v reflect.Value) 
 		if err = param.makeVerifyRules(); err != nil {
 			return errors.Trace(fmt.Errorf("%s|%s|%s", t.String(), field.Name, "initial validation failed:"+err.Error()))
 		}
-
 		a.params = append(a.params, param)
 	}
 	if maxMemoryMB > 0 {
@@ -345,11 +389,11 @@ func (a *Api) Number() int {
 }
 
 // BindAt binds the net/http api params to a struct pointer and validate it.
-// note: structPointer must be struct pointea.
+// note: structPointer must be struct pointe.
 func (a *Api) BindAt(
 	structPointer interface{},
 	req *http.Request,
-	apiParams ParamsKVStore,
+	apiParams ParamsKvstore,
 ) error {
 	name := reflect.TypeOf(structPointer).String()
 	if name != a.name {
@@ -365,7 +409,7 @@ func (a *Api) BindAt(
 // BindNew binds the net/http api params to a struct pointer and validate it.
 func (a *Api) BindNew(
 	req *http.Request,
-	apiParams ParamsKVStore,
+	apiParams ParamsKvstore,
 ) (
 	interface{},
 	error,
@@ -375,8 +419,8 @@ func (a *Api) BindNew(
 	return structPrinter, err
 }
 
-// NewReceiver creates a new struct pointer and the field's values  for its receive parameterste it.
-func (a *Api) NewReceiver() (interface{}, []interface{}) {
+// NewReceiver creates a new struct pointer and the field's values  for its receive parameters it.
+func (a *Api) NewReceiver() (interface{}, []reflect.Value) {
 	object := reflect.New(a.structType)
 	if len(a.defaultValues) > 0 {
 		// fmt.Printf("setting default value: %s\n", a.structType.String())
@@ -389,16 +433,16 @@ func (a *Api) NewReceiver() (interface{}, []interface{}) {
 	return object.Interface(), a.fieldsForBinding(object.Elem())
 }
 
-func (a *Api) fieldsForBinding(structElem reflect.Value) []interface{} {
+func (a *Api) fieldsForBinding(structElem reflect.Value) []reflect.Value {
 	count := len(a.params)
-	fields := make([]interface{}, count)
+	fields := make([]reflect.Value, count)
 	for i := 0; i < count; i++ {
 		value := structElem
 		param := a.params[i]
 		for _, index := range param.indexPath {
 			value = value.Field(index)
 		}
-		fields[i] = value.Interface()
+		fields[i] = value
 	}
 	return fields
 }
@@ -406,14 +450,14 @@ func (a *Api) fieldsForBinding(structElem reflect.Value) []interface{} {
 // BindFields binds the net/http api params to a struct and validate it.
 // Must ensure that the param `fields` matches `a.params`.
 func (a *Api) BindFields(
-	fields []interface{},
+	fields []reflect.Value,
 	req *http.Request,
-	apiParams ParamsKVStore,
+	apiParams ParamsKvstore,
 ) (
 	err error,
 ) {
 	if apiParams == nil {
-		apiParams = Map(map[string]string{})
+		apiParams = Map(map[string]interface{}{})
 	}
 	if req.Form == nil {
 		req.ParseMultipartForm(a.maxMemory)
@@ -424,16 +468,23 @@ func (a *Api) BindFields(
 			err = errors.Trace(fmt.Errorf("%s|%s|%s", a.name, "?", fmt.Sprint(p)))
 		}
 	}()
-	var ok bool
 	for i, param := range a.params {
 		value := fields[i]
 		switch param.In() {
 		case "path":
-			value, ok = apiParams.Get(param.name)
+			paramValue, ok := apiParams.Get(param.name)
 			if !ok {
-				return param.Error("missing path param")
+				return errors.New("missing path param")
 			}
-			// fmt.Printf("paramName:%s\nvalue:%#v\n\n", param.name, paramValue)
+			paramValueString, ok := paramValue.(string)
+			if !ok {
+				return errors.New("invalid path param")
+			}
+			// fmt.Printf("paramName:%s\nvalue:%#v\n\n", param.name, paramValueString)
+			if err = utility.ConvertAssign(value, []string{paramValueString}...); err != nil {
+				return errors.New(err.Error())
+			}
+
 		case "query":
 			if queryValues == nil {
 				queryValues, err = url.ParseQuery(req.URL.RawQuery)
@@ -441,9 +492,13 @@ func (a *Api) BindFields(
 					queryValues = make(url.Values)
 				}
 			}
-			value, ok = queryValues[param.name]
-			if !ok && param.IsRequired() {
-				return param.Error("missing query param")
+			paramValues, ok := queryValues[param.name]
+			if ok {
+				if err = utility.ConvertAssign(value, paramValues...); err != nil {
+					return errors.New(err.Error())
+				}
+			} else if param.IsRequired() {
+				return errors.New("missing query param")
 			}
 
 		case "formData":
@@ -453,42 +508,52 @@ func (a *Api) BindFields(
 					fhs := req.MultipartForm.File[param.name]
 					if len(fhs) == 0 {
 						if param.IsRequired() {
-							return param.Error("missing formData param")
+							return errors.New("missing formData param")
 						}
 						continue
 					}
-					typ := reflect.TypeOf(value)
+					typ := value.Type()
 					switch typ.String() {
 					case fileTypeString:
-						value = fhs[0]
+						value.Set(reflect.ValueOf(fhs[0]))
 					case fileTypeString2:
-						value = &fhs[0]
+						value.Set(reflect.ValueOf(fhs[0]).Elem())
 					case filesTypeString:
-						value = fhs
+						value.Set(reflect.ValueOf(fhs))
 					case filesTypeString2:
 						fhs2 := make([]multipart.FileHeader, len(fhs))
 						for i, fh := range fhs {
 							fhs2[i] = *fh
 						}
-						value = fhs2
+						value.Set(reflect.ValueOf(fhs2))
 					default:
-						return param.Error(
+						return errors.New(
 							"the param type is incorrect, reference: " +
 								fileTypeString +
 								"," + filesTypeString,
 						)
 					}
 				} else if param.IsRequired() {
-					return param.Error("missing formData param")
+					return errors.New("missing formData param")
 				}
 				continue
 			}
-
-			value, ok = req.PostForm[param.name]
-			if !ok && param.IsRequired() {
-				return param.Error("missing formData param")
+			if req.MultipartForm != nil {
+				paramValues, ok := req.MultipartForm.Value[param.name]
+				if ok {
+					if err = utility.ConvertAssign(value, paramValues...); err != nil {
+						return errors.New(err.Error())
+					}
+				}
 			}
-
+			paramValues, ok := req.PostForm[param.name]
+			if ok {
+				if err = utility.ConvertAssign(value, paramValues...); err != nil {
+					return errors.New(err.Error())
+				}
+			} else if param.IsRequired() {
+				return errors.New("missing formData param")
+			}
 		case "body":
 			// Theoretically there should be at most one `body` param, and can not exist with `formData` at the same time
 			var body []byte
@@ -496,34 +561,38 @@ func (a *Api) BindFields(
 			req.Body.Close()
 			if err == nil {
 				if err = a.bodydecoder(value, body); err != nil {
-					return param.Error(err.Error())
+					return errors.New(err.Error())
 				}
 			} else if param.IsRequired() {
-				return param.Error("missing body param")
+				return errors.New("missing body param")
 			}
 
 		case "header":
-			value, ok = req.Header[param.name]
-			if !ok && param.IsRequired() {
-				return param.Error("missing header param")
+			paramValues, ok := req.Header[param.name]
+			if ok {
+				if err = utility.ConvertAssign(value, paramValues...); err != nil {
+					return errors.New(err.Error())
+				}
+			} else if param.IsRequired() {
+				return errors.New("missing header param")
 			}
 
 		case "cookie":
 			c, _ := req.Cookie(param.name)
 			if c != nil {
-				typ := reflect.TypeOf(value)
-				switch typ.String() {
+				switch value.Type().String() {
 				case cookieTypeString:
-					value = c
+					value.Set(reflect.ValueOf(c))
 				case cookieTypeString2:
-					value = &c
+					value.Set(reflect.ValueOf(c).Elem())
+				default:
+					if err = utility.ConvertAssign(value, []string{c.Value}...); err != nil {
+						return errors.New(err.Error())
+					}
 				}
 			} else if param.IsRequired() {
-				return param.Error("missing cookie param")
+				return errors.New("missing cookie param")
 			}
-		}
-		if err = param.makeVerifyRules(); err != nil {
-			return err
 		}
 		if err = param.validate(value); err != nil {
 			return err
@@ -535,36 +604,6 @@ func (a *Api) BindFields(
 // Params gets the parameter information
 func (a *Api) Params() []*Param {
 	return a.params
-}
-
-// BindByName binds the net/http api params to a new struct and validate it.
-func BindByName(
-	apiName string,
-	req *http.Request,
-	apiParams ParamsKVStore,
-) (
-	interface{},
-	error,
-) {
-	api, err := GetApi(apiName)
-	if err != nil {
-		return nil, err
-	}
-	return api.BindNew(req, apiParams)
-}
-
-// Bind binds the net/http api params to the `structPointer` param and validate it.
-// note: structPointer must be struct pointea.
-func Bind(
-	structPointer interface{},
-	req *http.Request,
-	apiParams ParamsKVStore,
-) error {
-	api, err := GetApi(reflect.TypeOf(structPointer).String())
-	if err != nil {
-		return err
-	}
-	return api.BindAt(structPointer, req, apiParams)
 }
 
 func (apiMap *ApiMap) get(apiName string) (*Api, bool) {
@@ -606,4 +645,53 @@ func distinctAndSortedApiParams(infos []APIParam) []APIParam {
 		newinfos = append(newinfos, infoMap[k])
 	}
 	return newinfos
+}
+
+// Serve implements the APIHandler.
+// creates a new `*apiHandler`;
+// binds the api path params to `apiHandler.handler`;
+// calls Handler.Serve() method.
+func (h *apiHandler) Serve(ctx *Context) error {
+	paramMap := ctx.Context.ParamMap()
+	for paramKey, paramValue := range paramMap {
+		ctx.apiParams = append(ctx.apiParams, ApiParam{
+			Key:   paramKey,
+			Value: paramValue,
+		})
+	}
+	obj, err := h.api.BindNew(ctx.Request, ctx.apiParams)
+	if err != nil {
+		ctx.Context.Abort()
+		return routing.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+	return obj.(Handler).Serve(ctx)
+}
+
+// Doc returns the API's note, result or parameters information.
+func (h *apiHandler) Doc() Doc {
+	var doc Doc
+	if d, ok := h.api.Raw().(APIDoc); ok {
+		doc = d.Doc()
+	}
+	for _, param := range h.api.Params() {
+		var had bool
+		var info = APIParam{
+			Name:     param.Name(),
+			In:       param.In(),
+			Required: param.IsRequired(),
+			Desc:     param.Description(),
+			Model:    param.Raw(),
+		}
+		for i, p := range doc.MoreParams {
+			if p.Name == info.Name {
+				doc.MoreParams[i] = info
+				had = true
+				break
+			}
+		}
+		if !had {
+			doc.MoreParams = append(doc.MoreParams, info)
+		}
+	}
+	return doc
 }

@@ -1,4 +1,4 @@
-package cache
+package kvstore
 
 import (
 	"context"
@@ -12,23 +12,23 @@ import (
 var (
 	errInitiate = "cache: initiate '%s' error"
 	errStartup  = "cache: startup '%s' error"
-	errNewCache = "cache: new '%s' cache error"
-	errGetCache = "cache: get '%s' cache error"
+	errNewConnection = "cache: new '%s' cache error"
+	errGetConnection = "cache: get '%s' cache error"
 )
 
-func NewCache() *Cache {
-	instance := &Cache{
+func NewKvstore() *Kvstore {
+	instance := &Kvstore{
 	}
 	return instance
 }
 
-type Cache struct {
+type Kvstore struct {
 	Config      *config.Config `inject:"true"`
 	handlerName string
 	handler     Handler
 }
 
-func (c *Cache) Initiate(ctx context.Context) (context.Context, error) {
+func (c *Kvstore) Initiate(ctx context.Context) (context.Context, error) {
 	var configs map[string]config.Option = map[string]config.Option{
 		"CACHE_PROVIDER":         config.Option{Type: config.String, EnvironmentKey: "CACHE_PROVIDER"},
 		"CACHE_REDIS_HOST":       config.Option{Type: config.String, EnvironmentKey: "CACHE_REDIS_HOST"},
@@ -45,7 +45,7 @@ func (c *Cache) Initiate(ctx context.Context) (context.Context, error) {
 	}
 	return ctx, nil
 }
-func (c *Cache) OnStartup(ctx context.Context) (context.Context, error) {
+func (c *Kvstore) OnStartup(ctx context.Context) (context.Context, error) {
 	var err error
 	err = Register("redis", NewRedisHandler)
 	if err != nil {
@@ -62,19 +62,19 @@ func (c *Cache) OnStartup(ctx context.Context) (context.Context, error) {
 	}
 	return ctx, nil
 }
-func (c *Cache) OnShutdown(ctx context.Context) (context.Context, error) {
+func (c *Kvstore) OnShutdown(ctx context.Context) (context.Context, error) {
 	return ctx, nil
 }
-func (c *Cache) OnRequestStartup(ctx *routing.Context) error {
+func (c *Kvstore) OnRequestStartup(ctx *routing.Context) error {
 	return nil
 }
-func (c *Cache) OnRequestShutdown(ctx *routing.Context) error {
+func (c *Kvstore) OnRequestShutdown(ctx *routing.Context) error {
 	return nil
 }
-func (c *Cache) HandlerName() string {
+func (c *Kvstore) HandlerName() string {
 	return c.handlerName
 }
-func (c *Cache) Use(ctx context.Context, handlerName string) error {
+func (c *Kvstore) Use(ctx context.Context, handlerName string) error {
 	handler, err := Use(handlerName)
 	if err != nil {
 		return err
@@ -87,8 +87,8 @@ func (c *Cache) Use(ctx context.Context, handlerName string) error {
 	}
 	return nil
 }
-func (c *Cache) NewCache(ctx context.Context, name string, config map[string]interface{}) (CacheHandler, error) {
-	cacheHandler, err := c.GetCache(name)
+func (c *Kvstore) NewConnection(ctx context.Context, name string, config map[string]interface{}) (KvstoreHandler, error) {
+	cacheHandler, err := c.GetConnection(name)
 	if err == nil {
 		return cacheHandler, nil
 	}
@@ -113,30 +113,30 @@ func (c *Cache) NewCache(ctx context.Context, name string, config map[string]int
 	if _, ok := config["CACHE_REDIS_MAX_IDLE"]; !ok {
 		config["CACHE_REDIS_MAX_IDLE"] = c.Config.GetInt("CACHE_REDIS_MAX_IDLE")
 	}
-	cacheHandler, err = c.handler.NewCache(ctx, name, config)
+	cacheHandler, err = c.handler.NewConnection(ctx, name, config)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf(errNewCache+": "+err.Error(), name))
+		return nil, errors.New(fmt.Sprintf(errNewConnection+": "+err.Error(), name))
 	}
 	if cacheHandler == nil {
-		return nil, errors.New(fmt.Sprintf(errNewCache+": empty pool", name))
+		return nil, errors.New(fmt.Sprintf(errNewConnection+": empty pool", name))
 	}
 	return cacheHandler, nil
 }
-func (c *Cache) GetCache(name string) (CacheHandler, error) {
-	cacheHandler, err := c.handler.GetCache(name)
+func (c *Kvstore) GetConnection(name string) (KvstoreHandler, error) {
+	cacheHandler, err := c.handler.GetConnection(name)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf(errGetCache+": "+err.Error(), name))
+		return nil, errors.New(fmt.Sprintf(errGetConnection+": "+err.Error(), name))
 	}
 	return cacheHandler, err
 }
 
 type Handler interface {
 	Initiate(ctx context.Context) error
-	NewCache(ctx context.Context, name string, config map[string]interface{}) (CacheHandler, error)
-	GetCache(name string) (CacheHandler, error)
+	NewConnection(ctx context.Context, name string, config map[string]interface{}) (KvstoreHandler, error)
+	GetConnection(name string) (KvstoreHandler, error)
 }
 
-type CacheHandler interface {
+type KvstoreHandler interface {
 	GetConfig() map[string]interface{}
 	Set(key interface{}, value interface{}) error
 	Get(key interface{}) (interface{}, error)

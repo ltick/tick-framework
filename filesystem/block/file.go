@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ltick/tick-framework/utility/kvstore"
+	"github.com/ltick/tick-framework/utility"
 )
 
 var (
@@ -21,7 +21,7 @@ type ContentWriter interface {
 }
 
 type contentWriter struct {
-	*kvstore.KVStore
+	*utility.Kvstore
 	file     *os.File
 	basepath string
 	size     int64
@@ -39,7 +39,7 @@ func NewContentWriter(filename, basepath string) (w ContentWriter, err error) {
 		return
 	}
 	w = &contentWriter{
-		KVStore:  kvstore.NewKVStore(kvstore.NopStore, file),
+		Kvstore:  utility.NewKvstore(utility.NopStore, file),
 		file:     file,
 		basepath: basepath,
 		size:     offset,
@@ -48,7 +48,7 @@ func NewContentWriter(filename, basepath string) (w ContentWriter, err error) {
 }
 
 func (w *contentWriter) Write(key []byte, value []byte) (index *Index, err error) {
-	var data *kvstore.KVStoreData = kvstore.NewKVStoreData(key, value)
+	var data *utility.KvstoreData = utility.NewKvstoreData(key, value)
 	if err = w.Set(data); err != nil {
 		return
 	}
@@ -73,7 +73,7 @@ type ContentReader interface {
 }
 
 type contentReader struct {
-	*kvstore.KVStore
+	*utility.Kvstore
 	file     *os.File
 	basepath string
 	offset   int64
@@ -85,7 +85,7 @@ func NewContentReader(filename, basepath string) (r ContentReader, err error) {
 		return
 	}
 	r = &contentReader{
-		KVStore:  kvstore.NewKVStore(file, kvstore.NopStore),
+		Kvstore:  utility.NewKvstore(file, utility.NopStore),
 		file:     file,
 		basepath: basepath,
 		offset:   0,
@@ -94,7 +94,7 @@ func NewContentReader(filename, basepath string) (r ContentReader, err error) {
 }
 
 func (r *contentReader) Read(offset uint64, length uint32) (value []byte, err error) {
-	var data *kvstore.KVStoreData
+	var data *utility.KvstoreData
 	if data, err = r.Get(int64(offset)); err != nil {
 		return
 	}
@@ -108,7 +108,7 @@ func (r *contentReader) Read(offset uint64, length uint32) (value []byte, err er
 }
 
 func (r *contentReader) SequentialRead() (key string, index *Index, err error) {
-	var data *kvstore.KVStoreData
+	var data *utility.KvstoreData
 	if data, err = r.Get(r.offset); err != nil {
 		return
 	}
@@ -130,7 +130,7 @@ type IndexWriter interface {
 }
 
 type indexWriter struct {
-	*kvstore.KVStore
+	*utility.Kvstore
 	file *fileBufferWriteSeeker
 }
 
@@ -181,7 +181,7 @@ func NewIndexWriter(filename string, trunc bool) (w *indexWriter, err error) {
 	}
 	var fileBuffer *fileBufferWriteSeeker = newFileBufferWriteSeeker(file)
 	w = &indexWriter{
-		KVStore: kvstore.NewKVStore(kvstore.NopStore, fileBuffer),
+		Kvstore: utility.NewKvstore(utility.NopStore, fileBuffer),
 		file:    fileBuffer,
 	}
 	return
@@ -190,12 +190,12 @@ func NewIndexWriter(filename string, trunc bool) (w *indexWriter, err error) {
 func (w *indexWriter) Write(key string, index *Index) (err error) {
 	var (
 		value []byte
-		data  *kvstore.KVStoreData
+		data  *utility.KvstoreData
 	)
 	if value, err = index.MarshalBinary(); err != nil {
 		return
 	}
-	data = kvstore.NewKVStoreData([]byte(key), value)
+	data = utility.NewKvstoreData([]byte(key), value)
 	if err = w.Set(data); err != nil {
 		return
 	}
@@ -220,7 +220,7 @@ type IndexReader interface {
 }
 
 type indexReader struct {
-	*kvstore.KVStore
+	*utility.Kvstore
 	file   *os.File
 	offset int64
 }
@@ -231,7 +231,7 @@ func NewIndexReader(filename string) (r IndexReader, err error) {
 		return
 	}
 	r = &indexReader{
-		KVStore: kvstore.NewKVStore(file, kvstore.NopStore),
+		Kvstore: utility.NewKvstore(file, utility.NopStore),
 		file:    file,
 		offset:  0,
 	}
@@ -239,7 +239,7 @@ func NewIndexReader(filename string) (r IndexReader, err error) {
 }
 
 func (r *indexReader) SequentialRead() (key string, index *Index, err error) {
-	var data *kvstore.KVStoreData
+	var data *utility.KvstoreData
 	if data, err = r.Get(r.offset); err != nil {
 		return
 	}

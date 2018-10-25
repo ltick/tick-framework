@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"net/http/httputil"
 	"os"
 	"os/exec"
 	"path"
@@ -23,6 +24,7 @@ import (
 	"github.com/ltick/tick-framework/utility"
 	"github.com/ltick/tick-graceful"
 	libLog "github.com/ltick/tick-log"
+	"github.com/ltick/tick-routing"
 )
 
 var (
@@ -599,12 +601,51 @@ func (e *Engine) Startup() (err error) {
 	for _, server := range e.ServerMap {
 		if server.Router.routes != nil && len(server.Router.routes) > 0 {
 			for _, route := range server.Router.routes {
-				server.AddRoute(route.Method, route.Host, route.Handlers...)
+				if _, ok := server.RouteGroups[route.Group]; !ok {
+					server.RouteGroups[route.Group] = server.AddRouteGroup(route.Group)
+				}
+				server.RouteGroups[route.Group].AddRoute(route.Method, route.Path, func(c *routing.Context) error {
+					if c.Request.Host == route.Host {
+						for _, handler := range route.Handlers {
+							err := handler(c)
+							if err != nil {
+								return err
+							}
+						}
+					}
+					return nil
+				})
 			}
 		}
 		// proxy
 		if server.Router.proxys != nil && len(server.Router.proxys) > 0 {
-			server.AddRoute("ANY", "/")
+			for _, proxy := range server.Router.proxys {
+				if _, ok := server.RouteGroups[proxy.Group]; !ok {
+					server.RouteGroups[proxy.Group] = server.AddRouteGroup(proxy.Group)
+				}
+				server.RouteGroups[proxy.Group].AddRoute("ANY", proxy.Path, func(c *routing.Context) error {
+					upstreamURL, err := proxy.Proxy(c)
+					fmt.Println(upstreamURL)
+					fmt.Println(err)
+					if err != nil {
+						return routing.NewHTTPError(http.StatusInternalServerError, err.Error())
+					}
+					if upstreamURL != nil {
+						fmt.Println("===")
+						fmt.Println(upstreamURL)
+						director := func(req *http.Request) {
+							req = c.Request
+							req.URL.Scheme = upstreamURL.Scheme
+							req.URL.Host = upstreamURL.Host
+							req.RequestURI = upstreamURL.RequestURI()
+						}
+						proxy := &httputil.ReverseProxy{Director: director}
+						proxy.ServeHTTP(c.ResponseWriter, c.Request)
+						c.Abort()
+					}
+					return nil
+				})
+			}
 		}
 	}
 	sortedComponenetName := e.Registry.GetSortedComponentName()
@@ -698,25 +739,6 @@ func (e *Engine) ServerListenAndServe(server *Server) {
 	e.SystemLog("ltick: Server stop listen ", server.Port, "...")
 }
 
-func (e *Engine) ServeHTTP(res http.ResponseWriter, req *http.Request) {
-	// server
-	if e.ServerMap != nil {
-		serverCount := len(e.ServerMap)
-		for _, server := range e.ServerMap {
-			serverCount--
-			if serverCount == 0 {
-				e.ServerServeHTTP(server, res, req)
-			} else {
-				go e.ServerServeHTTP(server, res, req)
-			}
-		}
-	} else {
-		e.SystemLog("ltick: Server not set")
-	}
-}
-func (e *Engine) ServerServeHTTP(server *Server, res http.ResponseWriter, req *http.Request) {
-	server.Router.ServeHTTP(res, req)
-}
 func (e *Engine) SetContextValue(key, val interface{}) {
 	e.Context = context.WithValue(e.Context, key, val)
 }

@@ -12,8 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-
-type TestRequestCallback struct{
+type TestRequestCallback struct {
 	Config *config.Config `inject:"true"`
 }
 
@@ -138,7 +137,7 @@ func (suite *TestSuite) TestMiddleware() {
 		proxys: make([]*ServerRouterProxy, 0),
 	}
 	srv := a.NewServer("test", 8080, 30*time.Second, router)
-	rg := srv.GetRouteGroup("/").WithCallback(&TestRequestCallback{})
+	rg := srv.AddRouteGroup("/").WithCallback(&TestRequestCallback{})
 	assert.NotNil(suite.T(), rg)
 	rg.AddRoute("GET", "test", func(c *routing.Context) error {
 		c.ResponseWriter.Write([]byte("Bar1"))
@@ -147,7 +146,7 @@ func (suite *TestSuite) TestMiddleware() {
 	a.Startup()
 	res := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/test", nil)
-	a.ServeHTTP(res, req)
+	srv.ServeHTTP(res, req)
 	assert.Equal(suite.T(), "Bar1", res.Body.String())
 	a.Shutdown()
 	assert.Equal(suite.T(), "Startup||Shutdown", a.GetContextValue("output"))

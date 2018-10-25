@@ -1,11 +1,10 @@
-package http
+package api
 
 import (
 	"reflect"
 	"strings"
 	"testing"
 	"time"
-	"fmt"
 )
 
 func TestParsetags(t *testing.T) {
