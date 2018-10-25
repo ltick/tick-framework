@@ -1,21 +1,11 @@
-package http
+package api
 
 import (
-	"crypto/hmac"
-	"crypto/sha1"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
-	"path"
-	"strings"
-	"sync"
 
 	"github.com/ltick/tick-framework/session"
-	libSession "github.com/ltick/tick-framework/session"
-	libUtility "github.com/ltick/tick-framework/utility"
 	"github.com/ltick/tick-routing"
 )
 
@@ -120,12 +110,22 @@ type (
 	// Context is resetting every time a request is coming to the server
 	// it is not good practice to use this object in goroutines, for these cases use the .Clone()
 	Context struct {
-		routing.Context
+		*routing.Context
 
 		apiParams ApiParams // The parameter values on the URL path
 		Response  *Response
+		enableGzip bool
 
-		Session       *libSession.Session
+		// create param name from struct field name
+		paramNameMapper ParamNameMapper
+		// multipart max memory
+		multipartMaxMemory int64
+		// memory store byte
+		memoryStoreByte []byte
+		// save file dir
+		fileStoreDir string
+
+		Session       *session.Session
 		sessionStore  session.Store
 		enableSession bool // Note: Never reset!
 	}
@@ -214,56 +214,6 @@ func (ctx *Context) Redirect(status int, urlStr string) error {
 	return nil
 }
 
-var proxyList = &struct {
-	m map[string]*httputil.ReverseProxy
-	sync.RWMutex
-}{
-	m: map[string]*httputil.ReverseProxy{},
-}
-func (ctx *Context) GetParam(key string) (string, bool) {
-	return ctx.apiParams.Get(key)
-}
-// ReverseProxy routes URLs to the scheme, host, and base path provided in targetUrlBase.
-// If pathAppend is "true" and the targetUrlBase's path is "/base" and the incoming request was for "/dir",
-// the target request will be for /base/dir.
-func (ctx *Context) ReverseProxy(targetUrlBase string, pathAppend bool) error {
-	proxyList.RLock()
-	var rp = proxyList.m[targetUrlBase]
-	proxyList.RUnlock()
-	if rp == nil {
-		proxyList.Lock()
-		defer proxyList.Unlock()
-		rp = proxyList.m[targetUrlBase]
-		if rp == nil {
-			target, err := url.Parse(targetUrlBase)
-			if err != nil {
-				return err
-			}
-			targetQuery := target.RawQuery
-			rp = &httputil.ReverseProxy{
-				Director: func(r *http.Request) {
-					r.Host = target.Host
-					r.URL.Scheme = target.Scheme
-					r.URL.Host = target.Host
-					r.URL.Path = path.Join(target.Path, r.URL.Path)
-					if targetQuery == "" || r.URL.RawQuery == "" {
-						r.URL.RawQuery = targetQuery + r.URL.RawQuery
-					} else {
-						r.URL.RawQuery = targetQuery + "&" + r.URL.RawQuery
-					}
-				},
-			}
-			proxyList.m[targetUrlBase] = rp
-		}
-	}
-
-	if !pathAppend {
-		ctx.Request.URL.Path = ""
-	}
-	rp.ServeHTTP(ctx.ResponseWriter, ctx.Request)
-	return nil
-}
-
 func (ctx *Context) beforeWriteHeader() {
 	if ctx.enableSession {
 		if ctx.sessionStore != nil {
@@ -271,41 +221,4 @@ func (ctx *Context) beforeWriteHeader() {
 			ctx.sessionStore = nil
 		}
 	}
-}
-
-// SecureCookieParam Get secure cookie from request by a given key.
-func (ctx *Context) SecureCookieParam(secret, key string) (string, bool) {
-	val := ctx.CookieParam(key)
-	if val == "" {
-		return "", false
-	}
-
-	parts := strings.SplitN(val, "|", 3)
-
-	if len(parts) != 3 {
-		return "", false
-	}
-
-	vs := parts[0]
-	timestamp := parts[1]
-	sig := parts[2]
-
-	h := hmac.New(sha1.New, []byte(secret))
-	fmt.Fprintf(h, "%s%s", vs, timestamp)
-
-	if fmt.Sprintf("%x", h.Sum(nil)) != sig {
-		return "", false
-	}
-	res, _ := base64.URLEncoding.DecodeString(vs)
-	return libUtility.BytesToString(res), true
-}
-
-// CookieParam returns request cookie item string by a given key.
-// if non-existed, return empty string.
-func (ctx *Context) CookieParam(key string) string {
-	cookie, err := ctx.Context.Request.Cookie(key)
-	if err != nil {
-		return ""
-	}
-	return cookie.Value
 }

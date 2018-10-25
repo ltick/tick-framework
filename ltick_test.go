@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"fmt"
 	"github.com/ltick/tick-framework/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/juju/errors"
@@ -16,18 +15,17 @@ type TestSuite struct {
 	suite.Suite
 	configFile string
 	dotenvFile string
+	testAppLog string
 }
 
 func (suite *TestSuite) SetupTest() {
 	var err error
 	suite.configFile, err = filepath.Abs("testdata/ltick.json")
-	if err != nil {
-		fmt.Println("xxxx")
-	}
+	assert.Nil(suite.T(), err)
 	suite.dotenvFile, err = filepath.Abs("testdata/.env")
-	if err != nil {
-		fmt.Println("xxxx")
-	}
+	assert.Nil(suite.T(), err)
+	suite.testAppLog, err = filepath.Abs("testdata/app.log")
+	assert.Nil(suite.T(), err)
 }
 
 type TestCallback struct{}

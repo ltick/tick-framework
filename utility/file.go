@@ -121,3 +121,29 @@ func NewTemporaryFile(temporaryPath string, prefix string, payload io.Reader, si
 func Checksum(data []byte) uint32 {
 	return crc32.ChecksumIEEE(data)
 }
+
+// SelfPath gets compiled executable file absolute path.
+func SelfPath() string {
+	path, _ := filepath.Abs(os.Args[0])
+	return path
+}
+
+// SelfDir gets compiled executable file directory.
+func SelfDir() string {
+	return filepath.Dir(SelfPath())
+}
+
+// RelPath gets relative path.
+func RelPath(targpath string) string {
+	basepath, _ := filepath.Abs("./")
+	rel, _ := filepath.Rel(basepath, targpath)
+	return strings.Replace(rel, `\`, `/`, -1)
+}
+
+// FileExists reports whether the named file or directory exists.
+func FileExists(name string) bool {
+	if _, err := os.Stat(name); err != nil {
+		return !os.IsNotExist(err)
+	}
+	return true
+}

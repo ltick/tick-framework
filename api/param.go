@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package http
+package api
 
 import (
 	"fmt"
@@ -132,7 +132,7 @@ func (param *Param) Error(reason string) error {
 
 // validate tests if the param conforms to it's validation constraints specified
 // int the KEY_REGEXP struct tag
-func (param *Param) validate(value interface{}) (err error) {
+func (param *Param) validate(value reflect.Value) (err error) {
 	defer func() {
 		p := recover()
 		if p != nil {
@@ -141,9 +141,26 @@ func (param *Param) validate(value interface{}) (err error) {
 			err = param.Error(err.Error())
 		}
 	}()
-	if err = validation.Validate(value, param.rules...); err != nil {
-		return err
+	switch value.Kind()  {
+	case reflect.Slice, reflect.Array:
+		l := value.Len()
+		for i := 0; i < l; i++ {
+			if valueItem := value.Index(i).Interface(); valueItem != nil {
+				if err = validation.Validate(valueItem, param.rules...); err != nil {
+					return err
+				}
+			}
+		}
+	case reflect.Map:
+		for _, key := range value.MapKeys() {
+			if valueItem := value.MapIndex(key).Interface(); valueItem != nil {
+				if err = validation.Validate(valueItem, param.rules...); err != nil {
+					return err
+				}
+			}
+		}
 	}
+
 	return nil
 }
 
@@ -314,39 +331,4 @@ func parseTuple(tuple string) (string, string) {
 		}
 	}
 	panic("invalid validation tuple")
-}
-
-func validateNonZero() (func(value reflect.Value) error, error) {
-	return func(value reflect.Value) error {
-		obj := value.Interface()
-		if obj == reflect.Zero(value.Type()).Interface() {
-			return errors.New("not set")
-		}
-		return nil
-	}, nil
-}
-
-func validateRegexp(isStrings bool, reg string) (func(value reflect.Value) error, error) {
-	re, err := regexp.Compile(reg)
-	if err != nil {
-		return nil, err
-	}
-	if !isStrings {
-		return func(value reflect.Value) error {
-			s := value.String()
-			if !re.MatchString(s) {
-				return fmt.Errorf("not match %s: %s", reg, s)
-			}
-			return nil
-		}, nil
-	} else {
-		return func(value reflect.Value) error {
-			for _, s := range value.Interface().([]string) {
-				if !re.MatchString(s) {
-					return fmt.Errorf("not match %s: %s", reg, s)
-				}
-			}
-			return nil
-		}, nil
-	}
 }

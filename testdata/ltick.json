@@ -8,12 +8,14 @@
   },
   "router": {
     "proxy": {
-      "www.example.com": {
-        "rule": [
-          "(?P<prefix>test)(\/|[?])(?P<path>.*)$"
-        ],
-        "upstream": "http://127.0.0.1:8088/$prefix$path"
-      }
+      "www.example.com": [
+        {"group":"/proxy", "path": "<path:\\d+>", "upstream": "http://www.example.com/user/<:path>"}
+      ]
+    },
+    "handler": {
+      "www.example.com": [
+        {"group":"/user", "path":"<id>", "handler":"UserHandler"}
+      ]
     }
   },
   "component": {
