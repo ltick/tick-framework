@@ -326,13 +326,13 @@ func (ctx *Context) ResponseJSONOrXML(status int, data interface{}, isIndent ...
 	return ctx.ResponseXML(status, data, isIndent...)
 }
 
-func (ctx *Context) ResponseDefault(c *routing.Context, code string, data interface{}, messages ...string) error {
-	responseData := ctx.newResponseDefault(c, code, data, messages...)
+func (ctx *Context) ResponseDefault(code string, data interface{}, messages ...string) error {
+	responseData := ctx.newResponseDefault(code, data, messages...)
 	_, err := ctx.Response.Write(responseData)
 	return err
 }
-func (ctx *Context) ResponseDefaultError(c *routing.Context, code string, messages ...string) error {
-	responseData := ctx.newResponseDefaultError(c, code, messages...)
+func (ctx *Context) ResponseDefaultError(code string, messages ...string) error {
+	responseData := ctx.newResponseDefaultError(code, messages...)
 	_, err := ctx.Response.Write(responseData)
 	if err != nil {
 		if ConnectionResetByPeer(err) || Timeout(err) || NetworkUnreachable(err) {
@@ -342,7 +342,7 @@ func (ctx *Context) ResponseDefaultError(c *routing.Context, code string, messag
 	}
 	return nil
 }
-func (ctx *Context) newResponseDefault(c *routing.Context, code string, data interface{}, messages ...string) *DefaultResponse {
+func (ctx *Context) newResponseDefault(code string, data interface{}, messages ...string) *DefaultResponse {
 	config := make(map[string]interface{})
 	responseConfig, ok := responseOptions[code]
 	if ok {
@@ -362,9 +362,9 @@ func (ctx *Context) newResponseDefault(c *routing.Context, code string, data int
 		Data:    data,
 	}
 }
-func (ctx *Context) newResponseDefaultError(c *routing.Context, code string, messages ...string) *DefaultErrorResponse {
+func (ctx *Context) newResponseDefaultError(code string, messages ...string) *DefaultErrorResponse {
 	return &DefaultErrorResponse{
-		DefaultResponse: ctx.newResponseDefault(c, code, nil, messages...),
+		DefaultResponse: ctx.newResponseDefault(code, nil, messages...),
 	}
 }
 

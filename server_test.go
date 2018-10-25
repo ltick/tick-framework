@@ -11,6 +11,11 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"io"
+	"net/url"
+	"os"
+	"strings"
+	"bytes"
 
 	"github.com/juju/errors"
 	"github.com/ltick/tick-framework/api"
@@ -22,11 +27,6 @@ import (
 	"github.com/ltick/tick-routing/access"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"strings"
-	"net/url"
-	"bytes"
-	"os"
-	"io"
 )
 
 var GetLogContext = func(ctx context.Context) (forwardRequestId string, requestId string, clientIP string, serverAddress string) {
@@ -335,10 +335,10 @@ func (p Param) Serve(ctx *api.Context) error {
 	})
 
 	/*
-	info, err := ctx.StoreFile("pic", true)
-	if err == nil {
-		return errors.Annotatef(err, "ctx.StoreFile: error [filename:'%s', url:'%s', size:'%d']", p.Picture.Filename, info.Url, info.Size)
-	}
+		info, err := ctx.StoreFile("pic", true)
+		if err == nil {
+			return errors.Annotatef(err, "ctx.StoreFile: error [filename:'%s', url:'%s', size:'%d']", p.Picture.Filename, info.Url, info.Size)
+		}
 	*/
 	return ctx.ResponseJSON(200,
 		api.Map{
@@ -384,7 +384,7 @@ func (suite *TestServerSuite) TestApi() {
 	form.Add("n", "1")
 	form.Add("p", "!#!")
 	req, _ := http.NewRequest("POST", "/user/1?title=title", strings.NewReader(form.Encode()))
-	req.Header.Add("Content-Type","application/x-www-form-urlencoded")
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	suite.Server.ServeHTTP(res, req)
 	assert.Equal(suite.T(), http.StatusBadRequest, res.Code)
 	assert.Equal(suite.T(), "{\"status\":400,\"message\":\"*ltick.Param|p|must be in a valid format\"}\n", res.Body.String())
@@ -394,16 +394,14 @@ func (suite *TestServerSuite) TestApi() {
 	form.Add("n", "1")
 	form.Add("p", "abc=")
 	req, _ = http.NewRequest("POST", "/user/1?title=title", strings.NewReader(form.Encode()))
-	req.Header.Add("Content-Type","application/x-www-form-urlencoded")
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	suite.Server.ServeHTTP(res, req)
 	assert.Equal(suite.T(), http.StatusOK, res.Code)
 	assert.Equal(suite.T(), "1", res.Body.String())
 
-
-
 	body := &bytes.Buffer{}
 	w := multipart.NewWriter(body)
-		err = w.WriteField("n", "1")
+	err = w.WriteField("n", "1")
 	assert.Nil(suite.T(), err)
 	err = w.WriteField("p", "abc=")
 	assert.Nil(suite.T(), err)
