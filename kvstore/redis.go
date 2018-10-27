@@ -12,11 +12,11 @@ import (
 )
 
 var (
-	errRedisNewConnection              = "cache(redis): new pool error"
-	errRedisPoolNotExists         = "cache(redis): pool '%s' not exists"
-	errRedisZscanCursorTypeError  = "cache(redis): zscan cursor type error"
-	errRedisZscanValueTypeError   = "cache(redis): zscan value type error"
-	errRedisZscanValueLengthError = "cache(redis): zscan value length error"
+	errRedisNewConnection         = "kvstore(redis): new pool error"
+	errRedisPoolNotExists         = "kvstore(redis): pool '%s' not exists"
+	errRedisZscanCursorTypeError  = "kvstore(redis): zscan cursor type error"
+	errRedisZscanValueTypeError   = "kvstore(redis): zscan value type error"
+	errRedisZscanValueLengthError = "kvstore(redis): zscan value length error"
 )
 
 type RedisHandler struct {
