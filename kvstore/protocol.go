@@ -10,10 +10,10 @@ import (
 )
 
 var (
-	errInitiate = "cache: initiate '%s' error"
-	errStartup  = "cache: startup '%s' error"
-	errNewConnection = "cache: new '%s' cache error"
-	errGetConnection = "cache: get '%s' cache error"
+	errInitiate = "kvstore: initiate '%s' error"
+	errStartup  = "kvstore: startup '%s' error"
+	errNewConnection = "kvstore: new '%s' kvstore error"
+	errGetConnection = "kvstore: get '%s' kvstore error"
 )
 
 func NewKvstore() *Kvstore {
@@ -30,14 +30,14 @@ type Kvstore struct {
 
 func (c *Kvstore) Initiate(ctx context.Context) (context.Context, error) {
 	var configs map[string]config.Option = map[string]config.Option{
-		"CACHE_PROVIDER":         config.Option{Type: config.String, EnvironmentKey: "CACHE_PROVIDER"},
-		"CACHE_REDIS_HOST":       config.Option{Type: config.String, EnvironmentKey: "CACHE_REDIS_HOST"},
-		"CACHE_REDIS_PORT":       config.Option{Type: config.String, EnvironmentKey: "CACHE_REDIS_PORT"},
-		"CACHE_REDIS_PASSWORD":   config.Option{Type: config.String, EnvironmentKey: "CACHE_REDIS_PASSWORD"},
-		"CACHE_REDIS_DATABASE":   config.Option{Type: config.Int, EnvironmentKey: "CACHE_REDIS_DATABASE"},
-		"CACHE_REDIS_MAX_IDLE":   config.Option{Type: config.Int, EnvironmentKey: "CACHE_REDIS_MAX_IDLE"},
-		"CACHE_REDIS_MAX_ACTIVE": config.Option{Type: config.Int, EnvironmentKey: "CACHE_REDIS_MAX_ACTIVE"},
-		"CACHE_REDIS_KEY_PREFIX": config.Option{Type: config.String, EnvironmentKey: "CACHE_REDIS_KEY_PREFIX"},
+		"KVSTORE_PROVIDER":         config.Option{Type: config.String, EnvironmentKey: "KVSTORE_PROVIDER"},
+		"KVSTORE_REDIS_HOST":       config.Option{Type: config.String, EnvironmentKey: "KVSTORE_REDIS_HOST"},
+		"KVSTORE_REDIS_PORT":       config.Option{Type: config.String, EnvironmentKey: "KVSTORE_REDIS_PORT"},
+		"KVSTORE_REDIS_PASSWORD":   config.Option{Type: config.String, EnvironmentKey: "KVSTORE_REDIS_PASSWORD"},
+		"KVSTORE_REDIS_DATABASE":   config.Option{Type: config.Int, EnvironmentKey: "KVSTORE_REDIS_DATABASE"},
+		"KVSTORE_REDIS_MAX_IDLE":   config.Option{Type: config.Int, EnvironmentKey: "KVSTORE_REDIS_MAX_IDLE"},
+		"KVSTORE_REDIS_MAX_ACTIVE": config.Option{Type: config.Int, EnvironmentKey: "KVSTORE_REDIS_MAX_ACTIVE"},
+		"KVSTORE_REDIS_KEY_PREFIX": config.Option{Type: config.String, EnvironmentKey: "KVSTORE_REDIS_KEY_PREFIX"},
 	}
 	err := c.Config.SetOptions(configs)
 	if err != nil {
@@ -51,9 +51,9 @@ func (c *Kvstore) OnStartup(ctx context.Context) (context.Context, error) {
 	if err != nil {
 		return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), c.handlerName))
 	}
-	cacheProvider := c.Config.GetString("CACHE_PROVIDER")
-	if cacheProvider != "" {
-		err = c.Use(ctx, cacheProvider)
+	kvstoreProvider := c.Config.GetString("KVSTORE_PROVIDER")
+	if kvstoreProvider != "" {
+		err = c.Use(ctx, kvstoreProvider)
 	} else {
 		err = c.Use(ctx, "redis")
 	}
@@ -88,46 +88,46 @@ func (c *Kvstore) Use(ctx context.Context, handlerName string) error {
 	return nil
 }
 func (c *Kvstore) NewConnection(ctx context.Context, name string, config map[string]interface{}) (KvstoreHandler, error) {
-	cacheHandler, err := c.GetConnection(name)
+	kvstoreHandler, err := c.GetConnection(name)
 	if err == nil {
-		return cacheHandler, nil
+		return kvstoreHandler, nil
 	}
-	if _, ok := config["CACHE_REDIS_HOST"]; !ok {
-		config["CACHE_REDIS_HOST"] = c.Config.GetString("CACHE_REDIS_HOST")
+	if _, ok := config["KVSTORE_REDIS_HOST"]; !ok {
+		config["KVSTORE_REDIS_HOST"] = c.Config.GetString("KVSTORE_REDIS_HOST")
 	}
-	if _, ok := config["CACHE_REDIS_PORT"]; !ok {
-		config["CACHE_REDIS_PORT"] = c.Config.GetString("CACHE_REDIS_PORT")
+	if _, ok := config["KVSTORE_REDIS_PORT"]; !ok {
+		config["KVSTORE_REDIS_PORT"] = c.Config.GetString("KVSTORE_REDIS_PORT")
 	}
-	if _, ok := config["CACHE_REDIS_PASSWORD"]; !ok {
-		config["CACHE_REDIS_PASSWORD"] = c.Config.GetString("CACHE_REDIS_PASSWORD")
+	if _, ok := config["KVSTORE_REDIS_PASSWORD"]; !ok {
+		config["KVSTORE_REDIS_PASSWORD"] = c.Config.GetString("KVSTORE_REDIS_PASSWORD")
 	}
-	if _, ok := config["CACHE_REDIS_DATABASE"]; !ok {
-		config["CACHE_REDIS_DATABASE"] = c.Config.GetInt("CACHE_REDIS_DATABASE")
+	if _, ok := config["KVSTORE_REDIS_DATABASE"]; !ok {
+		config["KVSTORE_REDIS_DATABASE"] = c.Config.GetInt("KVSTORE_REDIS_DATABASE")
 	}
-	if _, ok := config["CACHE_REDIS_KEY_PREFIX"]; !ok {
-		config["CACHE_REDIS_KEY_PREFIX"] = c.Config.GetString("CACHE_REDIS_KEY_PREFIX")
+	if _, ok := config["KVSTORE_REDIS_KEY_PREFIX"]; !ok {
+		config["KVSTORE_REDIS_KEY_PREFIX"] = c.Config.GetString("KVSTORE_REDIS_KEY_PREFIX")
 	}
-	if _, ok := config["CACHE_REDIS_MAX_ACTIVE"]; !ok {
-		config["CACHE_REDIS_MAX_ACTIVE"] = c.Config.GetInt("CACHE_REDIS_MAX_ACTIVE")
+	if _, ok := config["KVSTORE_REDIS_MAX_ACTIVE"]; !ok {
+		config["KVSTORE_REDIS_MAX_ACTIVE"] = c.Config.GetInt("KVSTORE_REDIS_MAX_ACTIVE")
 	}
-	if _, ok := config["CACHE_REDIS_MAX_IDLE"]; !ok {
-		config["CACHE_REDIS_MAX_IDLE"] = c.Config.GetInt("CACHE_REDIS_MAX_IDLE")
+	if _, ok := config["KVSTORE_REDIS_MAX_IDLE"]; !ok {
+		config["KVSTORE_REDIS_MAX_IDLE"] = c.Config.GetInt("KVSTORE_REDIS_MAX_IDLE")
 	}
-	cacheHandler, err = c.handler.NewConnection(ctx, name, config)
+	kvstoreHandler, err = c.handler.NewConnection(ctx, name, config)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf(errNewConnection+": "+err.Error(), name))
 	}
-	if cacheHandler == nil {
+	if kvstoreHandler == nil {
 		return nil, errors.New(fmt.Sprintf(errNewConnection+": empty pool", name))
 	}
-	return cacheHandler, nil
+	return kvstoreHandler, nil
 }
 func (c *Kvstore) GetConnection(name string) (KvstoreHandler, error) {
-	cacheHandler, err := c.handler.GetConnection(name)
+	kvstoreHandler, err := c.handler.GetConnection(name)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf(errGetConnection+": "+err.Error(), name))
 	}
-	return cacheHandler, err
+	return kvstoreHandler, err
 }
 
 type Handler interface {
@@ -165,24 +165,24 @@ type KvstoreHandler interface {
 	Sort(key interface{}, by interface{}, offest int64, count int64, asc *bool, alpha *bool, get ...interface{}) ([]string, error)
 }
 
-type cacheHandler func() Handler
+type kvstoreHandler func() Handler
 
-var cacheHandlers = make(map[string]cacheHandler)
+var kvstoreHandlers = make(map[string]kvstoreHandler)
 
-func Register(name string, cacheHandler cacheHandler) error {
-	if cacheHandler == nil {
-		return errors.New("cache: Register cache handler is nil")
+func Register(name string, kvstoreHandler kvstoreHandler) error {
+	if kvstoreHandler == nil {
+		return errors.New("kvstore: Register kvstore handler is nil")
 	}
-	if _, ok := cacheHandlers[name]; !ok {
-		cacheHandlers[name] = cacheHandler
+	if _, ok := kvstoreHandlers[name]; !ok {
+		kvstoreHandlers[name] = kvstoreHandler
 	}
 	return nil
 }
-func Use(name string) (cacheHandler, error) {
-	if _, exist := cacheHandlers[name]; !exist {
-		return nil, errors.New("cache: unknown cache " + name + " (forgotten register?)")
+func Use(name string) (kvstoreHandler, error) {
+	if _, exist := kvstoreHandlers[name]; !exist {
+		return nil, errors.New("kvstore: unknown kvstore " + name + " (forgotten register?)")
 	}
-	return cacheHandlers[name], nil
+	return kvstoreHandlers[name], nil
 }
 
 func ErrNil(err error) bool {
