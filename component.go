@@ -2,16 +2,15 @@ package ltick
 
 import (
 	"context"
-	"fmt"
 	"reflect"
 	"strings"
 
 	"github.com/fatih/structs"
 	"github.com/juju/errors"
-	"github.com/ltick/tick-framework/kvstore"
 	"github.com/ltick/tick-framework/config"
 	"github.com/ltick/tick-framework/database"
 	"github.com/ltick/tick-framework/filesystem"
+	"github.com/ltick/tick-framework/kvstore"
 	"github.com/ltick/tick-framework/logger"
 	"github.com/ltick/tick-framework/queue"
 	"github.com/ltick/tick-framework/session"
@@ -19,15 +18,16 @@ import (
 )
 
 var (
-	errComponentExists                 = "ltick: component '%s' exists"
-	errComponentNotExists              = "ltick: component '%s' not exists"
-	errRegisterComponent               = "ltick: register component '%s' error"
-	errUnregisterComponent             = "ltick: unregister component '%s' error"
-	errInjectComponent                 = "ltick: inject component '%s' field '%s' error"
-	errInjectComponentTo               = "ltick: inject component '%s' field '%s' error"
-	errUseComponent                    = "ltick: use component error"
-	errValueExists                     = "ltick: value '%s' exists"
-	errValueNotExists                  = "ltick: value '%s' not exists"
+	errComponentExists         = "ltick: component '%s' exists"
+	errComponentNotExists      = "ltick: component '%s' not exists"
+	errRegisterComponent       = "ltick: register component '%s' error"
+	errUnregisterComponent     = "ltick: unregister component '%s' error"
+	errInjectComponent         = "ltick: inject component '%s' field '%s' error"
+	errInjectComponentTo       = "ltick: inject component '%s' field '%s' error"
+	errUseComponent            = "ltick: use component '%s' error"
+	errValueExists             = "ltick: value '%s' exists"
+	errValueNotExists          = "ltick: value '%s' not exists"
+	errLoadComponentFileConfig = "ltick: load component '%s' file config  error"
 )
 
 func (r *Registry) GetComponentMap() map[string]interface{} {
@@ -76,23 +76,23 @@ func (r *Registry) UseComponent(componentNames ...string) error {
 				components = append(components, component)
 				err = r.RegisterComponent(strings.ToLower(component.Name[0:1])+component.Name[1:], component.Component, true)
 				if err != nil {
-					return fmt.Errorf(errUseComponent+": %s", component.Name, err.Error())
+					return errors.Annotatef(err, errUseComponent, component.Name)
 				}
 			}
 		}
 		if !componentExists {
-			return fmt.Errorf(errComponentNotExists, canonicalComponentName)
+			return errors.Annotatef(err, errComponentNotExists, canonicalComponentName)
 		}
 	}
 	sortedComponents := SortComponent(components)
 	for _, name := range sortedComponents {
 		component, err := r.GetComponentByName(name)
 		if err != nil {
-			return fmt.Errorf(errUseComponent+": %s", name, err.Error())
+			return errors.Annotatef(err, errUseComponent, name)
 		}
 		err = r.InjectComponentTo([]interface{}{component})
 		if err != nil {
-			return fmt.Errorf(errUseComponent+": %s", name, err.Error())
+			return errors.Annotatef(err, errUseComponent, name)
 		}
 	}
 	return nil
@@ -107,11 +107,11 @@ func (r *Registry) RegisterComponent(componentName string, component ComponentIn
 	}
 	if _, ok := r.ComponentMap[canonicalComponentName]; ok {
 		if !ignoreIfExists {
-			return fmt.Errorf(errComponentExists, canonicalComponentName)
+			return errors.Errorf(errComponentExists, canonicalComponentName)
 		}
 		err := r.UnregisterComponent(canonicalComponentName)
 		if err != nil {
-			return fmt.Errorf(errRegisterComponent+": %s", canonicalComponentName, err.Error())
+			return errors.Annotatef(err, errRegisterComponent+": %s", canonicalComponentName)
 		}
 	}
 	r.Components = append(r.Components, component)
@@ -149,7 +149,7 @@ func (r *Registry) UnregisterComponent(componentNames ...string) error {
 func (r *Registry) GetComponentByName(componentName string) (interface{}, error) {
 	canonicalComponentName := strings.ToUpper(componentName[0:1]) + componentName[1:]
 	if _, ok := r.ComponentMap[canonicalComponentName]; !ok {
-		return nil, fmt.Errorf(errComponentNotExists, canonicalComponentName)
+		return nil, errors.Errorf(errComponentNotExists, canonicalComponentName)
 	}
 	return r.ComponentMap[canonicalComponentName], nil
 }
@@ -193,7 +193,7 @@ func (r *Registry) RegisterValue(key string, value interface{}, forceOverwrites 
 		forceOverwrite = forceOverwrites[0]
 	}
 	if _, ok := r.Values[Key]; ok && !forceOverwrite {
-		return fmt.Errorf(errValueExists, Key)
+		return errors.Errorf(errValueExists, Key)
 	}
 	r.Values[Key] = value
 	return nil
@@ -205,7 +205,7 @@ func (r *Registry) UnregisterValue(keys ...string) error {
 		for _, key := range keys {
 			Key := strings.ToUpper(key[0:1]) + key[1:]
 			if _, ok := r.Values[Key]; !ok {
-				return fmt.Errorf(errValueNotExists, Key)
+				return errors.Errorf(errValueNotExists, Key)
 			}
 			delete(r.Values, Key)
 		}
@@ -216,7 +216,7 @@ func (r *Registry) UnregisterValue(keys ...string) error {
 func (r *Registry) GetValue(key string) (interface{}, error) {
 	Key := strings.ToUpper(key[0:1]) + key[1:]
 	if _, ok := r.Values[Key]; !ok {
-		return nil, fmt.Errorf(errValueNotExists, Key)
+		return nil, errors.Errorf(errValueNotExists, Key)
 	}
 	return r.Values[Key], nil
 }
@@ -260,19 +260,19 @@ func (r *Registry) InjectComponentTo(injectTargets []interface{}) error {
 						if _, ok := r.ComponentMap[f.Name()]; ok {
 							err := f.Set(r.ComponentMap[f.Name()])
 							if err != nil {
-								return fmt.Errorf(errInjectComponentTo+": %s", injectTargetValue.String(), f.Name(), err.Error())
+								return errors.Annotatef(err, errInjectComponentTo, injectTargetValue.String(), f.Name())
 							}
 							fieldInjected = true
 						}
 						if !fieldInjected {
-							return fmt.Errorf(errInjectComponentTo+": component or key not exists", injectTargetValue.String(), f.Name())
+							return errors.Errorf(errInjectComponentTo+": component or key not exists", injectTargetValue.String(), f.Name())
 						}
 					}
 				}
 				if _, ok := r.Values[f.Name()]; ok {
 					err := f.Set(r.Values[f.Name()])
 					if err != nil {
-						return fmt.Errorf(errInjectComponentTo+": %s", injectTargetValue.String(), f.Name(), err.Error())
+						return errors.Annotatef(err, errInjectComponentTo, injectTargetValue.String(), f.Name())
 					}
 				}
 			}
@@ -292,18 +292,16 @@ func (r *Registry) LoadComponentFileConfig(componentName string, configFile stri
 	// configer
 	configComponent, err := r.GetComponentByName("Config")
 	if err != nil {
-		e := errors.Annotate(err, errLoadComponentFileConfig)
-		fmt.Println(errors.ErrorStack(e))
+		return errors.Annotatef(err, errLoadComponentFileConfig, canonicalComponentName)
 	}
 	configer, ok := configComponent.(*config.Config)
 	if !ok {
-		e := errors.Annotate(errors.Errorf("invalid 'Config' component type"), errLoadComponentFileConfig)
-		fmt.Println(errors.ErrorStack(e))
+		return errors.Annotatef(errors.Errorf("invalid 'Config' component type"), errLoadComponentFileConfig, canonicalComponentName)
 	}
 	// create a Config object
 	err = configer.LoadComponentFileConfig(component, componentName, configFile, configProviders, configTag...)
 	if err != nil {
-		return fmt.Errorf(errLoadComponentFileConfig+": %s", canonicalComponentName, err.Error())
+		return errors.Annotatef(err, errLoadComponentFileConfig, canonicalComponentName)
 	}
 	return nil
 }
