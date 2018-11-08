@@ -24,7 +24,7 @@ func init() {
 
 	var config *config.Config = config.NewConfig()
 	config.Initiate(nil)
-	config.SetOptions(nil, configs)
+	config.SetOptions(configs)
 	handler.Initiate(nil, config)
 }
 

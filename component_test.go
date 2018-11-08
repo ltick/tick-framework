@@ -3,9 +3,9 @@ package ltick
 import (
 	"context"
 
+	"github.com/juju/errors"
 	"github.com/ltick/tick-framework/config"
 	"github.com/stretchr/testify/assert"
-	"github.com/juju/errors"
 )
 
 type testComponent1 struct {
