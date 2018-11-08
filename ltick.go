@@ -35,20 +35,16 @@ var (
 	errWithValues                = "ltick: with values error [key:'%s']"
 	errWithLoggers               = "ltick: with loggers error [log_name:'%s', log_file:'%s']"
 	errStartupCallback           = "ltick: startup callback error"
-	errStartupRouterCallback     = "ltick: startup router callback error"
-	errStartupRouteGroupCallback = "ltick: startup route group callback error"
 	errStartupInjectComponent    = "ltick: startup inject component error"
 	errStartupComponentInitiate  = "ltick: startup component '%s' initiate error"
 	errStartupComponentStartup   = "ltick: startup component '%s' startup error"
 	errShutdownCallback          = "ltick: shutdown callback error"
 	errShutdownComponentShutdown = "ltick: shutdown component '%s' shutdown error"
-	errSetConfigOptions          = "ltick: set config options error"
 	errLoadCachedConfig          = "ltick: load cached config error"
 	errLoadConfig                = "ltick: load config error [path:'%s', name:'%s']"
 	errLoadEnv                   = "ltick: load env error [env_prefix:'%s', binded_environment_keys:'%v']"
 	errLoadSystemConfig          = "ltick: load system config error"
 	errLoadEnvFile               = "ltick: load env file error"
-	errLoadComponentFileConfig   = "ltick: load component file config error"
 )
 
 type State int8
@@ -94,32 +90,32 @@ func NewDefault(envPrefix string, registry *Registry, options map[string]config.
 	if err != nil {
 		e := errors.Annotatef(err, errNewDefault)
 		fmt.Println(errors.ErrorStack(e))
-		return nil
+		os.Exit(1)
 	}
 	defaultDotenvFile, err := filepath.Abs(defaultDotenvPath)
 	if err != nil {
 		e := errors.Annotatef(err, errNewDefault)
 		fmt.Println(errors.ErrorStack(e))
-		return nil
+		os.Exit(1)
 	}
 	// configer
 	configComponent, err := registry.GetComponentByName("Config")
 	if err != nil {
 		e := errors.Annotate(err, errNewDefault)
 		fmt.Println(errors.ErrorStack(e))
-		return nil
+		os.Exit(1)
 	}
 	configer, ok := configComponent.(*config.Config)
 	if !ok {
 		e := errors.Annotate(errors.Errorf("invalid 'Config' component type"), errNewDefault)
 		fmt.Println(errors.ErrorStack(e))
-		return nil
+		os.Exit(1)
 	}
 	err = configer.SetOptions(options)
 	if err != nil {
 		e := errors.Annotate(err, errNewDefault)
 		fmt.Println(errors.ErrorStack(e))
-		return nil
+		os.Exit(1)
 	}
 	engine = New(defaultConfigFile, defaultDotenvFile, envPrefix, registry)
 	logHandlers := make([]*LogHanlder, 0)
@@ -199,7 +195,7 @@ func New(configPath string, dotenvFile string, envPrefix string, registry *Regis
 	if err != nil {
 		e := errors.Annotate(err, errNew)
 		fmt.Println(errors.ErrorStack(e))
-		return nil
+		os.Exit(1)
 	}
 	e = &Engine{
 		state:           STATE_INITIATE,
@@ -214,7 +210,7 @@ func New(configPath string, dotenvFile string, envPrefix string, registry *Regis
 	if err != nil {
 		e := errors.Annotate(err, errNew)
 		fmt.Println(errors.ErrorStack(e))
-		return nil
+		os.Exit(1)
 	}
 	// 模块初始化
 	componentMap := e.Registry.GetComponentMap()
@@ -223,7 +219,7 @@ func New(configPath string, dotenvFile string, envPrefix string, registry *Regis
 		if !ok {
 			e := errors.Annotate(errors.Errorf("invalid type"), errNew)
 			fmt.Println(errors.ErrorStack(e))
-			return nil
+			os.Exit(1)
 		}
 		isBuiltinComponent := false
 		canonicalName := strings.ToUpper(name[0:1]) + name[1:]
@@ -238,9 +234,14 @@ func New(configPath string, dotenvFile string, envPrefix string, registry *Regis
 			if err != nil {
 				e := errors.Annotate(err, errNew)
 				fmt.Println(errors.ErrorStack(e))
-				return nil
+				os.Exit(1)
 			}
-			e.Registry.LoadComponentFileConfig(name, configPath, make(map[string]interface{}), "components."+name)
+			err = e.Registry.LoadComponentFileConfig(name, configPath, make(map[string]interface{}), "components."+name)
+			if err != nil {
+				e := errors.Annotate(err, errNew)
+				fmt.Println(errors.ErrorStack(e))
+				os.Exit(1)
+			}
 		}
 	}
 	// 中间件初始化
@@ -249,13 +250,13 @@ func New(configPath string, dotenvFile string, envPrefix string, registry *Regis
 		if !ok {
 			e := errors.Annotate(errors.Errorf("invalid type"), errNew)
 			fmt.Println(errors.ErrorStack(e))
-			return nil
+			os.Exit(1)
 		}
 		e.Context, err = mi.Initiate(e.Context)
 		if err != nil {
 			e := errors.Annotate(err, errNew)
 			fmt.Println(errors.ErrorStack(e))
-			return nil
+			os.Exit(1)
 		}
 	}
 	// 加载系统配置
@@ -270,12 +271,12 @@ func (e *Engine) LoadSystemConfig(configPath string, envPrefix string, dotenvFil
 	if configPath == "" {
 		e := errors.Annotate(fmt.Errorf("'%s' is a empty config path", configPath), errNew)
 		fmt.Println(errors.ErrorStack(e))
-		return nil
+		os.Exit(1)
 	}
 	if !path.IsAbs(configPath) {
 		e := errors.Annotate(fmt.Errorf("'%s' is not a valid config path", configPath), errNew)
 		fmt.Println(errors.ErrorStack(e))
-		return nil
+		os.Exit(1)
 	}
 	var dotenvFile string
 	if len(dotenvFiles) > 0 {
@@ -284,13 +285,13 @@ func (e *Engine) LoadSystemConfig(configPath string, envPrefix string, dotenvFil
 	if !path.IsAbs(dotenvFile) {
 		e := errors.Annotate(fmt.Errorf("'%s' is not a valid dotenv path", dotenvFile), errNew)
 		fmt.Println(errors.ErrorStack(e))
-		return nil
+		os.Exit(1)
 	}
 	configCachedFile, err := utility.GetCachedFile(configPath)
 	if err != nil {
 		e := errors.Annotate(err, errLoadSystemConfig)
 		fmt.Println(errors.ErrorStack(e))
-		return nil
+		os.Exit(1)
 	}
 	defer configCachedFile.Close()
 	cachedConfigFilePath := configCachedFile.Name()
@@ -380,7 +381,7 @@ func (e *Engine) LoadConfig(configPath string, configName string) *Engine {
 	if configPath == "" || configName == "" {
 		e := errors.Annotatef(errors.Errorf("config_path or config_name is empty"), errLoadConfig, configPath, configPath)
 		fmt.Println(errors.ErrorStack(e))
-		return nil
+		os.Exit(1)
 	}
 	if !strings.HasPrefix(configPath, "/") {
 		configPath = strings.TrimRight(configPath, "/") + "/" + configPath
@@ -390,7 +391,7 @@ func (e *Engine) LoadConfig(configPath string, configName string) *Engine {
 		if !os.IsNotExist(err) {
 			e := errors.Annotatef(err, errLoadConfig, configPath, configPath)
 			fmt.Println(errors.ErrorStack(e))
-			return nil
+			os.Exit(1)
 		}
 	}
 	// configer
@@ -409,7 +410,7 @@ func (e *Engine) LoadConfig(configPath string, configName string) *Engine {
 	if err != nil {
 		e := errors.Annotatef(err, errLoadConfig, configPath, configPath)
 		fmt.Println(errors.ErrorStack(e))
-		return nil
+		os.Exit(1)
 	}
 	return e
 }
@@ -419,11 +420,13 @@ func (e *Engine) LoadEnv(envPrefix string) *Engine {
 	if err != nil {
 		e := errors.Annotate(err, errLoadEnv)
 		fmt.Println(errors.ErrorStack(e))
+		os.Exit(1)
 	}
 	configer, ok := configComponent.(*config.Config)
 	if !ok {
 		e := errors.Annotate(errors.Errorf("invalid 'Config' component type"), errLoadEnv)
 		fmt.Println(errors.ErrorStack(e))
+		os.Exit(1)
 	}
 	configer.SetEnvPrefix(envPrefix)
 	err = configer.LoadFromEnv()
@@ -431,10 +434,10 @@ func (e *Engine) LoadEnv(envPrefix string) *Engine {
 		if !os.IsNotExist(err) {
 			e := errors.Annotatef(err, errLoadEnv, envPrefix, configer.BindedEnvironmentKeys())
 			fmt.Println(errors.ErrorStack(e))
-			return nil
+			os.Exit(1)
 		}
 	}
-	return nil
+	return e
 }
 func (e *Engine) LoadEnvFile(envPrefix string, dotenvFile string) *Engine {
 	// configer
@@ -442,18 +445,20 @@ func (e *Engine) LoadEnvFile(envPrefix string, dotenvFile string) *Engine {
 	if err != nil {
 		e := errors.Annotate(err, errLoadEnvFile)
 		fmt.Println(errors.ErrorStack(e))
+		os.Exit(1)
 	}
 	configer, ok := configComponent.(*config.Config)
 	if !ok {
 		e := errors.Annotate(errors.Errorf("invalid 'Config' component type"), errLoadEnvFile)
 		fmt.Println(errors.ErrorStack(e))
+		os.Exit(1)
 	}
 	configer.SetEnvPrefix(envPrefix)
 	err = configer.LoadFromEnvFile(dotenvFile)
 	if err != nil {
 		e := errors.Annotatef(err, errLoadEnvFile)
 		fmt.Println(errors.ErrorStack(e))
-		return nil
+		os.Exit(1)
 	}
 	return e
 }
@@ -463,7 +468,7 @@ func (e *Engine) WithValues(values map[string]interface{}) *Engine {
 		if err != nil {
 			e := errors.Annotatef(err, errWithValues, key)
 			fmt.Println(errors.ErrorStack(e))
-			return nil
+			os.Exit(1)
 		}
 	}
 	return e
@@ -500,7 +505,7 @@ func (e *Engine) WithLoggers(handlers []*LogHanlder) *Engine {
 			if err != nil {
 				e := errors.Annotatef(err, errWithLoggers, hanlder.Name, logFilename)
 				fmt.Println(errors.ErrorStack(e))
-				return nil
+				os.Exit(1)
 			}
 			_, err = os.Stat(logFilename)
 			if err != nil {
@@ -509,12 +514,12 @@ func (e *Engine) WithLoggers(handlers []*LogHanlder) *Engine {
 					if err != nil {
 						e := errors.Annotatef(err, errWithLoggers, hanlder.Name, logFilename)
 						fmt.Println(errors.ErrorStack(e))
-						return nil
+						os.Exit(1)
 					}
 				} else {
 					e := errors.Annotatef(err, errWithLoggers, hanlder.Name, logFilename)
 					fmt.Println(errors.ErrorStack(e))
-					return nil
+					os.Exit(1)
 				}
 			}
 			logTargetProviderName := hanlder.Name + "FileTarget"
@@ -551,13 +556,13 @@ func (e *Engine) WithLoggers(handlers []*LogHanlder) *Engine {
 	if err != nil {
 		e := errors.Annotate(err, errWithLoggers)
 		fmt.Println(errors.ErrorStack(e))
-		return nil
+		os.Exit(1)
 	}
 	logger, ok := loggerComponent.(*log.Logger)
 	if !ok {
 		e := errors.Annotate(errors.Errorf("invalid 'Logger' component type"), errWithLoggers)
 		fmt.Println(errors.ErrorStack(e))
-		return nil
+		os.Exit(1)
 	}
 	configer.LoadComponentJsonConfig(logger, "Log", []byte(logConfig), logProviders)
 	for _, hanlder := range handlers {
