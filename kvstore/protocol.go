@@ -10,22 +10,21 @@ import (
 )
 
 var (
-	errInitiate = "kvstore: initiate '%s' error"
-	errStartup  = "kvstore: startup '%s' error"
+	errInitiate      = "kvstore: initiate '%s' error"
+	errStartup       = "kvstore: startup '%s' error"
 	errNewConnection = "kvstore: new '%s' kvstore error"
 	errGetConnection = "kvstore: get '%s' kvstore error"
 )
 
 func NewKvstore() *Kvstore {
-	instance := &Kvstore{
-	}
+	instance := &Kvstore{}
 	return instance
 }
 
 type Kvstore struct {
-	Config      *config.Config `inject:"true"`
-	handlerName string
-	handler     Handler
+	Config   *config.Config `inject:"true"`
+	Provider string
+	handler  Handler
 }
 
 func (c *Kvstore) Initiate(ctx context.Context) (context.Context, error) {
@@ -49,7 +48,7 @@ func (c *Kvstore) OnStartup(ctx context.Context) (context.Context, error) {
 	var err error
 	err = Register("redis", NewRedisHandler)
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), c.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), c.Provider))
 	}
 	kvstoreProvider := c.Config.GetString("KVSTORE_PROVIDER")
 	if kvstoreProvider != "" {
@@ -58,7 +57,7 @@ func (c *Kvstore) OnStartup(ctx context.Context) (context.Context, error) {
 		err = c.Use(ctx, "redis")
 	}
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), c.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), c.Provider))
 	}
 	return ctx, nil
 }
@@ -71,19 +70,19 @@ func (c *Kvstore) OnRequestStartup(ctx *routing.Context) error {
 func (c *Kvstore) OnRequestShutdown(ctx *routing.Context) error {
 	return nil
 }
-func (c *Kvstore) HandlerName() string {
-	return c.handlerName
+func (c *Kvstore) GetProvider() string {
+	return c.Provider
 }
-func (c *Kvstore) Use(ctx context.Context, handlerName string) error {
-	handler, err := Use(handlerName)
+func (c *Kvstore) Use(ctx context.Context, Provider string) error {
+	handler, err := Use(Provider)
 	if err != nil {
 		return err
 	}
-	c.handlerName = handlerName
+	c.Provider = Provider
 	c.handler = handler()
 	err = c.handler.Initiate(ctx)
 	if err != nil {
-		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), c.handlerName))
+		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), c.Provider))
 	}
 	return nil
 }

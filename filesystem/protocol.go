@@ -27,9 +27,9 @@ func NewFilesystem() *Filesystem {
 }
 
 type Filesystem struct {
-	Config      *config.Config `inject:"true"`
-	handlerName string
-	handler     Handler
+	Config   *config.Config `inject:"true"`
+	Provider string
+	handler  Handler
 }
 
 func (this *Filesystem) Initiate(ctx context.Context) (context.Context, error) {
@@ -68,12 +68,12 @@ func (this *Filesystem) OnShutdown(ctx context.Context) (context.Context, error)
 	return ctx, nil
 }
 
-func (this *Filesystem) Use(ctx context.Context, handlerName string) (err error) {
+func (this *Filesystem) Use(ctx context.Context, Provider string) (err error) {
 	var handler storageHandler
-	if handler, err = Use(handlerName); err != nil {
+	if handler, err = Use(Provider); err != nil {
 		return
 	}
-	this.handlerName = handlerName
+	this.Provider = Provider
 	this.handler = handler()
 	if err = this.handler.Initiate(ctx, this.Config); err != nil {
 		return

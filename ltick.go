@@ -119,7 +119,7 @@ func NewDefault(envPrefix string, registry *Registry, options map[string]config.
 	}
 	engine = New(defaultConfigFile, defaultDotenvFile, envPrefix, registry)
 	logHandlers := make([]*LogHanlder, 0)
-	logTargetsConfig := configer.GetStringMap("components.log.targets")
+	logTargetsConfig := configer.GetStringMap("defaults.log.targets")
 	for logName, logTargetInterface := range logTargetsConfig {
 		logTarget := logTargetInterface.(map[string]interface{})
 		logTargetTypeInterface, ok := logTarget["type"]
@@ -240,7 +240,6 @@ func New(configPath string, dotenvFile string, envPrefix string, registry *Regis
 			if err != nil {
 				e := errors.Annotate(err, errNew)
 				fmt.Println(errors.ErrorStack(e))
-				os.Exit(1)
 			}
 		}
 	}

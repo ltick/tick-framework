@@ -157,18 +157,18 @@ func NewLogger() *Logger {
 }
 
 type Logger struct {
-	handlerName string
+	Provider string
 	handler     Handler
 }
 
 func (l *Logger) Initiate(ctx context.Context) (context.Context, error) {
 	err := Register("tick", NewTickHandler)
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), l.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), l.Provider))
 	}
 	err = l.Use(ctx, "tick")
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), l.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), l.Provider))
 	}
 	return ctx, nil
 }
@@ -178,19 +178,19 @@ func (l *Logger) OnStartup(ctx context.Context) (context.Context, error) {
 func (l *Logger) OnShutdown(ctx context.Context) (context.Context, error) {
 	return ctx, nil
 }
-func (l *Logger) HandlerName() string {
-	return l.handlerName
+func (l *Logger) GetProvider() string {
+	return l.Provider
 }
-func (l *Logger) Use(ctx context.Context, handlerName string) error {
-	handler, err := Use(handlerName)
+func (l *Logger) Use(ctx context.Context, Provider string) error {
+	handler, err := Use(Provider)
 	if err != nil {
 		return err
 	}
-	l.handlerName = handlerName
+	l.Provider = Provider
 	l.handler = handler()
 	err = l.handler.Initiate(ctx)
 	if err != nil {
-		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), l.handlerName))
+		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), l.Provider))
 	}
 	return nil
 }

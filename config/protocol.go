@@ -54,7 +54,7 @@ func NewConfig() *Config {
 }
 
 type Config struct {
-	handlerName string
+	Provider string
 	handler     Handler
 
 	options               map[string]Option
@@ -67,11 +67,11 @@ func (c *Config) Initiate(ctx context.Context) (context.Context, error) {
 	}
 	err := Register("viper", NewViperHandler)
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), c.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), c.Provider))
 	}
 	err = c.Use(ctx, "viper")
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), c.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), c.Provider))
 	}
 	return ctx, nil
 }
@@ -81,19 +81,19 @@ func (c *Config) OnStartup(ctx context.Context) (context.Context, error) {
 func (c *Config) OnShutdown(ctx context.Context) (context.Context, error) {
 	return ctx, nil
 }
-func (c *Config) HandlerName() string {
-	return c.handlerName
+func (c *Config) GetProvider() string {
+	return c.Provider
 }
-func (c *Config) Use(ctx context.Context, handlerName string) error {
-	handler, err := Use(handlerName)
+func (c *Config) Use(ctx context.Context, Provider string) error {
+	handler, err := Use(Provider)
 	if err != nil {
 		return err
 	}
-	c.handlerName = handlerName
+	c.Provider = Provider
 	c.handler = handler()
 	err = c.handler.Initiate(ctx)
 	if err != nil {
-		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), c.handlerName))
+		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), c.Provider))
 	}
 	return nil
 }
