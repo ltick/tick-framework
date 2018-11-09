@@ -14,7 +14,6 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -57,10 +56,10 @@ const (
 
 type (
 	Engine struct {
-		state           State
-		executeFile     string
-		systemLogWriter io.Writer
-		callback        Callback
+		state       State
+		executeFile string
+		logWriter   io.Writer
+		callback    Callback
 
 		Registry  *Registry
 		Context   context.Context
@@ -70,127 +69,11 @@ type (
 		OnStartup(*Engine) error  // Execute On After All Engine Component OnStartup
 		OnShutdown(*Engine) error // Execute On After All Engine Component OnShutdown
 	}
-	LogHanlder struct {
-		Name      string
-		Formatter log.Formatter
-		Type      log.Type
-		Filename  string
-		Writer    log.Writer // the writer name of writer (stdout, stderr, discard)
-		MaxLevel  log.Level
-	}
 )
 
-var defaultConfigPath = "etc/ltick.json"
-var defaultDotenvPath = ".env"
-var defaultConfigReloadTime = 120 * time.Second
 var configPlaceholdRegExp = regexp.MustCompile(`%\w+%`)
 
-func NewDefault(envPrefix string, registry *Registry, options map[string]config.Option) (engine *Engine) {
-	defaultConfigFile, err := filepath.Abs(defaultConfigPath)
-	if err != nil {
-		e := errors.Annotatef(err, errNewDefault)
-		fmt.Println(errors.ErrorStack(e))
-		os.Exit(1)
-	}
-	defaultDotenvFile, err := filepath.Abs(defaultDotenvPath)
-	if err != nil {
-		e := errors.Annotatef(err, errNewDefault)
-		fmt.Println(errors.ErrorStack(e))
-		os.Exit(1)
-	}
-	// configer
-	configComponent, err := registry.GetComponentByName("Config")
-	if err != nil {
-		e := errors.Annotate(err, errNewDefault)
-		fmt.Println(errors.ErrorStack(e))
-		os.Exit(1)
-	}
-	configer, ok := configComponent.(*config.Config)
-	if !ok {
-		e := errors.Annotate(errors.Errorf("invalid 'Config' component type"), errNewDefault)
-		fmt.Println(errors.ErrorStack(e))
-		os.Exit(1)
-	}
-	err = configer.SetOptions(options)
-	if err != nil {
-		e := errors.Annotate(err, errNewDefault)
-		fmt.Println(errors.ErrorStack(e))
-		os.Exit(1)
-	}
-	engine = New(defaultConfigFile, defaultDotenvFile, envPrefix, registry)
-	logHandlers := make([]*LogHanlder, 0)
-	logTargetsConfig := configer.GetStringMap("defaults.log.targets")
-	for logName, logTargetInterface := range logTargetsConfig {
-		logTarget := logTargetInterface.(map[string]interface{})
-		logTargetTypeInterface, ok := logTarget["type"]
-		if ok {
-			logTargetType, ok := logTargetTypeInterface.(string)
-			if ok {
-				logTargetMaxLevel := log.LevelDebug
-				for level, levelName := range log.LevelNames {
-					if levelName == logTarget["maxlevel"] {
-						logTargetMaxLevel = level
-						break
-					}
-				}
-				switch log.StringToType(logTargetType) {
-				case log.TypeFile:
-					logTargetFormatterInterface, ok := logTarget["formatter"]
-					if !ok {
-						continue
-					}
-					logTargetFormatter, ok := logTargetFormatterInterface.(string)
-					if !ok {
-						continue
-					}
-					logTargetFilenameInterface, ok := logTarget["filename"]
-					if !ok {
-						continue
-					}
-					logTargetFilename, ok := logTargetFilenameInterface.(string)
-					if !ok {
-						continue
-					}
-					logHandlers = append(logHandlers, &LogHanlder{
-						Name:      logName,
-						Type:      log.TypeFile,
-						Formatter: log.StringToFormatter(logTargetFormatter),
-						Filename:  logTargetFilename,
-						MaxLevel:  logTargetMaxLevel,
-					})
-				case log.TypeConsole:
-					logTargetFormatterInterface, ok := logTarget["formatter"]
-					if !ok {
-						continue
-					}
-					logTargetFormatter, ok := logTargetFormatterInterface.(string)
-					if !ok {
-						continue
-					}
-					logTargetWriterInterface, ok := logTarget["writer"]
-					if !ok {
-						continue
-					}
-					logTargetWriter, ok := logTargetWriterInterface.(string)
-					if !ok {
-						continue
-					}
-					logHandlers = append(logHandlers, &LogHanlder{
-						Name:      logName,
-						Type:      log.TypeConsole,
-						Formatter: log.StringToFormatter(logTargetFormatter),
-						Writer:    log.StringToWriter(logTargetWriter),
-						MaxLevel:  logTargetMaxLevel,
-					})
-				}
-			}
-		}
-	}
-	engine.WithLoggers(logHandlers)
-	return engine
-}
-
-func New(configPath string, dotenvFile string, envPrefix string, registry *Registry) (e *Engine) {
+func New(configPath string, dotenvFile string, envPrefix string, registry *Registry, options map[string]config.Option) (e *Engine) {
 	executeFile, err := exec.LookPath(os.Args[0])
 	if err != nil {
 		e := errors.Annotate(err, errNew)
@@ -198,12 +81,12 @@ func New(configPath string, dotenvFile string, envPrefix string, registry *Regis
 		os.Exit(1)
 	}
 	e = &Engine{
-		state:           STATE_INITIATE,
-		executeFile:     executeFile,
-		systemLogWriter: os.Stdout,
-		Registry:        registry,
-		Context:         context.Background(),
-		ServerMap:       make(map[string]*Server, 0),
+		state:       STATE_INITIATE,
+		executeFile: executeFile,
+		logWriter:   os.Stdout,
+		Registry:    registry,
+		Context:     context.Background(),
+		ServerMap:   make(map[string]*Server, 0),
 	}
 	// 注入模块
 	err = e.Registry.InjectComponent()
@@ -236,11 +119,6 @@ func New(configPath string, dotenvFile string, envPrefix string, registry *Regis
 				fmt.Println(errors.ErrorStack(e))
 				os.Exit(1)
 			}
-			err = e.Registry.LoadComponentFileConfig(name, configPath, make(map[string]interface{}), "components."+name)
-			if err != nil {
-				e := errors.Annotate(err, errNew)
-				fmt.Println(errors.ErrorStack(e))
-			}
 		}
 	}
 	// 中间件初始化
@@ -257,6 +135,25 @@ func New(configPath string, dotenvFile string, envPrefix string, registry *Regis
 			fmt.Println(errors.ErrorStack(e))
 			os.Exit(1)
 		}
+	}
+	// configer
+	configComponent, err := registry.GetComponentByName("Config")
+	if err != nil {
+		e := errors.Annotate(err, errNewDefault)
+		fmt.Println(errors.ErrorStack(e))
+		os.Exit(1)
+	}
+	configer, ok := configComponent.(*config.Config)
+	if !ok {
+		e := errors.Annotate(errors.Errorf("invalid 'Config' component type"), errNewDefault)
+		fmt.Println(errors.ErrorStack(e))
+		os.Exit(1)
+	}
+	err = configer.SetOptions(options)
+	if err != nil {
+		e := errors.Annotate(err, errNewDefault)
+		fmt.Println(errors.ErrorStack(e))
+		os.Exit(1)
 	}
 	// 加载系统配置
 	if dotenvFile != "" {
@@ -411,6 +308,13 @@ func (e *Engine) LoadConfig(configPath string, configName string) *Engine {
 		fmt.Println(errors.ErrorStack(e))
 		os.Exit(1)
 	}
+	for _, name := range e.Registry.GetSortedComponentName() {
+		err = e.Registry.ConfigureFileConfig(name, configer.ConfigFileUsed(), make(map[string]interface{}))
+		if err != nil {
+			e := errors.Annotate(err, errNew)
+			fmt.Println(errors.ErrorStack(e))
+		}
+	}
 	return e
 }
 func (e *Engine) LoadEnv(envPrefix string) *Engine {
@@ -494,104 +398,18 @@ func (e *Engine) GetLogger(name string) (*libLog.Logger, error) {
 	}
 	return logger, nil
 }
-func (e *Engine) WithLoggers(handlers []*LogHanlder) *Engine {
-	var logProviders map[string]interface{} = make(map[string]interface{})
-	logTargetProviderConfigs := make([]string, len(handlers))
-	for index, hanlder := range handlers {
-		switch hanlder.Type {
-		case log.TypeFile:
-			logFilename, err := filepath.Abs(hanlder.Filename)
-			if err != nil {
-				e := errors.Annotatef(err, errWithLoggers, hanlder.Name, logFilename)
-				fmt.Println(errors.ErrorStack(e))
-				os.Exit(1)
-			}
-			_, err = os.Stat(logFilename)
-			if err != nil {
-				if os.IsNotExist(err) {
-					_, err = os.Create(logFilename)
-					if err != nil {
-						e := errors.Annotatef(err, errWithLoggers, hanlder.Name, logFilename)
-						fmt.Println(errors.ErrorStack(e))
-						os.Exit(1)
-					}
-				} else {
-					e := errors.Annotatef(err, errWithLoggers, hanlder.Name, logFilename)
-					fmt.Println(errors.ErrorStack(e))
-					os.Exit(1)
-				}
-			}
-			logTargetProviderName := hanlder.Name + "FileTarget"
-			logProviders[logTargetProviderName] = log.NewFileTarget
-			logTargetProviderConfigs[index] = `"` + hanlder.Name + `":{"type": "` + logTargetProviderName + `","Filename":"` + logFilename + `","Rotate":true,"MaxBytes":` + strconv.Itoa(1<<22) + `}`
-			e.SystemLog("ltick: register log [name: '" + hanlder.Name + "', target: 'file', file: '" + logFilename + "']")
-		case log.TypeConsole:
-			logWriter := hanlder.Writer
-			logTargetProviderName := hanlder.Name + "ConsoleTarget"
-			logProviders[logTargetProviderName] = log.NewConsoleTarget
-			logTargetProviderConfigs[index] = `"` + hanlder.Name + `":{"type": "` + logTargetProviderName + `","Writer":"` + logWriter.String() + `"}`
-			index++
-			e.SystemLog("ltick: register log [name: '" + hanlder.Name + "', target:'console', writer:'" + logWriter.String() + "']")
-		}
-	}
-	logConfig := `{`
-	if len(logTargetProviderConfigs) > 0 {
-		logConfig = logConfig + `"Targets": {` + strings.Join(logTargetProviderConfigs, ",") + `}`
-	}
-	logConfig = logConfig + `}`
-	// configer
-	configComponent, err := e.Registry.GetComponentByName("Config")
-	if err != nil {
-		e := errors.Annotate(err, errWithLoggers)
-		fmt.Println(errors.ErrorStack(e))
-	}
-	configer, ok := configComponent.(*config.Config)
-	if !ok {
-		e := errors.Annotate(errors.Errorf("invalid 'Config' component type"), errWithLoggers)
-		fmt.Println(errors.ErrorStack(e))
-	}
-	// logger
-	loggerComponent, err := e.Registry.GetComponentByName("Log")
-	if err != nil {
-		e := errors.Annotate(err, errWithLoggers)
-		fmt.Println(errors.ErrorStack(e))
-		os.Exit(1)
-	}
-	logger, ok := loggerComponent.(*log.Logger)
-	if !ok {
-		e := errors.Annotate(errors.Errorf("invalid 'Logger' component type"), errWithLoggers)
-		fmt.Println(errors.ErrorStack(e))
-		os.Exit(1)
-	}
-	configer.LoadComponentJsonConfig(logger, "Log", []byte(logConfig), logProviders)
-	for _, hanlder := range handlers {
-		logger.NewLogger(hanlder.Name)
-		switch hanlder.Formatter {
-		case log.FormatterRaw:
-			logger.SetLoggerFormatter(hanlder.Name, log.RawLogFormatter())
-		case log.FormatterSys:
-			logger.SetLoggerFormatter(hanlder.Name, log.SysLogFormatter())
-		case log.FormatterDefault:
-			logger.SetLoggerFormatter(hanlder.Name, log.DefaultLogFormatter())
-		}
-		logger.SetLoggerTarget(hanlder.Name, hanlder.Name)
-		logger.SetLoggerMaxLevel(hanlder.Name, hanlder.MaxLevel)
-		logger.OpenLogger(hanlder.Name)
-	}
-	return e
+func (e *Engine) SetLogWriter(logWriter io.Writer) {
+	e.logWriter = logWriter
 }
-func (e *Engine) SetSystemLogWriter(systemLogWriter io.Writer) {
-	e.systemLogWriter = systemLogWriter
-}
-func (e *Engine) SystemLog(args ...interface{}) {
-	fmt.Fprintln(e.systemLogWriter, args...)
+func (e *Engine) Log(args ...interface{}) {
+	fmt.Fprintln(e.logWriter, args...)
 }
 func (e *Engine) Startup() (err error) {
 	if e.state != STATE_INITIATE {
 		return nil
 	}
-	e.SystemLog("ltick: Execute file \"" + e.executeFile + "\"")
-	e.SystemLog("ltick: Startup")
+	e.Log("ltick: Execute file \"" + e.executeFile + "\"")
+	e.Log("ltick: Startup")
 	if e.callback != nil {
 		err = e.Registry.InjectComponentTo([]interface{}{e.callback})
 		if err != nil {
@@ -688,7 +506,7 @@ func (e *Engine) Shutdown() (err error) {
 	if e.state != STATE_STARTUP {
 		return nil
 	}
-	e.SystemLog("ltick: Shutdown")
+	e.Log("ltick: Shutdown")
 	sortedComponenetName := e.Registry.GetSortedComponentName()
 	for index, c := range e.Registry.GetSortedComponents() {
 		component, ok := c.(ComponentInterface)
@@ -723,12 +541,12 @@ func (e *Engine) ListenAndServe() {
 			}
 		}
 	} else {
-		e.SystemLog("ltick: Server not set")
+		e.Log("ltick: Server not set")
 	}
 }
 
 func (e *Engine) ServerListenAndServe(server *Server) {
-	e.SystemLog("ltick: Server start listen ", server.Port, "...")
+	e.Log("ltick: Server start listen ", server.Port, "...")
 	g := graceful.New().Server(
 		&http.Server{
 			Addr:    fmt.Sprintf(":%d", server.Port),
@@ -736,11 +554,11 @@ func (e *Engine) ServerListenAndServe(server *Server) {
 		}).Timeout(server.gracefulStopTimeout).Build()
 	if err := g.ListenAndServe(); err != nil {
 		if opErr, ok := err.(*net.OpError); !ok || (ok && opErr.Op != "accept") {
-			e.SystemLog("ltick: Server stop error: ", err.Error())
+			e.Log("ltick: Server stop error: ", err.Error())
 			return
 		}
 	}
-	e.SystemLog("ltick: Server stop listen ", server.Port, "...")
+	e.Log("ltick: Server stop listen ", server.Port, "...")
 }
 
 func (e *Engine) SetContextValue(key, val interface{}) {

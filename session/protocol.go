@@ -119,16 +119,6 @@ func (s *Session) Initiate(ctx context.Context) (context.Context, error) {
 }
 
 func (s *Session) OnStartup(ctx context.Context) (context.Context, error) {
-	if s.DebugLog != nil {
-		debugLog = s.DebugLog
-	} else {
-		debugLog = libUtility.DefaultLogFunc
-	}
-	if s.SystemLog != nil {
-		systemLog = s.SystemLog
-	} else {
-		systemLog = libUtility.DefaultLogFunc
-	}
 	if s.Cache == nil {
 		return ctx, errors.New(errMissCache)
 	}

@@ -56,13 +56,13 @@ func TestFieldvalidate(t *testing.T) {
 	if x, ok := a.tags[KEY_LEN]; !ok || x != "3:6" {
 		t.Fatal("wrong value", x, ok)
 	}
-	if err := a.validate(a.rawValue); err == nil || err.Error() != "This is a custom error!" {
+	if err := a.validate(reflect.ValueOf(a.rawValue)); err == nil || err.Error() != "This is a custom error!" {
 		t.Fatal("should not validate")
 	}
-	if err := a.validate("abc"); err != nil {
+	if err := a.validate(reflect.ValueOf("abc")); err != nil {
 		t.Fatal("should validate", err)
 	}
-	if err := a.validate("abcdefg"); err == nil || err.Error() != "This is a custom error!" {
+	if err := a.validate(reflect.ValueOf("abcdefg")); err == nil || err.Error() != "This is a custom error!" {
 		t.Fatal("should not validate")
 	}
 
@@ -70,13 +70,13 @@ func TestFieldvalidate(t *testing.T) {
 	if x := len(b.tags); x != 2 {
 		t.Fatal("wrong len", x)
 	}
-	if err := b.validate(b.rawValue); err == nil || !strings.Contains(err.Error(), "small") {
+	if err := b.validate(reflect.ValueOf(b.rawValue)); err == nil || !strings.Contains(err.Error(), "small") {
 		t.Fatal("should not validate")
 	}
-	if err := b.validate(10); err != nil {
+	if err := b.validate(reflect.ValueOf(10)); err != nil {
 		t.Fatal("should validate", err)
 	}
-	if err := b.validate(21); err == nil || !strings.Contains(err.Error(), "bigger") {
+	if err := b.validate(reflect.ValueOf(21)); err == nil || !strings.Contains(err.Error(), "bigger") {
 		t.Fatal("should not validate")
 	}
 
@@ -84,13 +84,13 @@ func TestFieldvalidate(t *testing.T) {
 	if x := len(c.tags); x != 3 {
 		t.Fatal("wrong len", x)
 	}
-	if err := c.validate(c.rawValue); err != nil {
+	if err := c.validate(reflect.ValueOf(c.rawValue)); err != nil {
 		t.Fatal("should validate")
 	}
-	if err := c.validate("a"); err != nil {
+	if err := c.validate(reflect.ValueOf("a")); err != nil {
 		t.Fatal("should validate", err)
 	}
-	if err := c.validate("abcde"); err == nil || !strings.Contains(err.Error(), "the length must be no more than") {
+	if err := c.validate(reflect.ValueOf("abcde")); err == nil || !strings.Contains(err.Error(), "the length must be no more than") {
 		t.Fatal("should not validate")
 	}
 
@@ -98,10 +98,10 @@ func TestFieldvalidate(t *testing.T) {
 	if x := len(d.tags); x != 2 {
 		t.Fatal("wrong len", x)
 	}
-	if err := d.validate("gggg@gmail.com"); err != nil {
+	if err := d.validate(reflect.ValueOf("gggg@gmail.com")); err != nil {
 		t.Fatal("should validate", err)
 	}
-	if err := d.validate("www.google.com"); err == nil || !strings.Contains(err.Error(), "must be in a valid format") {
+	if err := d.validate(reflect.ValueOf("www.google.com")); err == nil || !strings.Contains(err.Error(), "must be in a valid format") {
 		t.Fatal("should not validate", err)
 	}
 }

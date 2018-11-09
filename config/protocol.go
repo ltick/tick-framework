@@ -2,14 +2,13 @@ package config
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"os"
 	"time"
 
 	"github.com/go-ozzo/ozzo-config"
 	"github.com/joho/godotenv"
 	_ "github.com/joho/godotenv/autoload"
+	"github.com/juju/errors"
 )
 
 var (
@@ -55,7 +54,7 @@ func NewConfig() *Config {
 
 type Config struct {
 	Provider string
-	handler     Handler
+	handler  Handler
 
 	options               map[string]Option
 	bindedEnvironmentKeys []string
@@ -67,11 +66,11 @@ func (c *Config) Initiate(ctx context.Context) (context.Context, error) {
 	}
 	err := Register("viper", NewViperHandler)
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), c.Provider))
+		return ctx, errors.Annotatef(err, errInitiate, c.Provider)
 	}
 	err = c.Use(ctx, "viper")
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), c.Provider))
+		return ctx, errors.Annotatef(err, errInitiate, c.Provider)
 	}
 	return ctx, nil
 }
@@ -93,7 +92,7 @@ func (c *Config) Use(ctx context.Context, Provider string) error {
 	c.handler = handler()
 	err = c.handler.Initiate(ctx)
 	if err != nil {
-		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), c.Provider))
+		return errors.Annotatef(err, errInitiate, c.Provider)
 	}
 	return nil
 }
@@ -130,7 +129,7 @@ func (c *Config) Callbacks(ctx context.Context, callbacks map[string]Callback) (
 			if value != nil {
 				value, err := callback(ctx, value)
 				if err != nil {
-					return ctx, fmt.Errorf("config: '%s' refresh error: callback error: %s", key, err.Error())
+					return ctx, errors.Annotatef(err, "config: callback '%s' error:", key)
 				}
 				c.SetValue(key, value)
 			}
@@ -139,44 +138,44 @@ func (c *Config) Callbacks(ctx context.Context, callbacks map[string]Callback) (
 	return ctx, nil
 }
 
-func (c *Config) LoadComponentFileConfig(component interface{}, componentName string, configFile string, configProviders map[string]interface{}, configTag ...string) (err error) {
+func (c *Config) ConfigureFileConfig(target interface{}, configFile string, configProviders map[string]interface{}, configTag ...string) (err error) {
 	oc := config.New()
 	err = oc.Load(configFile)
 	if err != nil {
-		return errors.New(fmt.Sprintf("config: component '%s' load config file '%s' error '%s'", componentName, configFile, err.Error()))
+		return errors.Annotatef(err, "config: load config file '%s'", configFile)
 	}
 	if len(configProviders) > 0 {
 		for configProviderName, configProvider := range configProviders {
 			err = oc.Register(configProviderName, configProvider)
 			if err != nil {
-				return errors.New(fmt.Sprintf("config: component '%s' register config provider '%s' error '%s'", componentName, configProviderName, err.Error()))
+				return errors.Annotatef(err, "config: register config provider '%s'", configProviderName)
 			}
 		}
 	}
-	err = oc.Configure(component, configTag...)
+	err = oc.Configure(target, configTag...)
 	if err != nil {
-		return errors.New(fmt.Sprintf("config: component '%s' configure error '%s'", componentName, err.Error()))
+		return errors.Annotatef(err, "config: configure '%v' error", target)
 	}
 	return nil
 }
 
-func (c *Config) LoadComponentJsonConfig(component interface{}, componentName string, configData []byte, configProviders map[string]interface{}, configTag ...string) (err error) {
+func (c *Config) ConfigureJsonConfig(target interface{}, configData []byte, configProviders map[string]interface{}, configTag ...string) (err error) {
 	oc := config.New()
 	err = oc.LoadJSON(configData)
 	if err != nil {
-		return errors.New(fmt.Sprintf("config: component '%s' load config '%s' error '%s'", componentName, configData, err.Error()))
+		return errors.Annotatef(err, "config: load config '%s' error", configData)
 	}
 	if len(configProviders) > 0 {
 		for configProviderName, configProvider := range configProviders {
 			err = oc.Register(configProviderName, configProvider)
 			if err != nil {
-				return errors.New(fmt.Sprintf("config: component '%s' register config provider '%s' error '%s'", componentName, configProviderName, err.Error()))
+				return errors.Annotatef(err, "config: register config provider '%s' error", configProviderName)
 			}
 		}
 	}
-	err = oc.Configure(component, configTag...)
+	err = oc.Configure(target, configTag...)
 	if err != nil {
-		return errors.New(fmt.Sprintf("config: component '%s' configure error '%s'", componentName, err.Error()))
+		return errors.Annotatef(err, "config: configure '%s' error", target)
 	}
 	return nil
 }
@@ -185,7 +184,7 @@ func (c *Config) LoadFromConfigPath(configName string) error {
 	c.handler.SetConfigName(configName)
 	err := c.handler.ReadInConfig()
 	if err != nil {
-		return fmt.Errorf(errLoadFromConfigPath+": %s", err.Error())
+		return errors.Annotatef(err, errLoadFromConfigPath)
 	}
 	return nil
 }
@@ -193,7 +192,7 @@ func (c *Config) LoadFromConfigFile(configFile string) error {
 	c.handler.SetConfigFile(configFile)
 	err := c.handler.ReadInConfig()
 	if err != nil {
-		return fmt.Errorf(errLoadFromConfigFile+": %s", err.Error())
+		return errors.Annotatef(err, errLoadFromConfigFile)
 	}
 	return nil
 }
@@ -205,7 +204,7 @@ func (c *Config) LoadFromEnv() error {
 		if option.EnvironmentKey != "" {
 			err := c.handler.BindEnv(option.EnvironmentKey)
 			if err != nil {
-				return fmt.Errorf(errLoadFromEnv+": [key:'%s', env_key:'%s', error:'%s']", key, option.EnvironmentKey, err.Error())
+				return errors.Annotatef(err, errLoadFromEnv+": [key:'%s', env_key:'%s']", key, option.EnvironmentKey)
 			}
 			c.bindedEnvironmentKeys = append(c.bindedEnvironmentKeys, option.EnvironmentKey)
 		}
@@ -217,16 +216,16 @@ func (c *Config) LoadFromEnvFile(dotEnvFile string) error {
 		_, err := os.Stat(dotEnvFile)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return fmt.Errorf(errLoadFromEnvFile+": %s", err.Error())
+				return errors.Annotatef(err, errLoadFromEnvFile)
 			}
 		}
 		err = godotenv.Load(dotEnvFile)
 		if err != nil {
-			return fmt.Errorf(errLoadFromEnvFile+": %s", err.Error())
+			return errors.Annotatef(err, errLoadFromEnvFile)
 		}
 		err = c.LoadFromEnv()
 		if err != nil {
-			return fmt.Errorf(errLoadFromEnvFile+": %s", err.Error())
+			return errors.Annotatef(err, errLoadFromEnvFile)
 		}
 	}
 	return nil

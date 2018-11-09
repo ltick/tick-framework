@@ -122,10 +122,10 @@ func (suite *TestSuite) TestMiddleware() {
 	assert.Nil(suite.T(), err)
 	err = r.RegisterMiddleware("testMiddleware2", &testMiddleware2{})
 	assert.Nil(suite.T(), err)
-	a := New(suite.configFile, suite.dotenvFile, "LTICK", r).
+	a := New(suite.configFile, suite.dotenvFile, "LTICK", r, configs).
 		WithCallback(&TestCallback{}).
 		WithValues(values)
-	a.SetSystemLogWriter(ioutil.Discard)
+	a.SetLogWriter(ioutil.Discard)
 	a.SetContextValue("output", "")
 
 	router := &ServerRouter{
@@ -136,7 +136,8 @@ func (suite *TestSuite) TestMiddleware() {
 		routes: make([]*ServerRouterRoute, 0),
 		proxys: make([]*ServerRouterProxy, 0),
 	}
-	srv := a.NewServer("test", 8080, 30*time.Second, router)
+	srv := NewServer(8080, 30*time.Second, router)
+	a.SetServer("test", srv)
 	rg := srv.AddRouteGroup("/").WithCallback(&TestRequestCallback{})
 	assert.NotNil(suite.T(), rg)
 	rg.AddRoute("GET", "test", func(c *routing.Context) error {

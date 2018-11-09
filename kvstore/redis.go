@@ -34,67 +34,67 @@ func (this *RedisHandler) Initiate(ctx context.Context) error {
 
 func (this *RedisHandler) NewConnection(ctx context.Context, name string, config map[string]interface{}) (KvstoreHandler, error) {
 	pool := &RedisPool{}
-	configHost := config["CACHE_REDIS_HOST"]
+	configHost := config["KVSTORE_REDIS_HOST"]
 	if configHost != nil {
 		host, ok := configHost.(string)
 		if ok {
 			pool.Host = host
 		} else {
-			return nil, errors.New(errRedisNewConnection + ": CACHE_REDIS_HOST data type must be string")
+			return nil, errors.New(errRedisNewConnection + ": KVSTORE_REDIS_HOST data type must be string")
 		}
 	}
-	configPort := config["CACHE_REDIS_PORT"]
+	configPort := config["KVSTORE_REDIS_PORT"]
 	if configPort != nil {
 		port, ok := configPort.(string)
 		if ok {
 			pool.Port = port
 		} else {
-			return nil, errors.New(errRedisNewConnection + ": CACHE_REDIS_PORT data type must be string")
+			return nil, errors.New(errRedisNewConnection + ": KVSTORE_REDIS_PORT data type must be string")
 		}
 	}
-	configPassword := config["CACHE_REDIS_PASSWORD"]
+	configPassword := config["KVSTORE_REDIS_PASSWORD"]
 	if configPassword != nil {
 		password, ok := configPassword.(string)
 		if ok {
 			pool.Password = password
 		} else {
-			return nil, errors.New(errRedisNewConnection + ": CACHE_REDIS_PASSWORD data type must be string")
+			return nil, errors.New(errRedisNewConnection + ": KVSTORE_REDIS_PASSWORD data type must be string")
 		}
 	}
-	configDatabase := config["CACHE_REDIS_DATABASE"]
+	configDatabase := config["KVSTORE_REDIS_DATABASE"]
 	if configDatabase != nil {
 		database, ok := configDatabase.(int)
 		if ok {
 			pool.Database = database
 		} else {
-			return nil, errors.New(errRedisNewConnection + ": CACHE_REDIS_DATABASE data type must be int")
+			return nil, errors.New(errRedisNewConnection + ": KVSTORE_REDIS_DATABASE data type must be int")
 		}
 	}
-	configKeyPrefix := config["CACHE_REDIS_KEY_PREFIX"]
+	configKeyPrefix := config["KVSTORE_REDIS_KEY_PREFIX"]
 	if configKeyPrefix != nil {
 		keyPrefix, ok := configKeyPrefix.(string)
 		if ok {
 			pool.KeyPrefix = keyPrefix
 		} else {
-			return nil, errors.New(errRedisNewConnection + ": CACHE_REDIS_KEY_PREFIX data type must be string")
+			return nil, errors.New(errRedisNewConnection + ": KVSTORE_REDIS_KEY_PREFIX data type must be string")
 		}
 	}
-	configMaxActive := config["CACHE_REDIS_MAX_ACTIVE"]
+	configMaxActive := config["KVSTORE_REDIS_MAX_ACTIVE"]
 	if configMaxActive != nil {
 		maxActive, ok := configMaxActive.(int)
 		if ok {
 			pool.MaxActive = maxActive
 		} else {
-			return nil, errors.New(errRedisNewConnection + ": CACHE_REDIS_MAX_ACTIVE data type must be int")
+			return nil, errors.New(errRedisNewConnection + ": KVSTORE_REDIS_MAX_ACTIVE data type must be int")
 		}
 	}
-	configMaxIdle := config["CACHE_REDIS_MAX_IDLE"]
+	configMaxIdle := config["KVSTORE_REDIS_MAX_IDLE"]
 	if configMaxIdle != nil {
 		maxIdle, ok := configMaxIdle.(int)
 		if ok {
 			pool.MaxIdle = maxIdle
 		} else {
-			return nil, errors.New(errRedisNewConnection + ": CACHE_REDIS_MAX_IDLE data type must be int")
+			return nil, errors.New(errRedisNewConnection + ": KVSTORE_REDIS_MAX_IDLE data type must be int")
 		}
 	}
 	if pool.Host != "" {

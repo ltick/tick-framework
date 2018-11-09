@@ -3,25 +3,27 @@ package log
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"sync"
 
+	"github.com/juju/errors"
 	libLogger "github.com/ltick/tick-log"
 )
 
 var (
-	errGetLogger = "logger: get '%s' logger error"
-	errGetLoggerTarget = "logger: get '%s' logger target error"
+	errGetLogger            = "logger: get '%s' logger error"
+	errGetLoggerTarget      = "logger: get '%s' logger target error"
+	errRegisterLoggerTarget = "logger: register '%s' logger target error"
 )
+
 func NewTickHandler() Handler {
 	return &TickHandler{}
 }
 
 type TickHandler struct {
-	Loggers map[string]*libLogger.Logger
-	Targets map[string]libLogger.Target
-	loggerLocker  sync.RWMutex
-	targetLocker  sync.RWMutex
+	Loggers      map[string]*libLogger.Logger
+	Targets      map[string]libLogger.Target
+	loggerLocker sync.RWMutex
+	targetLocker sync.RWMutex
 }
 
 func (this *TickHandler) Initiate(ctx context.Context) error {
@@ -62,7 +64,7 @@ func (this *TickHandler) GetLogger(name string) (*libLogger.Logger, error) {
 	l, ok := this.Loggers[name]
 	this.loggerLocker.RUnlock()
 	if !ok {
-		return nil, fmt.Errorf(errGetLogger + ": logger not exists", name)
+		return nil, errors.Errorf(errGetLogger+": logger not exists", name)
 	}
 	return l, nil
 }
@@ -72,7 +74,7 @@ func (this *TickHandler) GetLoggerTarget(name string) (libLogger.Target, error) 
 	t, ok := this.Targets[name]
 	this.targetLocker.RUnlock()
 	if !ok {
-		return nil, fmt.Errorf(errGetLoggerTarget, name)
+		return nil, errors.Errorf(errGetLoggerTarget, name)
 	}
 	return t, nil
 }
@@ -85,7 +87,7 @@ func (this *TickHandler) RegisterLoggerTarget(name string, targetType string, ta
 			fileLogTarget := libLogger.NewFileTarget()
 			err := json.Unmarshal([]byte(targetConfig), fileLogTarget)
 			if err != nil {
-				return fmt.Errorf("application: invalid target config '%q' '%q'", targetConfig, err.Error())
+				return errors.Annotatef(err, errRegisterLoggerTarget, name)
 			}
 			this.targetLocker.Lock()
 			this.Targets[name] = fileLogTarget
@@ -94,7 +96,7 @@ func (this *TickHandler) RegisterLoggerTarget(name string, targetType string, ta
 			consoleLogTarget := libLogger.NewConsoleTarget()
 			err := json.Unmarshal([]byte(targetConfig), consoleLogTarget)
 			if err != nil {
-				return fmt.Errorf("application: invalid target config '%q' '%q'", targetConfig, err.Error())
+				return errors.Annotatef(err, errRegisterLoggerTarget, name)
 			}
 			this.targetLocker.Lock()
 			this.Targets[name] = consoleLogTarget
@@ -103,7 +105,7 @@ func (this *TickHandler) RegisterLoggerTarget(name string, targetType string, ta
 			mailLogTarget := libLogger.NewMailTarget()
 			err := json.Unmarshal([]byte(targetConfig), mailLogTarget)
 			if err != nil {
-				return fmt.Errorf("application: invalid target config '%q' '%q'", targetConfig, err.Error())
+				return errors.Annotatef(err, errRegisterLoggerTarget, name)
 			}
 			this.targetLocker.Lock()
 			this.Targets[name] = mailLogTarget
@@ -112,13 +114,13 @@ func (this *TickHandler) RegisterLoggerTarget(name string, targetType string, ta
 			networkLogTarget := libLogger.NewNetworkTarget()
 			err := json.Unmarshal([]byte(targetConfig), networkLogTarget)
 			if err != nil {
-				return fmt.Errorf("application: invalid target config '%q' '%q'", targetConfig, err.Error())
+				return errors.Annotatef(err, errRegisterLoggerTarget, name)
 			}
 			this.targetLocker.Lock()
 			this.Targets[name] = networkLogTarget
 			this.targetLocker.Unlock()
 		default:
-			return fmt.Errorf("application: invalid target %q", targetType)
+			return errors.Annotatef(errors.Errorf("logger: invalid target '%q'", targetType), errRegisterLoggerTarget, name)
 		}
 	}
 	return nil

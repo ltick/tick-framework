@@ -2,18 +2,41 @@ package log
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"time"
 	"strings"
+	"time"
+	"strconv"
+	"path/filepath"
+	"os"
 
+	"github.com/ltick/tick-framework/config"
 	libLog "github.com/ltick/tick-log"
+	"github.com/juju/errors"
 )
 
 var (
-	errInitiate = "logger: initiate '%s' error"
+	errInitiate = "logger: initiate error"
+	errStartup = "logger: startup error"
+	errInvalidLogType = "logger: invalid log type '%s'"
 )
 
+type LogConfig struct {
+	Name      string
+	Formatter string
+	Type      string
+	Filename  string
+	Writer    string // the writer name of writer (stdout, stderr, discard)
+	MaxLevel  string
+}
+
+type Log struct {
+	Name      string
+	Formatter Formatter
+	Type      Type
+	Filename  string
+	Writer    Writer // the writer name of writer (stdout, stderr, discard)
+	MaxLevel  Level
+}
 
 // Formatter describes the formatter of a log message.
 type Formatter int
@@ -27,8 +50,8 @@ const (
 // LevelNames maps log levels to names
 var FormatterNames = map[Formatter]string{
 	FormatterDefault: "Default",
-	FormatterRaw:  "Raw",
-	FormatterSys:  "Sys",
+	FormatterRaw:     "Raw",
+	FormatterSys:     "Sys",
 }
 
 // String returns the string representation of the log level
@@ -60,10 +83,10 @@ const (
 
 // LevelNames maps log levels to names
 var WriterNames = map[Writer]string{
-	WriterUnknown: "Unknown",
-	WriterStdout:  "Stdout",
-	WriterStderr:  "Stderr",
-	WriterDiscard: "Discard",
+	WriterUnknown: "unknown",
+	WriterStdout:  "stdout",
+	WriterStderr:  "stderr",
+	WriterDiscard: "discard",
 }
 
 // String returns the string representation of the log level
@@ -157,22 +180,111 @@ func NewLogger() *Logger {
 }
 
 type Logger struct {
+	Config   *config.Config `inject:"true"`
 	Provider string
-	handler     Handler
+	Logs     []*LogConfig
+	handler  Handler
 }
 
 func (l *Logger) Initiate(ctx context.Context) (context.Context, error) {
 	err := Register("tick", NewTickHandler)
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), l.Provider))
+		return ctx, errors.Annotatef(err, errInitiate)
 	}
 	err = l.Use(ctx, "tick")
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), l.Provider))
+		return ctx, errors.Annotatef(err, errInitiate)
 	}
 	return ctx, nil
 }
 func (l *Logger) OnStartup(ctx context.Context) (context.Context, error) {
+	if l.Logs != nil {
+		logs := make([]*Log, 0)
+		for _, logConfig := range l.Logs {
+			logConfigMaxLevel := LevelDebug
+			for level, levelName := range LevelNames {
+				if levelName == logConfig.MaxLevel {
+					logConfigMaxLevel = level
+					break
+				}
+			}
+			switch StringToType(logConfig.Type) {
+			case TypeFile:
+				logs = append(logs, &Log{
+					Name:      logConfig.Name,
+					Type:      TypeFile,
+					Formatter: StringToFormatter(logConfig.Formatter),
+					Filename:  logConfig.Filename,
+					MaxLevel:  logConfigMaxLevel,
+				})
+			case TypeConsole:
+				logs = append(logs, &Log{
+					Name:      logConfig.Name,
+					Type:      TypeConsole,
+					Formatter: StringToFormatter(logConfig.Formatter),
+					Writer:    StringToWriter(logConfig.Writer),
+					MaxLevel:  logConfigMaxLevel,
+				})
+			default:
+				return ctx, errors.Errorf(errInvalidLogType, StringToType(logConfig.Type))
+			}
+		}
+		var logProviders map[string]interface{} = make(map[string]interface{})
+		logConfigProviderConfigs := make([]string, len(logs))
+		for index, lg := range logs {
+			switch lg.Type {
+			case TypeFile:
+				logFilename, err := filepath.Abs(lg.Filename)
+				if err != nil {
+					return ctx, err
+				}
+				_, err = os.Stat(logFilename)
+				if err != nil {
+					if os.IsNotExist(err) {
+						_, err = os.Create(logFilename)
+						if err != nil {
+							return ctx, err
+						}
+					} else {
+						return ctx, err
+					}
+				}
+				logConfigProviderName := lg.Name + "FileTarget"
+				logProviders[logConfigProviderName] = NewFileTarget
+				logConfigProviderConfigs[index] = `"` + lg.Name + `":{"type": "` + logConfigProviderName + `","FileName":"` + logFilename + `","Rotate":true,"MaxBytes":` + strconv.Itoa(1<<22) + `}`
+			case TypeConsole:
+				logWriter := lg.Writer
+				logConfigProviderName := lg.Name + "ConsoleTarget"
+				logProviders[logConfigProviderName] = NewConsoleTarget
+				logConfigProviderConfigs[index] = `"` + lg.Name + `":{"type": "` + logConfigProviderName + `","WriterName":"` + logWriter.String() + `"}`
+				index++
+			}
+		}
+		logConfig := `{`
+		if len(logConfigProviderConfigs) > 0 {
+			logConfig = logConfig + `"Targets": {` + strings.Join(logConfigProviderConfigs, ",") + `}`
+		}
+		logConfig = logConfig + `}`
+		err := l.Config.ConfigureJsonConfig(l.handler, []byte(logConfig), logProviders)
+		if err != nil {
+			return ctx, errors.Annotate(err, errStartup)
+		}
+		// logger
+		for _, lg := range logs {
+			l.NewLogger(lg.Name)
+			switch lg.Formatter {
+			case FormatterRaw:
+				l.SetLoggerFormatter(lg.Name, RawLogFormatter())
+			case FormatterSys:
+				l.SetLoggerFormatter(lg.Name, SysLogFormatter())
+			case FormatterDefault:
+				l.SetLoggerFormatter(lg.Name, DefaultLogFormatter())
+			}
+			l.SetLoggerTarget(lg.Name, lg.Name)
+			l.SetLoggerMaxLevel(lg.Name, lg.MaxLevel)
+			l.OpenLogger(lg.Name)
+		}
+	}
 	return ctx, nil
 }
 func (l *Logger) OnShutdown(ctx context.Context) (context.Context, error) {
@@ -190,7 +302,7 @@ func (l *Logger) Use(ctx context.Context, Provider string) error {
 	l.handler = handler()
 	err = l.handler.Initiate(ctx)
 	if err != nil {
-		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), l.Provider))
+		return errors.Annotatef(err, errInitiate, l.Provider)
 	}
 	return nil
 }
@@ -280,7 +392,7 @@ var logHandlers = make(map[string]logHandler)
 
 func Register(name string, logHandler logHandler) error {
 	if logHandler == nil {
-		return errors.New("log: Register log is nil")
+		return errors.New("logger: Register log is nil")
 	}
 	if _, ok := logHandlers[name]; !ok {
 		logHandlers[name] = logHandler
@@ -289,7 +401,7 @@ func Register(name string, logHandler logHandler) error {
 }
 func Use(name string) (logHandler, error) {
 	if _, exist := logHandlers[name]; !exist {
-		return nil, errors.New(fmt.Sprintf("log: unknown log '%s' (forgotten register?)", name))
+		return nil, errors.New(fmt.Sprintf( "logger: unknown log '%s' (forgotten register?)", name))
 	}
 	return logHandlers[name], nil
 }

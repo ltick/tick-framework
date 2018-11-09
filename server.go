@@ -3,7 +3,6 @@ package ltick
 import (
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/http/pprof"
 	"net/url"
@@ -15,8 +14,6 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ltick/tick-framework/api"
-	"github.com/ltick/tick-framework/config"
-	"github.com/ltick/tick-framework/utility"
 	"github.com/ltick/tick-routing"
 	"github.com/ltick/tick-routing/access"
 	"github.com/ltick/tick-routing/content"
@@ -29,7 +26,7 @@ import (
 type (
 	Server struct {
 		gracefulStopTimeout time.Duration
-		systemLogWriter     io.Writer
+		logWriter           io.Writer
 		Port                uint
 		Router              *ServerRouter
 		RouteGroups         map[string]*ServerRouteGroup
@@ -63,6 +60,23 @@ type (
 	}
 )
 
+func NewServer(port uint, gracefulStopTimeout time.Duration, router *ServerRouter, logWriters ...io.Writer) (server *Server) {
+	server = &Server{
+		Port:                port,
+		gracefulStopTimeout: gracefulStopTimeout,
+		Router:              router,
+		RouteGroups:         map[string]*ServerRouteGroup{},
+		mutex:               sync.RWMutex{},
+	}
+	if len(logWriters) > 0 {
+		server.logWriter = logWriters[0]
+	} else {
+		server.logWriter = os.Stdout
+	}
+	server.Log(fmt.Sprintf("ltick: new server [port:'%d', gracefulStopTimeout:'%.fs', requestTimeout:'%.fs']", port, gracefulStopTimeout.Seconds(), router.TimeoutDuration.Seconds()))
+	return server
+}
+
 func (sp *ServerRouterProxy) Proxy(c *routing.Context) (*url.URL, error) {
 	captures := make(map[string]string)
 	r := regexp.MustCompile("<:(\\w+)>")
@@ -94,107 +108,14 @@ func (sp *ServerRouterProxy) Proxy(c *routing.Context) (*url.URL, error) {
 	return nil, nil
 }
 
-func (e *Engine) NewDefaultServer(name string, routerCallback RouterCallback, requestTimeoutHandlers ...routing.Handler) (server *Server) {
-	// configer
-	configComponent, err := e.Registry.GetComponentByName("Config")
-	if err != nil {
-		e := errors.Annotate(err, errLoadCachedConfig)
-		fmt.Println(errors.ErrorStack(e))
-	}
-	configer, ok := configComponent.(*config.Config)
-	if !ok {
-		e := errors.Annotate(errors.Errorf("invalid 'Config' component type"), errLoadCachedConfig)
-		fmt.Println(errors.ErrorStack(e))
-	}
-	port := uint(configer.GetInt("server.port"))
-	if port == 0 {
-		fmt.Printf("ltick: new classic server [error: 'server port is empty']\n")
-		os.Exit(1)
-	}
-	gracefulStopTimeout := configer.GetDuration("server.graceful_stop_timeout")
-	requestTimeout := configer.GetDuration("server.request_timeout")
-	router := &ServerRouter{
-		Router: routing.New(e.Context),
-		routes: make([]*ServerRouterRoute, 0),
-		proxys: make([]*ServerRouterProxy, 0),
-	}
-	if len(requestTimeoutHandlers) > 0 {
-		router.Router.Timeout(requestTimeout, requestTimeoutHandlers[0])
-	}
-	router.WithAccessLogger(utility.DefaultAccessLogFunc).
-		WithErrorHandler(log.Printf, utility.DefaultErrorLogFunc).
-		WithPanicLogger(log.Printf).
-		WithTypeNegotiator(JSON, XML, XML2, HTML).
-		WithSlashRemover(http.StatusMovedPermanently).
-		WithLanguageNegotiator("zh-CN", "en-US").
-		WithCors(CorsAllowAll).
-		WithCallback(routerCallback)
-	server = e.NewServer(name, port, gracefulStopTimeout, router)
-	server.AddRouteGroup("/")
-	server.Pprof("*", "debug")
-	proxys := configer.GetStringMap("router.proxy")
-	if proxys != nil {
-		if len(proxys) != 0 {
-			for proxyHost, proxyInterface := range proxys {
-				proxyConfigs, ok := proxyInterface.([]interface{})
-				if !ok {
-					fmt.Println("request: read all proxy config to array error")
-					os.Exit(1)
-				}
-				for _, proxyConfig := range proxyConfigs {
-					proxy, ok := proxyConfig.(map[string]interface{})
-					if !ok {
-						fmt.Println("request: read proxy config to map error")
-						os.Exit(1)
-					}
-					proxyUpstream, ok := proxy["upstream"].(string)
-					if !ok {
-						fmt.Println("request: read one proxy config upstream error")
-						os.Exit(1)
-					}
-					proxyGroup, ok := proxy["group"].(string)
-					if !ok {
-						fmt.Println("request: read proxy config group error")
-						os.Exit(1)
-					}
-					proxyPath, ok := proxy["path"].(string)
-					if !ok {
-						fmt.Println("request: read proxy config path error")
-						os.Exit(1)
-					}
-					server.Proxy(proxyHost, proxyGroup, proxyPath, proxyUpstream)
-				}
-			}
-		}
-	}
-	return server
-}
-func (e *Engine) NewServer(name string, port uint, gracefulStopTimeout time.Duration, router *ServerRouter) (server *Server) {
+func (e *Engine) SetServer(name string, server *Server) {
 	if _, ok := e.ServerMap[name]; ok {
 		fmt.Printf(errNewServer+": server '%s' already exists\r\n", name)
 		os.Exit(1)
 	}
-	server = &Server{
-		systemLogWriter:     e.systemLogWriter,
-		Port:                port,
-		gracefulStopTimeout: gracefulStopTimeout,
-		Router:              router,
-		RouteGroups:         map[string]*ServerRouteGroup{},
-		mutex:               sync.RWMutex{},
-	}
-	middlewares := make([]MiddlewareInterface, 0)
-	for _, sortedMiddleware := range e.Registry.GetSortedMiddlewares() {
-		middleware, ok := sortedMiddleware.(MiddlewareInterface)
-		if !ok {
-			continue
-		}
-		middlewares = append(middlewares, middleware)
-	}
-	server.Router.WithMiddlewares(middlewares)
 	e.ServerMap[name] = server
-	e.SystemLog(fmt.Sprintf("ltick: new server [name:'%s', port:'%d', gracefulStopTimeout:'%.fs', requestTimeout:'%.fs']", name, port, gracefulStopTimeout.Seconds(), router.TimeoutDuration.Seconds()))
-	return server
 }
+
 func (e *Engine) SetServerLogFunc(name string, accessLogFunc access.LogWriterFunc, faultLogFunc fault.LogFunc, recoveryHandler ...fault.ConvertErrorFunc) *Engine {
 	server := e.GetServer(name)
 	if server != nil {
@@ -417,8 +338,8 @@ func (s *Server) GetRouteGroup(name string) *ServerRouteGroup {
 	}
 	return s.RouteGroups[name]
 }
-func (s *Server) SystemLog(args ...interface{}) {
-	fmt.Fprintln(s.systemLogWriter, args...)
+func (s *Server) Log(args ...interface{}) {
+	fmt.Fprintln(s.logWriter, args...)
 }
 func (s *Server) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	s.Router.ServeHTTP(res, req)
@@ -595,7 +516,7 @@ func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlers ...a
 	for index, handler := range handlers {
 		routeHandlers[index] = func(ctx *routing.Context) error {
 			apiCtx := &api.Context{
-				Context: ctx,
+				Context:  ctx,
 				Response: api.NewResponse(ctx.ResponseWriter),
 			}
 			err := handler.Serve(apiCtx)

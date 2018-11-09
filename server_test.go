@@ -1,33 +1,57 @@
 package ltick
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
-	"io"
-	"net/url"
-	"os"
-	"strings"
-	"bytes"
 
 	"github.com/juju/errors"
 	"github.com/ltick/tick-framework/api"
 	"github.com/ltick/tick-framework/config"
-	"github.com/ltick/tick-framework/logger"
 	"github.com/ltick/tick-framework/utility"
-	libLog "github.com/ltick/tick-log"
+	"github.com/ltick/tick-log"
 	"github.com/ltick/tick-routing"
 	"github.com/ltick/tick-routing/access"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
+
+var configs map[string]config.Option = map[string]config.Option{
+	"APP_ENV":     config.Option{Type: config.String, Default: "local", EnvironmentKey: "APP_ENV"},
+	"PREFIX_PATH": config.Option{Type: config.String, EnvironmentKey: "PREFIX_PATH"},
+	"TMP_PATH":    config.Option{Type: config.String, Default: "/tmp"},
+	"DEBUG":       config.Option{Type: config.String, Default: false},
+
+	"ACCESS_LOG_TYPE":      config.Option{Type: config.String, Default: "console", EnvironmentKey: "ACCESS_LOG_TYPE"},
+	"ACCESS_LOG_FILENAME":  config.Option{Type: config.String, Default: "/tmp/access.log", EnvironmentKey: "ACCESS_LOG_FILENAME"},
+	"ACCESS_LOG_WRITER":    config.Option{Type: config.String, Default: "discard", EnvironmentKey: "ACCESS_LOG_WRITER"},
+	"ACCESS_LOG_MAX_LEVEL": config.Option{Type: config.String, Default: log.LevelInfo, EnvironmentKey: "ACCESS_LOG_MAX_LEVEL"},
+	"ACCESS_LOG_FORMATTER": config.Option{Type: config.String, Default: "raw", EnvironmentKey: "ACCESS_LOG_FORMATTER"},
+
+	"DEBUG_LOG_TYPE":      config.Option{Type: config.String, Default: "console", EnvironmentKey: "DEBUG_LOG_TYPE"},
+	"DEBUG_LOG_FILENAME":  config.Option{Type: config.String, Default: "/tmp/debug.log", EnvironmentKey: "DEBUG_LOG_FILENAME"},
+	"DEBUG_LOG_WRITER":    config.Option{Type: config.String, Default: "discard", EnvironmentKey: "DEBUG_LOG_WRITER"},
+	"DEBUG_LOG_MAX_LEVEL": config.Option{Type: config.String, Default: log.LevelInfo, EnvironmentKey: "DEBUG_LOG_MAX_LEVEL"},
+	"DEBUG_LOG_FORMATTER": config.Option{Type: config.String, Default: "default", EnvironmentKey: "DEBUG_LOG_FORMATTER"},
+
+	"SYSTEM_LOG_TYPE":      config.Option{Type: config.String, Default: "console", EnvironmentKey: "SYSTEM_LOG_TYPE"},
+	"SYSTEM_LOG_FILENAME":  config.Option{Type: config.String, Default: "/tmp/system.log", EnvironmentKey: "SYSTEM_LOG_FILENAME"},
+	"SYSTEM_LOG_WRITER":    config.Option{Type: config.String, Default: "discard", EnvironmentKey: "SYSTEM_LOG_WRITER"},
+	"SYSTEM_LOG_MAX_LEVEL": config.Option{Type: config.String, Default: log.LevelInfo, EnvironmentKey: "SYSTEM_LOG_MAX_LEVEL"},
+	"SYSTEM_LOG_FORMATTER": config.Option{Type: config.String, Default: "sys", EnvironmentKey: "SYSTEM_LOG_FORMATTER"},
+}
 
 var GetLogContext = func(ctx context.Context) (forwardRequestId string, requestId string, clientIP string, serverAddress string) {
 	if ctx.Value("forwardRequestId") != nil {
@@ -50,7 +74,7 @@ var infoLogFunc utility.LogFunc = func(ctx context.Context, format string, data 
 	if ctxAppLogger == nil {
 		return
 	}
-	appLogger, ok := ctxAppLogger.(*libLog.Logger)
+	appLogger, ok := ctxAppLogger.(*log.Logger)
 	if !ok {
 		return
 	}
@@ -67,7 +91,7 @@ var systemLogFunc utility.LogFunc = func(ctx context.Context, format string, dat
 	if ctxSystemLogger == nil {
 		return
 	}
-	systemLogger, ok := ctxSystemLogger.(*libLog.Logger)
+	systemLogger, ok := ctxSystemLogger.(*log.Logger)
 	if !ok {
 		return
 	}
@@ -78,7 +102,7 @@ var debugLogFunc utility.LogFunc = func(ctx context.Context, format string, data
 	if ctxAppLogger == nil {
 		return
 	}
-	appLogger, ok := ctxAppLogger.(*libLog.Logger)
+	appLogger, ok := ctxAppLogger.(*log.Logger)
 	if !ok {
 		return
 	}
@@ -95,7 +119,7 @@ var accessLogFunc access.LogWriterFunc = func(c *routing.Context, rw *access.Log
 	if ctxAppLogger == nil {
 		return
 	}
-	appLogger, ok := ctxAppLogger.(*libLog.Logger)
+	appLogger, ok := ctxAppLogger.(*log.Logger)
 	if !ok {
 		return
 	}
@@ -103,7 +127,7 @@ var accessLogFunc access.LogWriterFunc = func(c *routing.Context, rw *access.Log
 	if ctxAccessLogger == nil {
 		return
 	}
-	accessLogger, ok := ctxAccessLogger.(*libLog.Logger)
+	accessLogger, ok := ctxAccessLogger.(*log.Logger)
 	if !ok {
 		return
 	}
@@ -144,13 +168,13 @@ func (f *ServerAppCallback) OnShutdown(e *Engine) error {
 type ServerRequestCallback struct{}
 
 func (f *ServerRequestCallback) OnRequestStartup(c *routing.Context) error {
-	systemLogger := c.Context.Value("systemLogger").(*libLog.Logger)
+	systemLogger := c.Context.Value("systemLogger").(*log.Logger)
 	systemLogger.Info("OnRequestStartup")
 	return nil
 }
 
 func (f *ServerRequestCallback) OnRequestShutdown(c *routing.Context) error {
-	systemLogger := c.Context.Value("systemLogger").(*libLog.Logger)
+	systemLogger := c.Context.Value("systemLogger").(*log.Logger)
 	systemLogger.Info("OnRequestShutdown")
 	return nil
 }
@@ -158,13 +182,13 @@ func (f *ServerRequestCallback) OnRequestShutdown(c *routing.Context) error {
 type ServerGroupRequestCallback struct{}
 
 func (f *ServerGroupRequestCallback) OnRequestStartup(c *routing.Context) error {
-	systemLogger := c.Context.Value("systemLogger").(*libLog.Logger)
+	systemLogger := c.Context.Value("systemLogger").(*log.Logger)
 	systemLogger.Info("OnGroupRequestStartup")
 	return nil
 }
 
 func (f *ServerGroupRequestCallback) OnRequestShutdown(c *routing.Context) error {
-	systemLogger := c.Context.Value("systemLogger").(*libLog.Logger)
+	systemLogger := c.Context.Value("systemLogger").(*log.Logger)
 	systemLogger.Info("OnGroupRequestShutdown")
 	return nil
 }
@@ -198,13 +222,16 @@ func (suite *TestServerSuite) SetupTest() {
 	assert.True(suite.T(), ok)
 	err = configer.SetOptions(options)
 	assert.Nil(suite.T(), err)
-	suite.engine = New(suite.configFile, suite.dotenvFile, "LTICK", registry).
-		WithCallback(&ServerAppCallback{}).WithValues(values).WithLoggers([]*LogHanlder{
+	suite.engine = New(suite.configFile, suite.dotenvFile, "LTICK", registry, configs).
+		WithCallback(&ServerAppCallback{}).WithValues(values)
+	/*
+	.WithLoggers([]*LogHanlder{
 		&LogHanlder{Name: "access", Formatter: log.FormatterRaw, Type: log.TypeConsole, Writer: log.WriterStdout, MaxLevel: log.LevelDebug},
 		&LogHanlder{Name: "app", Formatter: log.FormatterDefault, Type: log.TypeFile, Filename: suite.testAppLog, MaxLevel: log.LevelInfo},
 		&LogHanlder{Name: "system", Formatter: log.FormatterSys, Type: log.TypeConsole, Writer: log.WriterStdout, MaxLevel: log.LevelInfo},
 	})
-	suite.engine.SetSystemLogWriter(ioutil.Discard)
+	*/
+	suite.engine.SetLogWriter(ioutil.Discard)
 	accessLogger, err := suite.engine.GetLogger("access")
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), accessLogger)
@@ -219,14 +246,15 @@ func (suite *TestServerSuite) SetupTest() {
 	suite.engine.SetContextValue("accessLogger", accessLogger)
 	suite.engine.SetContextValue("Foo", "Bar")
 	// Default Server
-	suite.DefaultServer = suite.engine.NewDefaultServer("default", &ServerRequestCallback{})
+	suite.DefaultServer = NewDefaultServer(suite.engine, &ServerRequestCallback{})
+	suite.engine.SetServer("default", suite.DefaultServer)
 	// Server
 	errorLogHandler := func(c *routing.Context, err error) error {
 		ctxAppLogger := c.Context.Value("appLogger")
 		if ctxAppLogger == nil {
 			return errors.New("miss app logger")
 		}
-		appLogger, ok := ctxAppLogger.(*libLog.Logger)
+		appLogger, ok := ctxAppLogger.(*log.Logger)
 		if !ok {
 			return errors.New("invalid app logger")
 		}
@@ -256,7 +284,8 @@ func (suite *TestServerSuite) SetupTest() {
 		WithLanguageNegotiator("zh-CN", "en-US").
 		WithCors(CorsAllowAll).
 		WithCallback(&ServerRequestCallback{})
-	suite.Server = suite.engine.NewServer("test", 8080, 30*time.Second, router)
+	suite.Server = NewServer(8080, 30*time.Second, router)
+	suite.engine.SetServer("test", suite.Server)
 }
 
 func (suite *TestServerSuite) TestDefaultServer() {

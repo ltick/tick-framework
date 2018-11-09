@@ -48,10 +48,10 @@ func (suite *TestSuite) TestAppCallback() {
 	var values map[string]interface{} = make(map[string]interface{}, 0)
 	r, err := NewRegistry()
 	assert.Nil(suite.T(), err)
-	a := New(suite.configFile, suite.dotenvFile, "LTICK", r).
+	a := New(suite.configFile, suite.dotenvFile, "LTICK", r, configs).
 		WithCallback(&TestCallback{}).
 		WithValues(values)
-	a.SetSystemLogWriter(ioutil.Discard)
+	a.SetLogWriter(ioutil.Discard)
 	a.SetContextValue("output", "")
 	err = a.Startup()
 	assert.Nil(suite.T(), err)
@@ -87,10 +87,10 @@ func (suite *TestSuite) TestComponentCallback() {
 	err = configer.SetOptions(options)
 	assert.Nil(suite.T(), err)
 
-	a := New(suite.configFile, suite.dotenvFile, "LTICK", r).
+	a := New(suite.configFile, suite.dotenvFile, "LTICK", r, configs).
 		WithCallback(&TestCallback{}).
 		WithValues(values)
-	a.SetSystemLogWriter(ioutil.Discard)
+	a.SetLogWriter(ioutil.Discard)
 	a.SetContextValue("output", "")
 	err = a.Startup()
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))
