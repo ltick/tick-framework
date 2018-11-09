@@ -88,6 +88,31 @@ func New(configPath string, dotenvFile string, envPrefix string, registry *Regis
 		Context:     context.Background(),
 		ServerMap:   make(map[string]*Server, 0),
 	}
+	// configer
+	configComponent, err := registry.GetComponentByName("Config")
+	if err != nil {
+		e := errors.Annotate(err, errNewDefault)
+		fmt.Println(errors.ErrorStack(e))
+		os.Exit(1)
+	}
+	configer, ok := configComponent.(*config.Config)
+	if !ok {
+		e := errors.Annotate(errors.Errorf("invalid 'Config' component type"), errNewDefault)
+		fmt.Println(errors.ErrorStack(e))
+		os.Exit(1)
+	}
+	err = configer.SetOptions(options)
+	if err != nil {
+		e := errors.Annotate(err, errNewDefault)
+		fmt.Println(errors.ErrorStack(e))
+		os.Exit(1)
+	}
+	// 加载系统配置
+	if dotenvFile != "" {
+		e.LoadSystemConfig(configPath, envPrefix, dotenvFile)
+	} else {
+		e.LoadSystemConfig(configPath, envPrefix)
+	}
 	// 注入模块
 	err = e.Registry.InjectComponent()
 	if err != nil {
@@ -106,7 +131,7 @@ func New(configPath string, dotenvFile string, envPrefix string, registry *Regis
 		}
 		isBuiltinComponent := false
 		canonicalName := strings.ToUpper(name[0:1]) + name[1:]
-		for _, builtinComponent := range BuiltinComponents {
+		for _, builtinComponent := range EssentialComponents {
 			if canonicalName == builtinComponent.Name {
 				isBuiltinComponent = true
 				break
@@ -135,31 +160,6 @@ func New(configPath string, dotenvFile string, envPrefix string, registry *Regis
 			fmt.Println(errors.ErrorStack(e))
 			os.Exit(1)
 		}
-	}
-	// configer
-	configComponent, err := registry.GetComponentByName("Config")
-	if err != nil {
-		e := errors.Annotate(err, errNewDefault)
-		fmt.Println(errors.ErrorStack(e))
-		os.Exit(1)
-	}
-	configer, ok := configComponent.(*config.Config)
-	if !ok {
-		e := errors.Annotate(errors.Errorf("invalid 'Config' component type"), errNewDefault)
-		fmt.Println(errors.ErrorStack(e))
-		os.Exit(1)
-	}
-	err = configer.SetOptions(options)
-	if err != nil {
-		e := errors.Annotate(err, errNewDefault)
-		fmt.Println(errors.ErrorStack(e))
-		os.Exit(1)
-	}
-	// 加载系统配置
-	if dotenvFile != "" {
-		e.LoadSystemConfig(configPath, envPrefix, dotenvFile)
-	} else {
-		e.LoadSystemConfig(configPath, envPrefix)
 	}
 	return e
 }
@@ -381,20 +381,17 @@ func (e *Engine) WithCallback(callback Callback) *Engine {
 	return e
 }
 func (e *Engine) GetLogger(name string) (*libLog.Logger, error) {
-	// log
 	loggerComponent, err := e.Registry.GetComponentByName("Log")
 	if err != nil {
 		return nil, errors.Annotate(err, errGetLogger)
 	}
 	log, ok := loggerComponent.(*log.Logger)
 	if !ok {
-		e := errors.Annotate(errors.Errorf("invalid 'Logger' component type"), errGetLogger)
-		fmt.Println(errors.ErrorStack(e))
-		return nil, errors.Annotate(err, errGetLogger)
+		return nil, errors.Annotate(errors.Errorf("invalid 'Logger' component type"), errGetLogger)
 	}
 	logger, err := log.GetLogger(name)
 	if err != nil {
-		return nil, errors.Annotatef(err, errGetLogger)
+		return nil, errors.Annotate(err, errGetLogger)
 	}
 	return logger, nil
 }

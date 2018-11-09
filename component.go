@@ -40,6 +40,18 @@ type ComponentInterface interface {
 	OnShutdown(ctx context.Context) (context.Context, error)
 }
 
+type Components []*Component
+
+func (cs Components) Get(name string) *Component {
+	for _, c := range cs {
+		canonicalName := strings.ToUpper(name[0:1]) + name[1:]
+		if canonicalName == c.Name {
+			return c
+		}
+	}
+	return nil
+}
+
 type Component struct {
 	Name          string
 	Component     ComponentInterface
@@ -48,11 +60,11 @@ type Component struct {
 }
 
 var (
-	BuiltinComponents = []*Component{
+	EssentialComponents = Components{
 		&Component{Name: "Config", Component: &config.Config{}},
-		&Component{Name: "Log", Component: &log.Logger{}, ConfigurePath: "components.log"},
 	}
-	Components = []*Component{
+	OptionalComponents = Components{
+		&Component{Name: "Log", Component: &log.Logger{}, ConfigurePath: "components.log"},
 		&Component{Name: "Database", Component: &database.Database{}, ConfigurePath: "components.database"},
 		&Component{Name: "Kvstore", Component: &kvstore.Kvstore{}, ConfigurePath: "components.kvstore"},
 		&Component{Name: "Queue", Component: &queue.Queue{}, ConfigurePath: "components.queue"},
@@ -64,23 +76,17 @@ var (
 /**************** Component ****************/
 func (r *Registry) UseComponent(componentNames ...string) error {
 	var err error
-	// 内置模块注册
 	components := make([]*Component, 0)
 	for _, componentName := range componentNames {
 		canonicalComponentName := strings.ToUpper(componentName[0:1]) + componentName[1:]
-		componentExists := false
-		for _, component := range Components {
-			canonicalExistsComponentName := strings.ToUpper(component.Name[0:1]) + component.Name[1:]
-			if canonicalComponentName == canonicalExistsComponentName {
-				componentExists = true
-				components = append(components, component)
-				err = r.RegisterComponent(strings.ToLower(component.Name[0:1])+component.Name[1:], component.Component, true)
-				if err != nil {
-					return errors.Annotatef(err, errUseComponent, component.Name)
-				}
+		component := OptionalComponents.Get(canonicalComponentName)
+		if component != nil {
+			components = append(components, component)
+			err = r.RegisterComponent(strings.ToLower(component.Name[0:1])+component.Name[1:], component.Component, true)
+			if err != nil {
+				return errors.Annotatef(err, errUseComponent, component.Name)
 			}
-		}
-		if !componentExists {
+		} else {
 			return errors.Annotatef(err, errComponentNotExists, canonicalComponentName)
 		}
 	}
@@ -283,19 +289,18 @@ func (r *Registry) InjectComponentTo(injectTargets []interface{}) error {
 
 func (r *Registry) ConfigureFileConfig(componentName string, configFile string, configProviders map[string]interface{}, configTag ...string) (err error) {
 	canonicalComponentName := strings.ToUpper(componentName[0:1]) + componentName[1:]
-	components := append(BuiltinComponents, Components...)
-	for _, component := range components {
+	// configer
+	configComponent, err := r.GetComponentByName("Config")
+	if err != nil {
+		return errors.Annotatef(err, errConfigureFileConfig, canonicalComponentName)
+	}
+	configer, ok := configComponent.(*config.Config)
+	if !ok {
+		return errors.Annotatef(errors.New("ltick: invalid configer"), errConfigureFileConfig, canonicalComponentName)
+	}
+	for _, component := range OptionalComponents {
 		canonicalExistsComponentName := strings.ToUpper(component.Name[0:1]) + component.Name[1:]
 		if canonicalComponentName == canonicalExistsComponentName {
-			// configer
-			configComponent, err := r.GetComponentByName("Config")
-			if err != nil {
-				return errors.Annotatef(err, errConfigureFileConfig, canonicalComponentName)
-			}
-			configer, ok := configComponent.(*config.Config)
-			if !ok {
-				return errors.Annotatef(errors.Errorf("invalid 'Config' component type"), errConfigureFileConfig, canonicalComponentName)
-			}
 			if len(configTag) > 0 {
 				// create a Config object
 				err = configer.ConfigureFileConfig(component, configFile, configProviders, configTag...)

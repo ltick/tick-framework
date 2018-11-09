@@ -3,20 +3,20 @@ package log
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
-	"strconv"
-	"path/filepath"
-	"os"
 
+	"github.com/juju/errors"
 	"github.com/ltick/tick-framework/config"
 	libLog "github.com/ltick/tick-log"
-	"github.com/juju/errors"
 )
 
 var (
-	errInitiate = "logger: initiate error"
-	errStartup = "logger: startup error"
+	errInitiate       = "logger: initiate error"
+	errStartup        = "logger: startup error"
 	errInvalidLogType = "logger: invalid log type '%s'"
 )
 
@@ -195,9 +195,6 @@ func (l *Logger) Initiate(ctx context.Context) (context.Context, error) {
 	if err != nil {
 		return ctx, errors.Annotatef(err, errInitiate)
 	}
-	return ctx, nil
-}
-func (l *Logger) OnStartup(ctx context.Context) (context.Context, error) {
 	if l.Logs != nil {
 		logs := make([]*Log, 0)
 		for _, logConfig := range l.Logs {
@@ -267,24 +264,45 @@ func (l *Logger) OnStartup(ctx context.Context) (context.Context, error) {
 		logConfig = logConfig + `}`
 		err := l.Config.ConfigureJsonConfig(l.handler, []byte(logConfig), logProviders)
 		if err != nil {
-			return ctx, errors.Annotate(err, errStartup)
+			return ctx, errors.Annotate(err, errInitiate)
 		}
 		// logger
 		for _, lg := range logs {
 			l.NewLogger(lg.Name)
 			switch lg.Formatter {
 			case FormatterRaw:
-				l.SetLoggerFormatter(lg.Name, RawLogFormatter())
+				err = l.SetLoggerFormatter(lg.Name, RawLogFormatter())
+				if err != nil {
+					return ctx, errors.Annotate(err, errInitiate)
+				}
 			case FormatterSys:
-				l.SetLoggerFormatter(lg.Name, SysLogFormatter())
+				err = l.SetLoggerFormatter(lg.Name, SysLogFormatter())
+				if err != nil {
+					return ctx, errors.Annotate(err, errInitiate)
+				}
 			case FormatterDefault:
-				l.SetLoggerFormatter(lg.Name, DefaultLogFormatter())
+				err = l.SetLoggerFormatter(lg.Name, DefaultLogFormatter())
+				if err != nil {
+					return ctx, errors.Annotate(err, errInitiate)
+				}
 			}
-			l.SetLoggerTarget(lg.Name, lg.Name)
-			l.SetLoggerMaxLevel(lg.Name, lg.MaxLevel)
-			l.OpenLogger(lg.Name)
+			err = l.SetLoggerTarget(lg.Name, lg.Name)
+			if err != nil {
+				return ctx, errors.Annotate(err, errInitiate)
+			}
+			err = l.SetLoggerMaxLevel(lg.Name, lg.MaxLevel)
+			if err != nil {
+				return ctx, errors.Annotate(err, errInitiate)
+			}
+			err = l.OpenLogger(lg.Name)
+			if err != nil {
+				return ctx, errors.Annotate(err, errInitiate)
+			}
 		}
 	}
+	return ctx, nil
+}
+func (l *Logger) OnStartup(ctx context.Context) (context.Context, error) {
 	return ctx, nil
 }
 func (l *Logger) OnShutdown(ctx context.Context) (context.Context, error) {
@@ -401,7 +419,7 @@ func Register(name string, logHandler logHandler) error {
 }
 func Use(name string) (logHandler, error) {
 	if _, exist := logHandlers[name]; !exist {
-		return nil, errors.New(fmt.Sprintf( "logger: unknown log '%s' (forgotten register?)", name))
+		return nil, errors.New(fmt.Sprintf("logger: unknown log '%s' (forgotten register?)", name))
 	}
 	return logHandlers[name], nil
 }

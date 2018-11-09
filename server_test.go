@@ -70,11 +70,11 @@ var GetLogContext = func(ctx context.Context) (forwardRequestId string, requestI
 }
 
 var infoLogFunc utility.LogFunc = func(ctx context.Context, format string, data ...interface{}) {
-	ctxAppLogger := ctx.Value("appLogger")
-	if ctxAppLogger == nil {
+	ctxDebugLogger := ctx.Value("appLogger")
+	if ctxDebugLogger == nil {
 		return
 	}
-	appLogger, ok := ctxAppLogger.(*log.Logger)
+	appLogger, ok := ctxDebugLogger.(*log.Logger)
 	if !ok {
 		return
 	}
@@ -98,11 +98,11 @@ var systemLogFunc utility.LogFunc = func(ctx context.Context, format string, dat
 	systemLogger.Info(format, data...)
 }
 var debugLogFunc utility.LogFunc = func(ctx context.Context, format string, data ...interface{}) {
-	ctxAppLogger := ctx.Value("appLogger")
-	if ctxAppLogger == nil {
+	ctxDebugLogger := ctx.Value("appLogger")
+	if ctxDebugLogger == nil {
 		return
 	}
-	appLogger, ok := ctxAppLogger.(*log.Logger)
+	appLogger, ok := ctxDebugLogger.(*log.Logger)
 	if !ok {
 		return
 	}
@@ -115,11 +115,11 @@ var debugLogFunc utility.LogFunc = func(ctx context.Context, format string, data
 	appLogger.Debug("TEST|%s|%s|%s|"+format, logData...)
 }
 var accessLogFunc access.LogWriterFunc = func(c *routing.Context, rw *access.LogResponseWriter, elapsed float64) {
-	ctxAppLogger := c.Context.Value("appLogger")
-	if ctxAppLogger == nil {
+	ctxDebugLogger := c.Context.Value("appLogger")
+	if ctxDebugLogger == nil {
 		return
 	}
-	appLogger, ok := ctxAppLogger.(*log.Logger)
+	appLogger, ok := ctxDebugLogger.(*log.Logger)
 	if !ok {
 		return
 	}
@@ -212,38 +212,24 @@ func (suite *TestServerSuite) SetupTest() {
 	assert.Nil(suite.T(), err)
 	suite.testAppLog, err = filepath.Abs("testdata/app.log")
 	assert.Nil(suite.T(), err)
-	var options map[string]config.Option = map[string]config.Option{}
 	var values map[string]interface{} = make(map[string]interface{}, 0)
 	registry, err := NewRegistry()
 	assert.Nil(suite.T(), err)
-	configComponent, err := registry.GetComponentByName("Config")
-	assert.Nil(suite.T(), err)
-	configer, ok := configComponent.(*config.Config)
-	assert.True(suite.T(), ok)
-	err = configer.SetOptions(options)
-	assert.Nil(suite.T(), err)
+	registry.UseComponent("Log")
 	suite.engine = New(suite.configFile, suite.dotenvFile, "LTICK", registry, configs).
 		WithCallback(&ServerAppCallback{}).WithValues(values)
-	/*
-	.WithLoggers([]*LogHanlder{
-		&LogHanlder{Name: "access", Formatter: log.FormatterRaw, Type: log.TypeConsole, Writer: log.WriterStdout, MaxLevel: log.LevelDebug},
-		&LogHanlder{Name: "app", Formatter: log.FormatterDefault, Type: log.TypeFile, Filename: suite.testAppLog, MaxLevel: log.LevelInfo},
-		&LogHanlder{Name: "system", Formatter: log.FormatterSys, Type: log.TypeConsole, Writer: log.WriterStdout, MaxLevel: log.LevelInfo},
-	})
-	*/
 	suite.engine.SetLogWriter(ioutil.Discard)
 	accessLogger, err := suite.engine.GetLogger("access")
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), accessLogger)
-	appLogger, err := suite.engine.GetLogger("app")
+	debugLogger, err := suite.engine.GetLogger("debug")
 	assert.Nil(suite.T(), err)
-	assert.NotNil(suite.T(), appLogger)
+	assert.NotNil(suite.T(), debugLogger)
 	systemLogger, err := suite.engine.GetLogger("system")
-	fmt.Println(err)
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), systemLogger)
 	suite.engine.SetContextValue("systemLogger", systemLogger)
-	suite.engine.SetContextValue("appLogger", appLogger)
+	suite.engine.SetContextValue("debugLogger", debugLogger)
 	suite.engine.SetContextValue("accessLogger", accessLogger)
 	suite.engine.SetContextValue("Foo", "Bar")
 	// Default Server
@@ -251,15 +237,15 @@ func (suite *TestServerSuite) SetupTest() {
 	suite.engine.SetServer("default", suite.DefaultServer)
 	// Server
 	errorLogHandler := func(c *routing.Context, err error) error {
-		ctxAppLogger := c.Context.Value("appLogger")
-		if ctxAppLogger == nil {
+		ctxDebugLogger := c.Context.Value("debugLogger")
+		if ctxDebugLogger == nil {
 			return errors.New("miss app logger")
 		}
-		appLogger, ok := ctxAppLogger.(*log.Logger)
+		debugLogger, ok := ctxDebugLogger.(*log.Logger)
 		if !ok {
 			return errors.New("invalid app logger")
 		}
-		appLogger.Info(`TEST|%s|%s|%s|%s|%s`, c.Get("forwardRequestId"), c.Get("requestId"), c.Get("serverAddress"), err.Error(), c.Get("errorStack"))
+		debugLogger.Info(`TEST|%s|%s|%s|%s|%s`, c.Get("forwardRequestId"), c.Get("requestId"), c.Get("serverAddress"), err.Error(), c.Get("errorStack"))
 		return err
 	}
 

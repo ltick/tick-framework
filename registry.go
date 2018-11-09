@@ -30,7 +30,7 @@ func NewRegistry() (r *Registry, err error) {
 		Values:               make(map[string]interface{}),
 	}
 	// 注册内置模块
-	for _, component := range BuiltinComponents {
+	for _, component := range EssentialComponents {
 		err = r.RegisterComponent(component.Name, component.Component, true)
 		if err != nil {
 			e := errors.Annotate(err, errNew)
