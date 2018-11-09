@@ -239,6 +239,7 @@ func (suite *TestServerSuite) SetupTest() {
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), appLogger)
 	systemLogger, err := suite.engine.GetLogger("system")
+	fmt.Println(err)
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), systemLogger)
 	suite.engine.SetContextValue("systemLogger", systemLogger)
