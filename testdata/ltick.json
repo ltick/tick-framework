@@ -7,16 +7,25 @@
     "graceful_stop_timeout": "120s"
   },
   "router": {
-    "proxy": {
-      "www.example.com": [
-        {"group":"/proxy", "path": "<path:\\d+>", "upstream": "http://www.example.com/user/<:path>"}
-      ]
-    },
-    "handler": {
-      "www.example.com": [
-        {"group":"/user", "path":"<id>", "handler":"UserHandler"}
-      ]
-    }
+    "proxy": [
+      {
+        "Host": "www.example.com",
+        "Group": "/proxy",
+        "Path": "<path:\\d+>",
+        "Upstream": "http://www.example.com/user/<:path>"
+      }
+    ],
+    "route": [
+      {
+        "Host": "www.example.com",
+        "Method": "ANY",
+        "Group": "/test",
+        "Path": "<id>",
+        "Handlers": [
+          "TestHandler"
+        ]
+      }
+    ]
   },
   "components": {
     "log": {

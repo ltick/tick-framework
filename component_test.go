@@ -217,7 +217,7 @@ func (suite *TestSuite) TestComponentConfig() {
 	component, ok := testComponent.(*testComponent1)
 	assert.Equal(suite.T(), true, ok)
 	assert.Equal(suite.T(), "Bar", component.Foo)
-	err = r.ConfigureFileConfig("testComponent1", suite.configFile, nil, "component.TestComponent1")
+	err = r.ConfigureComponentFileConfig("testComponent1", suite.configFile, nil, "components.TestComponent1")
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))
 	err = r.UnregisterComponent("TestComponent2")
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))

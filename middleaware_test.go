@@ -122,7 +122,7 @@ func (suite *TestSuite) TestMiddleware() {
 	assert.Nil(suite.T(), err)
 	err = r.RegisterMiddleware("testMiddleware2", &testMiddleware2{})
 	assert.Nil(suite.T(), err)
-	a := New(suite.configFile, suite.dotenvFile, "LTICK", r, configs).
+	a := New(r, ConfigFile(suite.configFile), DotenvFile(suite.dotenvFile), EnvPrefix("LTICK")).
 		WithCallback(&TestCallback{}).
 		WithValues(values)
 	a.SetLogWriter(ioutil.Discard)

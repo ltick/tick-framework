@@ -18,16 +18,16 @@ import (
 )
 
 var (
-	errComponentExists     = "ltick: component '%s' exists"
-	errComponentNotExists  = "ltick: component '%s' not exists"
-	errRegisterComponent   = "ltick: register component '%s' error"
-	errUnregisterComponent = "ltick: unregister component '%s' error"
-	errInjectComponent     = "ltick: inject component '%s' field '%s' error"
-	errInjectComponentTo   = "ltick: inject component '%s' field '%s' error"
-	errUseComponent        = "ltick: use component '%s' error"
-	errValueExists         = "ltick: value '%s' exists"
-	errValueNotExists      = "ltick: value '%s' not exists"
-	errConfigureFileConfig = "ltick: configure '%s' file config  error"
+	errComponentExists              = "ltick: component '%s' exists"
+	errComponentNotExists           = "ltick: component '%s' not exists"
+	errRegisterComponent            = "ltick: register component '%s' error"
+	errUnregisterComponent          = "ltick: unregister component '%s' error"
+	errInjectComponent              = "ltick: inject component '%s' field '%s' error"
+	errInjectComponentTo            = "ltick: inject component '%s' field '%s' error"
+	errUseComponent                 = "ltick: use component '%s' error"
+	errValueExists                  = "ltick: value '%s' exists"
+	errValueNotExists               = "ltick: value '%s' not exists"
+	errConfigureComponentFileConfig = "ltick: configure component '%s' file config  error"
 )
 
 func (r *Registry) GetComponentMap() map[string]interface{} {
@@ -60,9 +60,6 @@ type Component struct {
 }
 
 var (
-	EssentialComponents = Components{
-		&Component{Name: "Config", Component: &config.Config{}},
-	}
 	OptionalComponents = Components{
 		&Component{Name: "Log", Component: &log.Logger{}, ConfigurePath: "components.log"},
 		&Component{Name: "Database", Component: &database.Database{}, ConfigurePath: "components.database"},
@@ -287,37 +284,6 @@ func (r *Registry) InjectComponentTo(injectTargets []interface{}) error {
 	return nil
 }
 
-func (r *Registry) ConfigureFileConfig(componentName string, configFile string, configProviders map[string]interface{}, configTag ...string) (err error) {
-	canonicalComponentName := strings.ToUpper(componentName[0:1]) + componentName[1:]
-	// configer
-	configComponent, err := r.GetComponentByName("Config")
-	if err != nil {
-		return errors.Annotatef(err, errConfigureFileConfig, canonicalComponentName)
-	}
-	configer, ok := configComponent.(*config.Config)
-	if !ok {
-		return errors.Annotatef(errors.New("ltick: invalid configer"), errConfigureFileConfig, canonicalComponentName)
-	}
-	for _, component := range OptionalComponents {
-		canonicalExistsComponentName := strings.ToUpper(component.Name[0:1]) + component.Name[1:]
-		if canonicalComponentName == canonicalExistsComponentName {
-			if len(configTag) > 0 {
-				// create a Config object
-				err = configer.ConfigureFileConfig(component, configFile, configProviders, configTag...)
-				if err != nil {
-					return errors.Annotatef(err, errConfigureFileConfig, canonicalComponentName)
-				}
-			} else if component.ConfigurePath != "" {
-				err = configer.ConfigureFileConfig(component.Component, configFile, configProviders, component.ConfigurePath)
-				if err != nil {
-					return errors.Annotatef(err, errConfigureFileConfig, canonicalComponentName)
-				}
-			}
-		}
-	}
-	return nil
-}
-
 /******** Component Dependency Manage ********/
 // SortComponent - Sort user components.
 func SortComponent(components []*Component) []string {
@@ -380,4 +346,30 @@ func sortComponent(components []*Component, currentComponents []*Component, sort
 		}
 	}
 	return sortedComponents
+}
+
+func (r *Registry) ConfigureComponentFileConfig(componentName string, configFile string, configProviders map[string]interface{}, configTag ...string) (err error) {
+	canonicalComponentName := strings.ToUpper(componentName[0:1]) + componentName[1:]
+	configComponent, err := r.GetComponentByName("Config")
+	if err != nil {
+		return errors.Annotatef(err, errConfigureComponentFileConfig, canonicalComponentName)
+	}
+	configer, ok := configComponent.(*config.Config)
+	if !ok {
+		return errors.Annotatef(errors.Errorf("invalid 'Config' component type"), errConfigureComponentFileConfig, canonicalComponentName)
+	}
+	// configer
+	for componentName, component := range r.ComponentMap {
+		canonicalExistsComponentName := strings.ToUpper(componentName[0:1]) + componentName[1:]
+		if canonicalComponentName == canonicalExistsComponentName {
+			if len(configTag) > 0 {
+				// create a Config object
+				err = configer.ConfigureFileConfig(component, configFile, configProviders, configTag...)
+				if err != nil {
+					return errors.Annotatef(err, errConfigureComponentFileConfig, canonicalComponentName)
+				}
+			}
+		}
+	}
+	return nil
 }

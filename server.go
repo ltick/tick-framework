@@ -109,6 +109,9 @@ func (sp *ServerRouterProxy) Proxy(c *routing.Context) (*url.URL, error) {
 }
 
 func (e *Engine) SetServer(name string, server *Server) {
+	if e.ServerMap == nil {
+		e.ServerMap = make(map[string]*Server, 0)
+	}
 	if _, ok := e.ServerMap[name]; ok {
 		fmt.Printf(errNewServer+": server '%s' already exists\r\n", name)
 		os.Exit(1)
@@ -143,8 +146,10 @@ func (e *Engine) SetServerReuqestCors(name string, corsOptions cors.Options) *En
 	return e
 }
 func (e *Engine) GetServer(name string) *Server {
-	if _, ok := e.ServerMap[name]; ok {
-		return e.ServerMap[name]
+	if e.ServerMap != nil {
+		if _, ok := e.ServerMap[name]; ok {
+			return e.ServerMap[name]
+		}
 	}
 	return nil
 }

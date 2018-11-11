@@ -1,8 +1,9 @@
 package ltick
 
 import (
-	"github.com/juju/errors"
 	"context"
+	"github.com/juju/errors"
+	"github.com/ltick/tick-framework/config"
 )
 
 const INJECT_TAG = "inject"
@@ -30,17 +31,16 @@ func NewRegistry() (r *Registry, err error) {
 		Values:               make(map[string]interface{}),
 	}
 	// 注册内置模块
-	for _, component := range EssentialComponents {
-		err = r.RegisterComponent(component.Name, component.Component, true)
-		if err != nil {
-			e := errors.Annotate(err, errNew)
-			return nil, e
-		}
-		_, err = component.Component.Initiate(context.Background())
-		if err != nil {
-			e := errors.Annotate(err, errNew)
-			return nil, e
-		}
+	configer := &config.Config{}
+	err = r.RegisterComponent("Config", configer, true)
+	if err != nil {
+		e := errors.Annotate(err, errNew)
+		return nil, e
+	}
+	_, err = configer.Initiate(context.Background())
+	if err != nil {
+		e := errors.Annotate(err, errNew)
+		return nil, e
 	}
 	return r, nil
 }

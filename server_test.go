@@ -19,7 +19,6 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ltick/tick-framework/api"
-	"github.com/ltick/tick-framework/config"
 	"github.com/ltick/tick-framework/utility"
 	"github.com/ltick/tick-log"
 	"github.com/ltick/tick-routing"
@@ -27,31 +26,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
-
-var configs map[string]config.Option = map[string]config.Option{
-	"APP_ENV":     config.Option{Type: config.String, Default: "local", EnvironmentKey: "APP_ENV"},
-	"PREFIX_PATH": config.Option{Type: config.String, EnvironmentKey: "PREFIX_PATH"},
-	"TMP_PATH":    config.Option{Type: config.String, Default: "/tmp"},
-	"DEBUG":       config.Option{Type: config.String, Default: false},
-
-	"ACCESS_LOG_TYPE":      config.Option{Type: config.String, Default: "console", EnvironmentKey: "ACCESS_LOG_TYPE"},
-	"ACCESS_LOG_FILENAME":  config.Option{Type: config.String, Default: "/tmp/access.log", EnvironmentKey: "ACCESS_LOG_FILENAME"},
-	"ACCESS_LOG_WRITER":    config.Option{Type: config.String, Default: "discard", EnvironmentKey: "ACCESS_LOG_WRITER"},
-	"ACCESS_LOG_MAX_LEVEL": config.Option{Type: config.String, Default: log.LevelInfo, EnvironmentKey: "ACCESS_LOG_MAX_LEVEL"},
-	"ACCESS_LOG_FORMATTER": config.Option{Type: config.String, Default: "raw", EnvironmentKey: "ACCESS_LOG_FORMATTER"},
-
-	"DEBUG_LOG_TYPE":      config.Option{Type: config.String, Default: "console", EnvironmentKey: "DEBUG_LOG_TYPE"},
-	"DEBUG_LOG_FILENAME":  config.Option{Type: config.String, Default: "/tmp/debug.log", EnvironmentKey: "DEBUG_LOG_FILENAME"},
-	"DEBUG_LOG_WRITER":    config.Option{Type: config.String, Default: "discard", EnvironmentKey: "DEBUG_LOG_WRITER"},
-	"DEBUG_LOG_MAX_LEVEL": config.Option{Type: config.String, Default: log.LevelInfo, EnvironmentKey: "DEBUG_LOG_MAX_LEVEL"},
-	"DEBUG_LOG_FORMATTER": config.Option{Type: config.String, Default: "default", EnvironmentKey: "DEBUG_LOG_FORMATTER"},
-
-	"SYSTEM_LOG_TYPE":      config.Option{Type: config.String, Default: "console", EnvironmentKey: "SYSTEM_LOG_TYPE"},
-	"SYSTEM_LOG_FILENAME":  config.Option{Type: config.String, Default: "/tmp/system.log", EnvironmentKey: "SYSTEM_LOG_FILENAME"},
-	"SYSTEM_LOG_WRITER":    config.Option{Type: config.String, Default: "discard", EnvironmentKey: "SYSTEM_LOG_WRITER"},
-	"SYSTEM_LOG_MAX_LEVEL": config.Option{Type: config.String, Default: log.LevelInfo, EnvironmentKey: "SYSTEM_LOG_MAX_LEVEL"},
-	"SYSTEM_LOG_FORMATTER": config.Option{Type: config.String, Default: "sys", EnvironmentKey: "SYSTEM_LOG_FORMATTER"},
-}
 
 var GetLogContext = func(ctx context.Context) (forwardRequestId string, requestId string, clientIP string, serverAddress string) {
 	if ctx.Value("forwardRequestId") != nil {
@@ -216,7 +190,7 @@ func (suite *TestServerSuite) SetupTest() {
 	registry, err := NewRegistry()
 	assert.Nil(suite.T(), err)
 	registry.UseComponent("Log")
-	suite.engine = New(suite.configFile, suite.dotenvFile, "LTICK", registry, configs).
+	suite.engine = New(registry, ConfigFile(suite.configFile), DotenvFile(suite.dotenvFile), EnvPrefix("LTICK")).
 		WithCallback(&ServerAppCallback{}).WithValues(values)
 	suite.engine.SetLogWriter(ioutil.Discard)
 	accessLogger, err := suite.engine.GetLogger("access")
@@ -233,7 +207,7 @@ func (suite *TestServerSuite) SetupTest() {
 	suite.engine.SetContextValue("accessLogger", accessLogger)
 	suite.engine.SetContextValue("Foo", "Bar")
 	// Default Server
-	suite.DefaultServer = NewDefaultServer(suite.engine, &ServerRequestCallback{})
+	suite.DefaultServer = NewDefaultServer(suite.engine, &ServerRequestCallback{}, map[string]routing.Handler{})
 	suite.engine.SetServer("default", suite.DefaultServer)
 	// Server
 	errorLogHandler := func(c *routing.Context, err error) error {

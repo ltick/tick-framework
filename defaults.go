@@ -2,32 +2,36 @@ package ltick
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	libLog "log"
 	"net/http"
 	"os"
-	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/juju/errors"
-	"github.com/ltick/tick-framework/config"
 	"github.com/ltick/tick-framework/utility"
 	"github.com/ltick/tick-routing"
 	"github.com/ltick/tick-routing/access"
 	"github.com/ltick/tick-routing/fault"
 )
 
+var (
+	errNewDefaultServer = "ltick: new default server"
+	errProxyConfig      = "ltick: proxy config '%v'"
+)
 var defaultEnvPrefix = "LTICK"
-var defaultConfigPath = "etc/ltick.json"
+var defaultConfigFile = "etc/ltick.json"
 
-func DefaultConfigPath() string {
-	return defaultConfigPath
+func DefaultConfigFile() string {
+	return defaultConfigFile
 }
 
-var defaultDotenvPath = ".env"
+var defaultDotenvFile = ".env"
 
-func DefaultDotenvPath() string {
-	return defaultDotenvPath
+func DefaultDotenvFile() string {
+	return defaultDotenvFile
 }
 
 var defaultConfigReloadTime = 120 * time.Second
@@ -95,48 +99,22 @@ func DefaultAccessLogFunc(c *routing.Context, rw *access.LogResponseWriter, elap
 	}
 }
 
-func DefaultEngine(registry *Registry, options map[string]config.Option) (engine *Engine) {
-	defaultConfigFile, err := filepath.Abs(defaultConfigPath)
-	if err != nil {
-		e := errors.Annotatef(err, errNewDefault)
-		fmt.Println(errors.ErrorStack(e))
-		os.Exit(1)
-	}
-	defaultDotenvFile, err := filepath.Abs(defaultDotenvPath)
-	if err != nil {
-		e := errors.Annotatef(err, errNewDefault)
-		fmt.Println(errors.ErrorStack(e))
-		os.Exit(1)
-	}
-	return New(defaultConfigFile, defaultDotenvFile, defaultEnvPrefix, registry, options)
-}
-
-func NewDefaultServer(e *Engine, routerCallback RouterCallback, requestTimeoutHandlers ...routing.Handler) (server *Server) {
+func NewDefaultServer(e *Engine, routerCallback RouterCallback, handlers map[string]routing.Handler, timeoutHandlers ...routing.Handler) (server *Server) {
 	// configer
-	configComponent, err := e.Registry.GetComponentByName("Config")
-	if err != nil {
-		e := errors.Annotate(err, errLoadCachedConfig)
-		fmt.Println(errors.ErrorStack(e))
-	}
-	configer, ok := configComponent.(*config.Config)
-	if !ok {
-		e := errors.Annotate(errors.Errorf("invalid 'Config' component type"), errLoadCachedConfig)
-		fmt.Println(errors.ErrorStack(e))
-	}
-	port := uint(configer.GetInt("server.port"))
+	port := uint(e.configer.GetInt("server.port"))
 	if port == 0 {
-		fmt.Printf("ltick: new classic server [error: 'server port is empty']\n")
+		errors.Annotatef(errors.New("ltick: server port is 0"), errNewDefaultServer)
 		os.Exit(1)
 	}
-	gracefulStopTimeout := configer.GetDuration("server.graceful_stop_timeout")
-	requestTimeout := configer.GetDuration("server.request_timeout")
+	gracefulStopTimeout := e.configer.GetDuration("server.graceful_stop_timeout")
+	requestTimeout := e.configer.GetDuration("server.request_timeout")
 	router := &ServerRouter{
 		Router: routing.New(e.Context),
 		routes: make([]*ServerRouterRoute, 0),
 		proxys: make([]*ServerRouterProxy, 0),
 	}
-	if len(requestTimeoutHandlers) > 0 {
-		router.Router.Timeout(requestTimeout, requestTimeoutHandlers[0])
+	if len(timeoutHandlers) > 0 {
+		router.Router.Timeout(requestTimeout, timeoutHandlers[0])
 	}
 	middlewares := make([]MiddlewareInterface, 0)
 	for _, sortedMiddleware := range e.Registry.GetSortedMiddlewares() {
@@ -158,40 +136,59 @@ func NewDefaultServer(e *Engine, routerCallback RouterCallback, requestTimeoutHa
 	server = NewServer(port, gracefulStopTimeout, router, e.logWriter)
 	server.AddRouteGroup("/")
 	server.Pprof("*", "debug")
-	proxys := configer.GetStringMap("router.proxy")
-	if proxys != nil {
-		if len(proxys) != 0 {
-			for proxyHost, proxyInterface := range proxys {
-				proxyConfigs, ok := proxyInterface.([]interface{})
-				if !ok {
-					fmt.Println("request: read all proxy config to array error")
-					os.Exit(1)
-				}
-				for _, proxyConfig := range proxyConfigs {
-					proxy, ok := proxyConfig.(map[string]interface{})
-					if !ok {
-						fmt.Println("request: read proxy config to map error")
-						os.Exit(1)
-					}
-					proxyUpstream, ok := proxy["upstream"].(string)
-					if !ok {
-						fmt.Println("request: read one proxy config upstream error")
-						os.Exit(1)
-					}
-					proxyGroup, ok := proxy["group"].(string)
-					if !ok {
-						fmt.Println("request: read proxy config group error")
-						os.Exit(1)
-					}
-					proxyPath, ok := proxy["path"].(string)
-					if !ok {
-						fmt.Println("request: read proxy config path error")
-						os.Exit(1)
-					}
-					server.Proxy(proxyHost, proxyGroup, proxyPath, proxyUpstream)
-				}
-			}
+	err := e.configer.ConfigureFileConfig(server.Router.proxys, e.configFile, nil, "router.proxy")
+	if err != nil {
+		err := errors.Annotatef(err, errProxyConfig, e.configer.GetStringSlice("router.proxy"))
+		fmt.Println(errors.ErrorStack(err))
+		os.Exit(1)
+	}
+	routes := e.configer.GetStringSlice("router.route")
+	for i, route := range routes {
+		routeConfig := make(map[string]interface{})
+		err := json.Unmarshal([]byte(route), routeConfig)
+		if err != nil {
+			err := errors.Annotatef(err, errProxyConfig, routes)
+			fmt.Println(errors.ErrorStack(err))
+			os.Exit(1)
 		}
+		routeConfigHandlers, ok := routeConfig["Handlers"].(string)
+		if ok {
+			routeHandlers := make([]string, 0)
+			err = json.Unmarshal([]byte(routeConfigHandlers), routeHandlers)
+			if err != nil {
+				err := errors.Annotatef(err, errProxyConfig, routes)
+				fmt.Println(errors.ErrorStack(err))
+				os.Exit(1)
+			}
+			handlerProviderConfigs := make([]string, len(routeHandlers))
+			for index, handlerName := range routeHandlers {
+				handlerProviderConfigs[index] = `{"type": "` + handlerName + `"}`
+			}
+			routeConfig["Handlers"] = `[` + strings.Join(handlerProviderConfigs, ",") + `]`
+		}
+		routeConfigByte, err := json.Marshal(routeConfig)
+		if err != nil {
+			err := errors.Annotatef(err, errProxyConfig, routes)
+			fmt.Println(errors.ErrorStack(err))
+			os.Exit(1)
+		}
+		routes[i] = string(routeConfigByte)
+	}
+	routesConfig, err := json.Marshal(routes)
+	if err != nil {
+		err := errors.Annotatef(err, errProxyConfig, routes)
+		fmt.Println(errors.ErrorStack(err))
+		os.Exit(1)
+	}
+	handlerProviders := make(map[string]interface{}, len(handlers))
+	for handlerName, handler := range handlers {
+		handlerProviders[handlerName] = handler
+	}
+	err = e.configer.ConfigureJsonConfig(server.Router.routes, routesConfig, handlerProviders)
+	if err != nil {
+		err := errors.Annotatef(err, errProxyConfig, routes)
+		fmt.Println(errors.ErrorStack(err))
+		os.Exit(1)
 	}
 	return server
 }
