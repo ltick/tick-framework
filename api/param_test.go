@@ -24,12 +24,12 @@ func TestParseTags(t *testing.T) {
 	var a reflect.StructTag = `param1:"<in:\"path\"> <name:test> <desc:test\\<1,2\\>> <required> <range::4>"`
 	var param1 = a.Get("param1")
 	var values1 = ParseTags(param1)
-	assert.Equal(t, map[string]string{"range": ":4", "in": "path", "name": "test", "desc": "test<1,2>", "required": ""}, values1)
+	assert.Equal(t, map[string]string{"range": ":4", "in": "\"path\"", "name": "test", "desc": "test<1,2>", "required": ""}, values1)
 
 	var b reflect.StructTag = `  param2:"   <in:\"path\"> <name : test   > <desc:test\\<1,2\\>> <required:>    <range: :4  >  "   `
 	var param2 = b.Get("param2")
 	var values2 = ParseTags(param2)
-	assert.Equal(t, map[string]string{"in": "path", "name": "test", "desc": "test<1,2>", "required": "", "range": ":4"}, values2)
+	assert.Equal(t, map[string]string{"in": "\"path\"", "name": "test", "desc": "test<1,2>", "required": "", "range": ":4"}, values2)
 
 	if values1["in"] != values2["in"] ||
 		values1["desc"] != values2["desc"] ||

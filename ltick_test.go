@@ -5,9 +5,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ltick/tick-framework/config"
-	"github.com/stretchr/testify/assert"
 	"github.com/juju/errors"
+	"github.com/ltick/tick-framework/config"
+	"github.com/ltick/tick-framework/utility"
+	"github.com/ltick/tick-routing"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -25,6 +27,10 @@ func (suite *TestSuite) SetupTest() {
 	suite.dotenvFile, err = filepath.Abs("testdata/.env")
 	assert.Nil(suite.T(), err)
 	suite.testAppLog, err = filepath.Abs("testdata/app.log")
+	assert.Nil(suite.T(), err)
+	_, err = utility.CopyFile("testdata/ltick.json", "etc/ltick.json")
+	assert.Nil(suite.T(), err)
+	_, err = utility.CopyFile("testdata/.env", ".env")
 	assert.Nil(suite.T(), err)
 }
 
@@ -48,10 +54,8 @@ func (suite *TestSuite) TestAppCallback() {
 	var values map[string]interface{} = make(map[string]interface{}, 0)
 	r, err := NewRegistry()
 	assert.Nil(suite.T(), err)
-	a := New(r, ConfigFile(suite.configFile), DotenvFile(suite.dotenvFile), EnvPrefix("LTICK")).
-		WithCallback(&TestCallback{}).
+	a := New(r, EngineLogWriter(ioutil.Discard), EngineConfigFile(suite.configFile), EngineDotenvFile(suite.dotenvFile), EngineEnvPrefix("LTICK"), EngineCallback(&TestCallback{})).
 		WithValues(values)
-	a.SetLogWriter(ioutil.Discard)
 	a.SetContextValue("output", "")
 	err = a.Startup()
 	assert.Nil(suite.T(), err)
@@ -87,10 +91,8 @@ func (suite *TestSuite) TestComponentCallback() {
 	err = configer.SetOptions(options)
 	assert.Nil(suite.T(), err)
 
-	a := New(r, ConfigFile(suite.configFile), DotenvFile(suite.dotenvFile), EnvPrefix("LTICK")).
-		WithCallback(&TestCallback{}).
+	a := New(r, EngineLogWriter(ioutil.Discard), EngineConfigFile(suite.configFile), EngineDotenvFile(suite.dotenvFile), EngineEnvPrefix("LTICK"), EngineCallback(&TestCallback{})).
 		WithValues(values)
-	a.SetLogWriter(ioutil.Discard)
 	a.SetContextValue("output", "")
 	err = a.Startup()
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))
@@ -98,6 +100,17 @@ func (suite *TestSuite) TestComponentCallback() {
 	err = a.Shutdown()
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))
 	assert.Equal(suite.T(), "Startup|testComponent1-Startup||testComponent1-Shutdown|Shutdown", a.GetContextValue("output"))
+}
+
+func (suite *TestSuite) TestDefault() {
+	r, err := NewRegistry()
+	assert.Nil(suite.T(), err)
+	a := Default(r, make(map[string]routing.Handler, 0))
+	a.WithValues(make(map[string]interface{}, 0))
+	a.WithCallback(&TestCallback{})
+	err = a.Startup()
+	assert.Nil(suite.T(), err)
+	err = a.Shutdown()
 }
 
 func TestTestSuite(t *testing.T) {

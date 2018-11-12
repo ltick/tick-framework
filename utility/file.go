@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/klauspost/crc32"
+	"fmt"
 )
 
 var (
@@ -21,19 +22,46 @@ var (
 	errCreateTemporaryFile  = "ltick utility: create temporary file error"
 )
 
-func Md5File(f *os.File) (string, error) {
-	md5hash := md5.New()
-	if _, err := io.Copy(md5hash, f); err != nil {
-		return "", err
-	}
-	return string(md5hash.Sum(nil)), nil
-}
+const BUFFERSIZE  = 1024
 
-//获取给定byte的MD5
-func Md5Byte(text []byte) string {
-	hasher := md5.New()
-	hasher.Write(text)
-	return hex.EncodeToString(hasher.Sum(nil))
+func CopyFile(src, dst string) (int64, error) {
+	sourceFileStat, err := os.Stat(src)
+	if err != nil {
+		return 0, err
+	}
+
+	if !sourceFileStat.Mode().IsRegular() {
+		return 0, fmt.Errorf("%s is not a regular file", src)
+	}
+
+	source, err := os.Open(src)
+	if err != nil {
+		return 0, err
+	}
+	defer source.Close()
+
+	destination, err := os.Create(dst)
+	if err != nil {
+		return 0, err
+	}
+	defer destination.Close()
+	buf := make([]byte, BUFFERSIZE)
+	var cn int64
+	for {
+		n, err := source.Read(buf)
+		if err != nil && err != io.EOF {
+			return 0, err
+		}
+		cn += int64(n)
+		if n == 0 {
+			break
+		}
+
+		if _, err := destination.Write(buf[:n]); err != nil {
+			return 0, err
+		}
+	}
+	return cn, nil
 }
 
 func GetCachedFile(filePath string) (file *os.File, err error) {
@@ -146,4 +174,19 @@ func FileExists(name string) bool {
 		return !os.IsNotExist(err)
 	}
 	return true
+}
+
+func Md5File(f *os.File) (string, error) {
+	md5hash := md5.New()
+	if _, err := io.Copy(md5hash, f); err != nil {
+		return "", err
+	}
+	return string(md5hash.Sum(nil)), nil
+}
+
+//获取给定byte的MD5
+func Md5Byte(text []byte) string {
+	hasher := md5.New()
+	hasher.Write(text)
+	return hex.EncodeToString(hasher.Sum(nil))
 }

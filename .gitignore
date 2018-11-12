@@ -25,3 +25,5 @@ _testmain.go
 Gopkg.lock
 vendor
 testdata
+etc
+.env

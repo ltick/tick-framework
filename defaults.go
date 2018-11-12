@@ -73,6 +73,14 @@ func DefaultFaultLogFunc() fault.LogFunc {
 	}
 }
 
+func DefaultTimeoutHandler() routing.Handler {
+	return defaultTimeoutHandler
+}
+
+func defaultTimeoutHandler(c *routing.Context) error {
+	return routing.NewHTTPError(http.StatusRequestTimeout)
+}
+
 func DefaultAccessLogFunc(c *routing.Context, rw *access.LogResponseWriter, elapsed float64) {
 	//来源请求ID
 	forwardRequestId := c.Get("uniqid")
@@ -98,51 +106,18 @@ func DefaultAccessLogFunc(c *routing.Context, rw *access.LogResponseWriter, elap
 		DefaultLogFunc(c.Context, `%s - %s [%s] "%s" %d %d %d %.3f "%s" "%s" %s %s "-" "-"`, clientIP, c.Request.Host, time.Now().Format("2/Jan/2006:15:04:05 -0700"), requestLine, c.Request.ContentLength, rw.Status, rw.BytesWritten, elapsed/1e3, c.Request.Header.Get("Referer"), c.Request.Header.Get("User-Agent"), c.Request.RemoteAddr, serverAddress)
 	}
 }
-
-func NewDefaultServer(e *Engine, routerCallback RouterCallback, handlers map[string]routing.Handler, timeoutHandlers ...routing.Handler) (server *Server) {
+func Default(registry *Registry, handlers map[string]routing.Handler, handlerCallbacks ...RouterCallback) (e *Engine) {
+	fmt.Println("asdasda")
 	// configer
-	port := uint(e.configer.GetInt("server.port"))
-	if port == 0 {
-		errors.Annotatef(errors.New("ltick: server port is 0"), errNewDefaultServer)
-		os.Exit(1)
-	}
-	gracefulStopTimeout := e.configer.GetDuration("server.graceful_stop_timeout")
-	requestTimeout := e.configer.GetDuration("server.request_timeout")
-	router := &ServerRouter{
-		Router: routing.New(e.Context),
-		routes: make([]*ServerRouterRoute, 0),
-		proxys: make([]*ServerRouterProxy, 0),
-	}
-	if len(timeoutHandlers) > 0 {
-		router.Router.Timeout(requestTimeout, timeoutHandlers[0])
-	}
-	middlewares := make([]MiddlewareInterface, 0)
-	for _, sortedMiddleware := range e.Registry.GetSortedMiddlewares() {
-		middleware, ok := sortedMiddleware.(MiddlewareInterface)
-		if !ok {
-			continue
-		}
-		middlewares = append(middlewares, middleware)
-	}
-	router.WithAccessLogger(DefaultAccessLogFunc).
-		WithErrorHandler(DefaultFaultLogFunc(), DefaultErrorLogFunc).
-		WithPanicLogger(DefaultFaultLogFunc()).
-		WithTypeNegotiator(JSON, XML, XML2, HTML).
-		WithSlashRemover(http.StatusMovedPermanently).
-		WithLanguageNegotiator("zh-CN", "en-US").
-		WithCors(CorsAllowAll).
-		WithCallback(routerCallback).
-		WithMiddlewares(middlewares)
-	server = NewServer(port, gracefulStopTimeout, router, e.logWriter)
-	server.AddRouteGroup("/")
-	server.Pprof("*", "debug")
-	err := e.configer.ConfigureFileConfig(server.Router.proxys, e.configFile, nil, "router.proxy")
+	e = New(registry)
+	s := e.NewDefaultServer()
+	err := e.configer.ConfigureFileConfig(s, e.configFile, nil, "server")
 	if err != nil {
-		err := errors.Annotatef(err, errProxyConfig, e.configer.GetStringSlice("router.proxy"))
+		err := errors.Annotatef(err, errProxyConfig, e.configer.GetStringMap("server"))
 		fmt.Println(errors.ErrorStack(err))
 		os.Exit(1)
 	}
-	routes := e.configer.GetStringSlice("router.route")
+	routes := e.configer.GetStringSlice("server.router.route")
 	for i, route := range routes {
 		routeConfig := make(map[string]interface{})
 		err := json.Unmarshal([]byte(route), routeConfig)
@@ -184,11 +159,12 @@ func NewDefaultServer(e *Engine, routerCallback RouterCallback, handlers map[str
 	for handlerName, handler := range handlers {
 		handlerProviders[handlerName] = handler
 	}
-	err = e.configer.ConfigureJsonConfig(server.Router.routes, routesConfig, handlerProviders)
+	fmt.Println(string(routesConfig))
+	err = e.configer.ConfigureJsonConfig(s.Router.routes, routesConfig, handlerProviders)
 	if err != nil {
 		err := errors.Annotatef(err, errProxyConfig, routes)
 		fmt.Println(errors.ErrorStack(err))
 		os.Exit(1)
 	}
-	return server
+	return e
 }

@@ -122,23 +122,18 @@ func (suite *TestSuite) TestMiddleware() {
 	assert.Nil(suite.T(), err)
 	err = r.RegisterMiddleware("testMiddleware2", &testMiddleware2{})
 	assert.Nil(suite.T(), err)
-	a := New(r, ConfigFile(suite.configFile), DotenvFile(suite.dotenvFile), EnvPrefix("LTICK")).
-		WithCallback(&TestCallback{}).
+	a := New(r, EngineLogWriter(ioutil.Discard), EngineConfigFile(suite.configFile), EngineDotenvFile(suite.dotenvFile), EngineEnvPrefix("LTICK"), EngineCallback(&TestCallback{})).
 		WithValues(values)
-	a.SetLogWriter(ioutil.Discard)
 	a.SetContextValue("output", "")
 
-	router := &ServerRouter{
-		Router: routing.New(a.Context).Timeout(3*time.Second, func(c *routing.Context) error {
-			a.Context = context.WithValue(a.Context, "output", "Timeout")
-			return routing.NewHTTPError(http.StatusRequestTimeout)
-		}),
-		routes: make([]*ServerRouterRoute, 0),
-		proxys: make([]*ServerRouterProxy, 0),
-	}
-	srv := NewServer(8080, 30*time.Second, router)
+	router := NewServerRouter(a.Context, ServerRouterTimeoutHandler(func(c *routing.Context) error {
+		a.Context = context.WithValue(a.Context, "output", "Timeout")
+		return routing.NewHTTPError(http.StatusRequestTimeout)
+	}), ServerRouterHandlerTimeout(3*time.Second), ServerRouterGracefulStopTimeout(30*time.Second))
+	assert.NotNil(suite.T(), router)
+	srv := NewServer(router, ServerLogWriter(ioutil.Discard), ServerPort(8080))
 	a.SetServer("test", srv)
-	rg := srv.AddRouteGroup("/").WithCallback(&TestRequestCallback{})
+	rg := srv.AddRouteGroup("/").AddCallback(&TestRequestCallback{})
 	assert.NotNil(suite.T(), rg)
 	rg.AddRoute("GET", "test", func(c *routing.Context) error {
 		c.ResponseWriter.Write([]byte("Bar1"))

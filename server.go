@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"context"
 	"github.com/juju/errors"
 	"github.com/ltick/tick-framework/api"
 	"github.com/ltick/tick-routing"
@@ -23,14 +24,27 @@ import (
 	"github.com/ltick/tick-routing/slash"
 )
 
+var (
+	defaultServerPort                      uint          = 80
+	defaultServerLogWriter                 io.Writer     = os.Stdout
+	defaultServerRouterGracefulStopTimeout time.Duration = 120 * time.Second
+	defaultServerRouterHandlerTimeout      time.Duration = 3 * time.Second
+)
+
 type (
+	ServerOptions struct {
+		Context   context.Context
+		logWriter io.Writer
+		Port      uint
+	}
+
+	ServerOption func(*ServerOptions)
+
 	Server struct {
-		gracefulStopTimeout time.Duration
-		logWriter           io.Writer
-		Port                uint
-		Router              *ServerRouter
-		RouteGroups         map[string]*ServerRouteGroup
-		mutex               sync.RWMutex
+		*ServerOptions
+		Router      *ServerRouter
+		RouteGroups map[string]*ServerRouteGroup
+		mutex       sync.RWMutex
 	}
 	ServerRouterProxy struct {
 		Host     string
@@ -45,8 +59,19 @@ type (
 		Path     string
 		Handlers []routing.Handler
 	}
+
+	ServerRouterOptions struct {
+		HandlerTimeout      time.Duration
+		GracefulStopTimeout time.Duration
+		TimeoutHandler      routing.Handler
+		Callback            RouterCallback
+	}
+
+	ServerRouterOption func(*ServerRouterOptions)
+
 	ServerRouter struct {
 		*routing.Router
+		*ServerRouterOptions
 		middlewares []MiddlewareInterface
 		proxys      []*ServerRouterProxy
 		routes      []*ServerRouterRoute
@@ -60,20 +85,83 @@ type (
 	}
 )
 
-func NewServer(port uint, gracefulStopTimeout time.Duration, router *ServerRouter, logWriters ...io.Writer) (server *Server) {
+func ServerContext(ctx context.Context) ServerOption {
+	return func(options *ServerOptions) {
+		options.Context = ctx
+	}
+}
+
+func ServerPort(port uint) ServerOption {
+	return func(options *ServerOptions) {
+		options.Port = port
+	}
+}
+func ServerLogWriter(logWriter io.Writer) ServerOption {
+	return func(options *ServerOptions) {
+		options.logWriter = logWriter
+	}
+}
+func ServerRouterCallback(callback RouterCallback) ServerRouterOption {
+	return func(options *ServerRouterOptions) {
+		options.Callback = callback
+	}
+}
+func ServerRouterHandlerTimeout(handlerTimeout time.Duration) ServerRouterOption {
+	return func(options *ServerRouterOptions) {
+		options.HandlerTimeout = handlerTimeout
+	}
+}
+func ServerRouterTimeoutHandler(timeoutHandler routing.Handler) ServerRouterOption {
+	return func(options *ServerRouterOptions) {
+		options.TimeoutHandler = timeoutHandler
+	}
+}
+func ServerRouterGracefulStopTimeout(gracefulStopTimeout time.Duration) ServerRouterOption {
+	return func(options *ServerRouterOptions) {
+		options.GracefulStopTimeout = gracefulStopTimeout
+	}
+}
+func NewServerRouter(ctx context.Context, setters ...ServerRouterOption) (router *ServerRouter) {
+	serverRouterOptions := &ServerRouterOptions{
+		HandlerTimeout:      defaultServerRouterHandlerTimeout,
+		GracefulStopTimeout: defaultServerRouterGracefulStopTimeout,
+		TimeoutHandler:      defaultTimeoutHandler,
+	}
+	for _, setter := range setters {
+		setter(serverRouterOptions)
+	}
+	router = &ServerRouter{
+		Router:              routing.New(ctx),
+		ServerRouterOptions: serverRouterOptions,
+		routes:              make([]*ServerRouterRoute, 0),
+		proxys:              make([]*ServerRouterProxy, 0),
+	}
+	router.Timeout(serverRouterOptions.HandlerTimeout, serverRouterOptions.TimeoutHandler)
+	if serverRouterOptions.Callback != nil {
+		router.PrependStartupHandler(serverRouterOptions.Callback.OnRequestStartup)
+		router.AppendShutdownHandler(serverRouterOptions.Callback.OnRequestShutdown)
+	}
+	return
+}
+func NewServer(router *ServerRouter, setters ...ServerOption) (server *Server) {
+	serverOptions := &ServerOptions{
+		logWriter: defaultServerLogWriter,
+		Port:      defaultServerPort,
+	}
+	for _, setter := range setters {
+		setter(serverOptions)
+	}
+	if serverOptions.Context == nil {
+		serverOptions.Context = context.Background()
+	}
+	serverRouter := NewServerRouter(serverOptions.Context)
 	server = &Server{
-		Port:                port,
-		gracefulStopTimeout: gracefulStopTimeout,
-		Router:              router,
-		RouteGroups:         map[string]*ServerRouteGroup{},
-		mutex:               sync.RWMutex{},
+		ServerOptions: serverOptions,
+		Router:        serverRouter,
+		RouteGroups:   map[string]*ServerRouteGroup{},
+		mutex:         sync.RWMutex{},
 	}
-	if len(logWriters) > 0 {
-		server.logWriter = logWriters[0]
-	} else {
-		server.logWriter = os.Stdout
-	}
-	server.Log(fmt.Sprintf("ltick: new server [port:'%d', gracefulStopTimeout:'%.fs', requestTimeout:'%.fs']", port, gracefulStopTimeout.Seconds(), router.TimeoutDuration.Seconds()))
+	server.Log(fmt.Sprintf("ltick: new server [serverOptions:'%v', serverRouterOptions:'%v',  handlerTimeout:'%.fs']", server.ServerOptions, server.Router.ServerRouterOptions, router.TimeoutDuration.Seconds()))
 	return server
 }
 
@@ -158,6 +246,9 @@ func (e *Engine) GetServerMap() map[string]*Server {
 }
 
 /********** Server **********/
+func (s *Server) GetGracefulStopTimeout() time.Duration {
+	return s.Router.GracefulStopTimeout
+}
 func (s *Server) Get(host string, group string, path string, handlers ...routing.Handler) *Server {
 	s.Router.routes = append(s.Router.routes, &ServerRouterRoute{
 		Method:   "GET",
@@ -350,6 +441,14 @@ func (s *Server) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	s.Router.ServeHTTP(res, req)
 }
 
+func (r *ServerRouter) AddCallback(callback RouterCallback) *ServerRouter {
+	if callback != nil {
+		r.PrependStartupHandler(callback.OnRequestStartup)
+		r.AppendShutdownHandler(callback.OnRequestShutdown)
+	}
+	return r
+}
+
 // Middlewares
 func (r *ServerRouter) WithMiddlewares(middlewares []MiddlewareInterface) *ServerRouter {
 	r.middlewares = middlewares
@@ -487,14 +586,6 @@ func (r *ServerRouter) NewFileHandler(pathMap file.PathMap, opts ...file.ServerO
 	return file.Server(pathMap, opts...)
 }
 
-func (r *ServerRouter) WithCallback(callback RouterCallback) *ServerRouter {
-	if callback != nil {
-		r.PrependStartupHandler(callback.OnRequestStartup)
-		r.AppendShutdownHandler(callback.OnRequestShutdown)
-	}
-	return r
-}
-
 func (r *ServerRouter) AddRouteGroup(groupName string, startupHandlers []routing.Handler, shutdownHandlers []routing.Handler) *ServerRouteGroup {
 	g := &ServerRouteGroup{
 		RouteGroup: r.Group(groupName, startupHandlers, shutdownHandlers),
@@ -506,7 +597,7 @@ func (r *ServerRouter) AddRouteGroup(groupName string, startupHandlers []routing
 	return g
 }
 
-func (g *ServerRouteGroup) WithCallback(callback RouterCallback) *ServerRouteGroup {
+func (g *ServerRouteGroup) AddCallback(callback RouterCallback) *ServerRouteGroup {
 	if callback != nil {
 		g.PrependStartupHandler(callback.OnRequestStartup)
 		g.AppendShutdownHandler(callback.OnRequestShutdown)

@@ -61,6 +61,8 @@ type (
 		dotenvFile    string
 		envPrefix     string
 		configOptions map[string]config.Option
+		callback      Callback
+		logWriter     io.Writer
 	}
 
 	EngineOption func(*EngineOptions)
@@ -69,10 +71,8 @@ type (
 		*EngineOptions
 		state       State
 		executeFile string
-		logWriter   io.Writer
-		callback    Callback
-		configer    *config.Config
 
+		configer  *config.Config
 		Registry  *Registry
 		Context   context.Context
 		ServerMap map[string]*Server
@@ -108,7 +108,9 @@ var defaultConfigOptions map[string]config.Option = map[string]config.Option{
 	"SYSTEM_LOG_FORMATTER": config.Option{Type: config.String, Default: "sys", EnvironmentKey: "SYSTEM_LOG_FORMATTER"},
 }
 
-func ConfigFile(configFile string) EngineOption {
+var defaultlogWriter io.Writer = os.Stdout
+
+func EngineConfigFile(configFile string) EngineOption {
 	return func(options *EngineOptions) {
 		configFile, err := filepath.Abs(configFile)
 		if err != nil {
@@ -120,7 +122,7 @@ func ConfigFile(configFile string) EngineOption {
 	}
 }
 
-func DotenvFile(dotenvFile string) EngineOption {
+func EngineDotenvFile(dotenvFile string) EngineOption {
 	return func(options *EngineOptions) {
 		dotenvFile, err := filepath.Abs(dotenvFile)
 		if err != nil {
@@ -132,15 +134,27 @@ func DotenvFile(dotenvFile string) EngineOption {
 	}
 }
 
-func EnvPrefix(envPrefix string) EngineOption {
+func EngineEnvPrefix(envPrefix string) EngineOption {
 	return func(options *EngineOptions) {
 		options.envPrefix = envPrefix
 	}
 }
 
-func ConfigOptions(configOptions map[string]config.Option) EngineOption {
+func EngineConfigOptions(configOptions map[string]config.Option) EngineOption {
 	return func(options *EngineOptions) {
 		options.configOptions = configOptions
+	}
+}
+
+func EngineCallback(callback Callback) EngineOption {
+	return func(options *EngineOptions) {
+		options.callback = callback
+	}
+}
+
+func EngineLogWriter(logWriter io.Writer) EngineOption {
+	return func(options *EngineOptions) {
+		options.logWriter = logWriter
 	}
 }
 
@@ -166,6 +180,7 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 		configFile:    defaultConfigFile,
 		envPrefix:     defaultEnvPrefix,
 		configOptions: defaultConfigOptions,
+		logWriter:     defaultlogWriter,
 	}
 	for _, setter := range setters {
 		setter(engineOptions)
@@ -173,7 +188,6 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 	e = &Engine{
 		EngineOptions: engineOptions,
 		state:         STATE_INITIATE,
-		logWriter:     os.Stdout,
 		Registry:      registry,
 		Context:       context.Background(),
 	}
@@ -247,6 +261,30 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 		}
 	}
 	return e
+}
+func (e *Engine) NewDefaultServer() *Server {
+	middlewares := make([]MiddlewareInterface, 0)
+	for _, sortedMiddleware := range e.Registry.GetSortedMiddlewares() {
+		middleware, ok := sortedMiddleware.(MiddlewareInterface)
+		if !ok {
+			continue
+		}
+		middlewares = append(middlewares, middleware)
+	}
+	var router *ServerRouter = NewServerRouter(e.Context)
+	router.WithAccessLogger(DefaultAccessLogFunc).
+		WithErrorHandler(DefaultFaultLogFunc(), DefaultErrorLogFunc).
+		WithPanicLogger(DefaultFaultLogFunc()).
+		WithTypeNegotiator(JSON, XML, XML2, HTML).
+		WithSlashRemover(http.StatusMovedPermanently).
+		WithLanguageNegotiator("zh-CN", "en-US").
+		WithCors(CorsAllowAll).
+		WithMiddlewares(middlewares)
+	server := NewServer(router, ServerLogWriter(e.logWriter))
+	server.AddRouteGroup("/")
+	server.Pprof("*", "debug")
+	e.SetServer("default", server)
+	return server
 }
 func (e *Engine) LoadSystemConfig(configPath string, envPrefix string, dotenvFiles ...string) *Engine {
 	var err error
@@ -407,6 +445,13 @@ func (e *Engine) LoadEnvFile(envPrefix string, dotenvFile string) *Engine {
 	}
 	return e
 }
+
+func (e *Engine) WithCallback(callback Callback) *Engine {
+	if callback != nil {
+		e.EngineOptions.callback = callback
+	}
+	return e
+}
 func (e *Engine) WithValues(values map[string]interface{}) *Engine {
 	for key, value := range values {
 		err := e.Registry.RegisterValue(key, value)
@@ -418,10 +463,7 @@ func (e *Engine) WithValues(values map[string]interface{}) *Engine {
 	}
 	return e
 }
-func (e *Engine) WithCallback(callback Callback) *Engine {
-	e.callback = callback
-	return e
-}
+
 func (e *Engine) GetLogger(name string) (*libLog.Logger, error) {
 	loggerComponent, err := e.Registry.GetComponentByName("Log")
 	if err != nil {
@@ -437,9 +479,7 @@ func (e *Engine) GetLogger(name string) (*libLog.Logger, error) {
 	}
 	return logger, nil
 }
-func (e *Engine) SetLogWriter(logWriter io.Writer) {
-	e.logWriter = logWriter
-}
+
 func (e *Engine) Log(args ...interface{}) {
 	fmt.Fprintln(e.logWriter, args...)
 }
@@ -449,12 +489,12 @@ func (e *Engine) Startup() (err error) {
 	}
 	e.Log("ltick: Execute file \"" + e.executeFile + "\"")
 	e.Log("ltick: Startup")
-	if e.callback != nil {
-		err = e.Registry.InjectComponentTo([]interface{}{e.callback})
+	if e.EngineOptions.callback != nil {
+		err = e.Registry.InjectComponentTo([]interface{}{e.EngineOptions.callback})
 		if err != nil {
 			return errors.Annotatef(err, errStartupCallback)
 		}
-		err = e.callback.OnStartup(e)
+		err = e.EngineOptions.callback.OnStartup(e)
 		if err != nil {
 			return errors.Annotatef(err, errStartupCallback)
 		}
@@ -559,8 +599,8 @@ func (e *Engine) Shutdown() (err error) {
 			return errors.Annotatef(err, errShutdownComponentShutdown, sortedComponenetName[index])
 		}
 	}
-	if e.callback != nil {
-		err = e.callback.OnShutdown(e)
+	if e.EngineOptions.callback != nil {
+		err = e.EngineOptions.callback.OnShutdown(e)
 		if err != nil {
 			return errors.Annotatef(err, errShutdownCallback)
 		}
@@ -592,7 +632,7 @@ func (e *Engine) ServerListenAndServe(server *Server) {
 		&http.Server{
 			Addr:    fmt.Sprintf(":%d", server.Port),
 			Handler: server.Router,
-		}).Timeout(server.gracefulStopTimeout).Build()
+		}).Timeout(server.GetGracefulStopTimeout()).Build()
 	if err := g.ListenAndServe(); err != nil {
 		if opErr, ok := err.(*net.OpError); !ok || (ok && opErr.Op != "accept") {
 			e.Log("ltick: Server stop error: ", err.Error())

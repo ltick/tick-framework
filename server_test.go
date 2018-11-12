@@ -139,15 +139,15 @@ func (f *ServerAppCallback) OnShutdown(e *Engine) error {
 	return nil
 }
 
-type ServerRequestCallback struct{}
+type HandlerCallback struct{}
 
-func (f *ServerRequestCallback) OnRequestStartup(c *routing.Context) error {
+func (f *HandlerCallback) OnRequestStartup(c *routing.Context) error {
 	systemLogger := c.Context.Value("systemLogger").(*log.Logger)
 	systemLogger.Info("OnRequestStartup")
 	return nil
 }
 
-func (f *ServerRequestCallback) OnRequestShutdown(c *routing.Context) error {
+func (f *HandlerCallback) OnRequestShutdown(c *routing.Context) error {
 	systemLogger := c.Context.Value("systemLogger").(*log.Logger)
 	systemLogger.Info("OnRequestShutdown")
 	return nil
@@ -174,8 +174,8 @@ type TestServerSuite struct {
 	testAppLog string
 
 	engine        *Engine
-	DefaultServer *Server
-	Server        *Server
+	server        *Server
+	defaultServer *Server
 }
 
 func (suite *TestServerSuite) SetupTest() {
@@ -190,9 +190,9 @@ func (suite *TestServerSuite) SetupTest() {
 	registry, err := NewRegistry()
 	assert.Nil(suite.T(), err)
 	registry.UseComponent("Log")
-	suite.engine = New(registry, ConfigFile(suite.configFile), DotenvFile(suite.dotenvFile), EnvPrefix("LTICK")).
-		WithCallback(&ServerAppCallback{}).WithValues(values)
-	suite.engine.SetLogWriter(ioutil.Discard)
+	// Engine
+	suite.engine = New(registry, EngineLogWriter(ioutil.Discard), EngineConfigFile(suite.configFile), EngineDotenvFile(suite.dotenvFile), EngineEnvPrefix("LTICK"), EngineCallback(&ServerAppCallback{})).
+		WithValues(values)
 	accessLogger, err := suite.engine.GetLogger("access")
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), accessLogger)
@@ -206,9 +206,6 @@ func (suite *TestServerSuite) SetupTest() {
 	suite.engine.SetContextValue("debugLogger", debugLogger)
 	suite.engine.SetContextValue("accessLogger", accessLogger)
 	suite.engine.SetContextValue("Foo", "Bar")
-	// Default Server
-	suite.DefaultServer = NewDefaultServer(suite.engine, &ServerRequestCallback{}, map[string]routing.Handler{})
-	suite.engine.SetServer("default", suite.DefaultServer)
 	// Server
 	errorLogHandler := func(c *routing.Context, err error) error {
 		ctxDebugLogger := c.Context.Value("debugLogger")
@@ -230,11 +227,7 @@ func (suite *TestServerSuite) SetupTest() {
 			return routing.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
 	}
-	router := &ServerRouter{
-		Router: routing.New(suite.engine.Context).Timeout(3 * time.Second),
-		routes: make([]*ServerRouterRoute, 0),
-		proxys: make([]*ServerRouterProxy, 0),
-	}
+	router := NewServerRouter(suite.engine.Context, ServerRouterHandlerTimeout(3*time.Second), ServerRouterGracefulStopTimeout(30*time.Second))
 	assert.NotNil(suite.T(), router)
 	router.WithAccessLogger(accessLogFunc).
 		WithErrorHandler(systemLogger.Error, errorLogHandler).
@@ -243,19 +236,20 @@ func (suite *TestServerSuite) SetupTest() {
 		WithTypeNegotiator(JSON, XML, XML2, HTML).
 		WithSlashRemover(http.StatusMovedPermanently).
 		WithLanguageNegotiator("zh-CN", "en-US").
-		WithCors(CorsAllowAll).
-		WithCallback(&ServerRequestCallback{})
-	suite.Server = NewServer(8080, 30*time.Second, router)
-	suite.engine.SetServer("test", suite.Server)
+		WithCors(CorsAllowAll)
+	suite.server = NewServer(router, ServerContext(suite.engine.Context), ServerPort(8080))
+	suite.engine.SetServer("test", suite.server)
+
+	suite.defaultServer = suite.engine.GetServer("default")
 }
 
 func (suite *TestServerSuite) TestDefaultServer() {
-	rg := suite.DefaultServer.GetRouteGroup("/")
+	rg := suite.defaultServer.GetRouteGroup("/")
 	if rg == nil {
-		rg = suite.DefaultServer.AddRouteGroup("/")
+		rg = suite.defaultServer.AddRouteGroup("/")
 	}
 	assert.NotNil(suite.T(), rg)
-	rg.WithCallback(&ServerGroupRequestCallback{})
+	rg.AddCallback(&ServerGroupRequestCallback{})
 	rg.AddRoute("GET", "user/<id>", func(c *routing.Context) error {
 		_, err := c.ResponseWriter.Write([]byte(c.Param("id")))
 		return err
@@ -268,22 +262,22 @@ func (suite *TestServerSuite) TestDefaultServer() {
 	assert.Nil(suite.T(), err)
 	res := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/user/1", nil)
-	suite.DefaultServer.ServeHTTP(res, req)
+	suite.defaultServer.ServeHTTP(res, req)
 	assert.Equal(suite.T(), "1", res.Body.String())
 
 	res = httptest.NewRecorder()
 	req, _ = http.NewRequest("GET", "/test/1", nil)
-	suite.DefaultServer.ServeHTTP(res, req)
+	suite.defaultServer.ServeHTTP(res, req)
 	assert.Equal(suite.T(), "1", res.Body.String())
 }
 
 func (suite *TestServerSuite) TestServer() {
-	rg := suite.Server.GetRouteGroup("/")
+	rg := suite.server.GetRouteGroup("/")
 	if rg == nil {
-		rg = suite.Server.AddRouteGroup("/")
+		rg = suite.server.AddRouteGroup("/")
 	}
 	assert.NotNil(suite.T(), rg)
-	rg.WithCallback(&ServerGroupRequestCallback{})
+	rg.AddCallback(&ServerGroupRequestCallback{})
 	rg.AddRoute("GET", "user/<id>", func(c *routing.Context) error {
 		_, err := c.ResponseWriter.Write([]byte(c.Param("id")))
 		return err
@@ -296,12 +290,12 @@ func (suite *TestServerSuite) TestServer() {
 	assert.Nil(suite.T(), err)
 	res := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/user/1", nil)
-	suite.Server.ServeHTTP(res, req)
+	suite.server.ServeHTTP(res, req)
 	assert.Equal(suite.T(), "1", res.Body.String())
 
 	res = httptest.NewRecorder()
 	req, _ = http.NewRequest("GET", "/Foo", nil)
-	suite.Server.ServeHTTP(res, req)
+	suite.server.ServeHTTP(res, req)
 	assert.Equal(suite.T(), "Bar", res.Body.String())
 }
 
@@ -358,9 +352,9 @@ func (p Param) Doc() api.Doc {
 	}
 }
 func (suite *TestServerSuite) TestApi() {
-	rg := suite.Server.GetRouteGroup("/")
+	rg := suite.server.GetRouteGroup("/")
 	if rg == nil {
-		rg = suite.Server.AddRouteGroup("/")
+		rg = suite.server.AddRouteGroup("/")
 	}
 	assert.NotNil(suite.T(), rg)
 	apiHandler, err := api.ToAPIHandler(&Param{}, true)
@@ -375,7 +369,7 @@ func (suite *TestServerSuite) TestApi() {
 	form.Add("p", "!#!")
 	req, _ := http.NewRequest("POST", "/user/1?title=title", strings.NewReader(form.Encode()))
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	suite.Server.ServeHTTP(res, req)
+	suite.server.ServeHTTP(res, req)
 	assert.Equal(suite.T(), http.StatusBadRequest, res.Code)
 	assert.Equal(suite.T(), "{\"status\":400,\"message\":\"*ltick.Param|p|must be in a valid format\"}\n", res.Body.String())
 	// case 2
@@ -385,7 +379,7 @@ func (suite *TestServerSuite) TestApi() {
 	form.Add("p", "abc=")
 	req, _ = http.NewRequest("POST", "/user/1?title=title", strings.NewReader(form.Encode()))
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	suite.Server.ServeHTTP(res, req)
+	suite.server.ServeHTTP(res, req)
 	assert.Equal(suite.T(), http.StatusOK, res.Code)
 	assert.Equal(suite.T(), "1", res.Body.String())
 
@@ -404,7 +398,7 @@ func (suite *TestServerSuite) TestApi() {
 	assert.Nil(suite.T(), err)
 	w.Close()
 	req, _ = http.NewRequest("POST", "/user/1?title=title", body)
-	suite.Server.ServeHTTP(res, req)
+	suite.server.ServeHTTP(res, req)
 	assert.Equal(suite.T(), http.StatusOK, res.Code)
 	assert.Equal(suite.T(), "1", res.Body.String())
 }
