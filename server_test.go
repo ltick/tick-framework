@@ -192,7 +192,8 @@ func (suite *TestServerSuite) SetupTest() {
 	assert.Nil(suite.T(), err)
 	registry.UseComponent("Log")
 	// Engine
-	suite.engine = New(registry, EngineLogWriter(ioutil.Discard), EngineConfigFile(suite.configFile), EngineDotenvFile(suite.dotenvFile), EngineEnvPrefix("LTICK"), EngineCallback(&ServerAppCallback{})).
+	suite.engine = New(registry, EngineLogWriter(ioutil.Discard), EngineCallback(&ServerAppCallback{})).
+		LoadConfig(EngineConfigFile(suite.configFile), EngineConfigDotenvFile(suite.dotenvFile), EngineConfigEnvPrefix("LTICK")).
 		WithValues(values)
 	accessLogger, err := suite.engine.GetLogger("access")
 	assert.Nil(suite.T(), err)
@@ -245,7 +246,6 @@ func (suite *TestServerSuite) SetupTest() {
 	suite.engine.SetServer("default", suite.defaultServer)
 	suite.configureServer = suite.engine.NewDefaultServer()
 	suite.engine.SetServer("configure", suite.configureServer)
-
 }
 
 func (suite *TestServerSuite) TestDefaultServer() {
@@ -293,7 +293,7 @@ func (suite *TestServerSuite) TestConfigureServer() {
 	providers["TestHandler"] = func() api.Handler {
 		return &TestHandler{}
 	}
-	suite.engine.ConfigureServer(suite.defaultServer, providers, "server")
+	suite.engine.ConfigureServerFromFile(suite.defaultServer, suite.engine.GetConfigCacheFile(), providers, "server")
 
 	err := suite.engine.Startup()
 	assert.Nil(suite.T(), err)

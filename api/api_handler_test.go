@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-	"fmt"
 )
 
 func TestParsetags(t *testing.T) {
@@ -96,7 +95,6 @@ func TestFieldvalidate(t *testing.T) {
 		t.Fatal("should validate", err)
 	}
 	if err := c.validate(reflect.ValueOf("abcde")); err == nil || !strings.Contains(err.Error(), "the length must be no more than") {
-		fmt.Println(err.Error())
 		t.Fatal("should not validate")
 	}
 

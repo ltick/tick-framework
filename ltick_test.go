@@ -53,7 +53,8 @@ func (suite *TestSuite) TestAppCallback() {
 	var values map[string]interface{} = make(map[string]interface{}, 0)
 	r, err := NewRegistry()
 	assert.Nil(suite.T(), err)
-	a := New(r, EngineLogWriter(ioutil.Discard), EngineConfigFile(suite.configFile), EngineDotenvFile(suite.dotenvFile), EngineEnvPrefix("LTICK"), EngineCallback(&TestCallback{})).
+	a := New(r, EngineLogWriter(ioutil.Discard), EngineCallback(&TestCallback{})).
+		LoadConfig(EngineConfigFile(suite.configFile), EngineConfigDotenvFile(suite.dotenvFile), EngineConfigEnvPrefix("LTICK")).
 		WithValues(values)
 	a.SetContextValue("output", "")
 	err = a.Startup()
@@ -90,7 +91,8 @@ func (suite *TestSuite) TestComponentCallback() {
 	err = configer.SetOptions(options)
 	assert.Nil(suite.T(), err)
 
-	a := New(r, EngineLogWriter(ioutil.Discard), EngineConfigFile(suite.configFile), EngineDotenvFile(suite.dotenvFile), EngineEnvPrefix("LTICK"), EngineCallback(&TestCallback{})).
+	a := New(r, EngineLogWriter(ioutil.Discard), EngineCallback(&TestCallback{})).
+		LoadConfig(EngineConfigFile(suite.configFile), EngineConfigDotenvFile(suite.dotenvFile), EngineConfigEnvPrefix("LTICK")).
 		WithValues(values)
 	a.SetContextValue("output", "")
 	err = a.Startup()

@@ -29,6 +29,7 @@ import (
 var (
 	errNew                       = "ltick: new error"
 	errEngineOption              = "ltick: set engine option error"
+	errEngineConfigOption        = "ltick: set engine config option error"
 	errNewDefault                = "ltick: new classic error"
 	errNewServer                 = "ltick: new server error"
 	errGetLogger                 = "ltick: get logger error"
@@ -57,18 +58,25 @@ const (
 
 type (
 	EngineOptions struct {
-		configFile    string
-		dotenvFile    string
-		envPrefix     string
-		configOptions map[string]config.Option
-		callback      Callback
-		logWriter     io.Writer
+		callback  Callback
+		logWriter io.Writer
 	}
 
 	EngineOption func(*EngineOptions)
 
+	EngineConfigOptions struct {
+		configFile      string
+		configCacheFile string
+		dotenvFile      string
+		envPrefix       string
+		configs         map[string]config.Option
+	}
+
+	EngineConfigOption func(*EngineConfigOptions)
+
 	Engine struct {
 		*EngineOptions
+		*EngineConfigOptions
 		state       State
 		executeFile string
 
@@ -83,10 +91,10 @@ type (
 	}
 )
 
-var defaultConfigOptions map[string]config.Option = map[string]config.Option{
+var defaultConfigs map[string]config.Option = map[string]config.Option{
 	"APP_ENV":     config.Option{Type: config.String, Default: "local", EnvironmentKey: "APP_ENV"},
 	"PREFIX_PATH": config.Option{Type: config.String, EnvironmentKey: "PREFIX_PATH"},
-	"TMP_PATH":    config.Option{Type: config.String, Default: "/tmp"},
+	"TMP_PATH":    config.Option{Type: config.String, Default: "/tmp", EnvironmentKey: "TMP_PATH"},
 	"DEBUG":       config.Option{Type: config.String, Default: false},
 
 	"ACCESS_LOG_TYPE":      config.Option{Type: config.String, Default: "console", EnvironmentKey: "ACCESS_LOG_TYPE"},
@@ -110,11 +118,11 @@ var defaultConfigOptions map[string]config.Option = map[string]config.Option{
 
 var defaultlogWriter io.Writer = os.Stdout
 
-func EngineConfigFile(configFile string) EngineOption {
-	return func(options *EngineOptions) {
+func EngineConfigFile(configFile string) EngineConfigOption {
+	return func(options *EngineConfigOptions) {
 		configFile, err := filepath.Abs(configFile)
 		if err != nil {
-			err = errors.Annotatef(err, errEngineOption)
+			err = errors.Annotatef(err, errEngineConfigOption)
 			fmt.Println(errors.ErrorStack(err))
 			os.Exit(1)
 		}
@@ -122,11 +130,11 @@ func EngineConfigFile(configFile string) EngineOption {
 	}
 }
 
-func EngineDotenvFile(dotenvFile string) EngineOption {
-	return func(options *EngineOptions) {
+func EngineConfigDotenvFile(dotenvFile string) EngineConfigOption {
+	return func(options *EngineConfigOptions) {
 		dotenvFile, err := filepath.Abs(dotenvFile)
 		if err != nil {
-			err = errors.Annotatef(err, errEngineOption)
+			err = errors.Annotatef(err, errEngineConfigOption)
 			fmt.Println(errors.ErrorStack(err))
 			os.Exit(1)
 		}
@@ -134,15 +142,21 @@ func EngineDotenvFile(dotenvFile string) EngineOption {
 	}
 }
 
-func EngineEnvPrefix(envPrefix string) EngineOption {
-	return func(options *EngineOptions) {
+func EngineConfigEnvPrefix(envPrefix string) EngineConfigOption {
+	return func(options *EngineConfigOptions) {
 		options.envPrefix = envPrefix
 	}
 }
 
-func EngineConfigOptions(configOptions map[string]config.Option) EngineOption {
-	return func(options *EngineOptions) {
-		options.configOptions = configOptions
+func EngineConfigConfigs(configs map[string]config.Option) EngineConfigOption {
+	return func(options *EngineConfigOptions) {
+		options.configs = configs
+	}
+}
+
+func EngineConfigCacheFile(configCacheFile string) EngineConfigOption {
+	return func(options *EngineConfigOptions) {
+		options.configCacheFile = configCacheFile
 	}
 }
 
@@ -156,6 +170,26 @@ func EngineLogWriter(logWriter io.Writer) EngineOption {
 	return func(options *EngineOptions) {
 		options.logWriter = logWriter
 	}
+}
+
+func (e *Engine) GetLogWriter() io.Writer {
+	return e.EngineOptions.logWriter
+}
+
+func (e *Engine) GetConfigDotenvFile() string {
+	return e.EngineConfigOptions.dotenvFile
+}
+
+func (e *Engine) GetConfigEnvPrefix() string {
+	return e.EngineConfigOptions.envPrefix
+}
+
+func (e *Engine) GetConfigCacheFile() string {
+	return e.EngineConfigOptions.configCacheFile
+}
+
+func (e *Engine) GetConfigConfigs() map[string]config.Option {
+	return e.EngineConfigOptions.configs
 }
 
 var configPlaceholdRegExp = regexp.MustCompile(`%\w+%`)
@@ -176,11 +210,7 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 		os.Exit(1)
 	}
 	engineOptions := &EngineOptions{
-		dotenvFile:    defaultDotenvFile,
-		configFile:    defaultConfigFile,
-		envPrefix:     defaultEnvPrefix,
-		configOptions: defaultConfigOptions,
-		logWriter:     defaultlogWriter,
+		logWriter: defaultlogWriter,
 	}
 	for _, setter := range setters {
 		setter(engineOptions)
@@ -210,25 +240,6 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
-	err = e.configer.SetOptions(e.configOptions)
-	if err != nil {
-		err = errors.Annotate(err, errNewDefault)
-		e.Log(errors.ErrorStack(err))
-		os.Exit(1)
-	}
-	// 加载系统配置
-	if e.dotenvFile != "" {
-		e.LoadSystemConfig(e.configFile, e.envPrefix, e.dotenvFile)
-	} else {
-		e.LoadSystemConfig(e.configFile, e.envPrefix)
-	}
-	// 注入模块
-	err = e.Registry.InjectComponent()
-	if err != nil {
-		err = errors.Annotate(err, errNew)
-		e.Log(errors.ErrorStack(err))
-		os.Exit(1)
-	}
 	// 模块初始化
 	componentMap := e.Registry.GetComponentMap()
 	for _, name := range e.Registry.GetSortedComponentName() {
@@ -245,26 +256,21 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 			os.Exit(1)
 		}
 	}
-	// 中间件初始化
-	for _, m := range e.Registry.GetMiddlewareMap() {
-		mi, ok := m.(MiddlewareInterface)
-		if !ok {
-			err = errors.Annotate(errors.Errorf("invalid type"), errNew)
-			e.Log(errors.ErrorStack(err))
-			os.Exit(1)
-		}
-		e.Context, err = mi.Initiate(e.Context)
-		if err != nil {
-			err = errors.Annotate(err, errNew)
-			e.Log(errors.ErrorStack(err))
-			os.Exit(1)
-		}
-	}
 	return e
 }
 
-func (e *Engine) ConfigureServer(s *Server, providers map[string]interface{}, configTag string) *Server {
-	err := e.configer.ConfigureFileConfig(s, e.configFile, providers, "server")
+func (e *Engine) ConfigureServerFromFile(s *Server, configFile string, providers map[string]interface{}, configTag string) *Server {
+	err := e.configer.ConfigureFileConfig(s, configFile, providers, "server")
+	if err != nil {
+		err := errors.Annotate(err, errConfigureServer)
+		fmt.Println(errors.ErrorStack(err))
+		os.Exit(1)
+	}
+	return s
+}
+
+func (e *Engine) ConfigureServerFromJson(s *Server, configJson []byte, providers map[string]interface{}, configTag string) *Server {
+	err := e.configer.ConfigureJsonConfig(s, configJson, providers, "server")
 	if err != nil {
 		err := errors.Annotate(err, errConfigureServer)
 		fmt.Println(errors.ErrorStack(err))
@@ -297,70 +303,79 @@ func (e *Engine) NewDefaultServer(setters ...ServerOption) *Server {
 	server.Pprof("*", "debug")
 	return server
 }
-func (e *Engine) LoadSystemConfig(configPath string, envPrefix string, dotenvFiles ...string) *Engine {
+
+func (e *Engine) LoadConfig(setters ...EngineConfigOption) *Engine {
 	var err error
-	if configPath == "" {
-		err = errors.Annotate(fmt.Errorf("'%s' is a empty config path", configPath), errNew)
+	engineConfigOptions := &EngineConfigOptions{
+		dotenvFile:      defaultDotenvFile,
+		configFile:      defaultConfigFile,
+		envPrefix:       defaultEnvPrefix,
+		configs:         defaultConfigs,
+		configCacheFile: defaultConfigFile,
+	}
+	for _, setter := range setters {
+		setter(engineConfigOptions)
+	}
+	err = e.configer.SetOptions(engineConfigOptions.configs)
+	if err != nil {
+		err = errors.Annotate(err, errNewDefault)
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
-	if !path.IsAbs(configPath) {
-		err = errors.Annotate(fmt.Errorf("'%s' is not a valid config path", configPath), errNew)
+	// 加载系统配置
+	if !path.IsAbs(engineConfigOptions.configFile) {
+		err = errors.Annotate(fmt.Errorf("ltick: '%s' is not a valid config path", engineConfigOptions.configFile), errNew)
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
-	var dotenvFile string
-	if len(dotenvFiles) > 0 {
-		dotenvFile = dotenvFiles[0]
-	}
-	if !path.IsAbs(dotenvFile) {
-		err = errors.Annotate(fmt.Errorf("'%s' is not a valid dotenv path", dotenvFile), errNew)
+	if !path.IsAbs(engineConfigOptions.dotenvFile) {
+		err = errors.Annotate(fmt.Errorf("ltick: '%s' is not a valid dotenv path", engineConfigOptions.dotenvFile), errNew)
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
-	configCachedFile, err := utility.GetCachedFile(configPath)
+	configCachedFile, err := utility.GetCacheFile(engineConfigOptions.configCacheFile)
 	if err != nil {
 		err = errors.Annotate(err, errLoadSystemConfig)
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
 	defer configCachedFile.Close()
-	cachedConfigFilePath := configCachedFile.Name()
-	if dotenvFile != "" {
-		e.LoadEnvFile(envPrefix, dotenvFile)
+	cachedConfigFileName := configCachedFile.Name()
+	if engineConfigOptions.dotenvFile != "" {
+		e.LoadEnvFile(engineConfigOptions.envPrefix, engineConfigOptions.dotenvFile)
 	} else {
-		e.LoadEnv(envPrefix)
+		e.LoadEnv(engineConfigOptions.envPrefix)
 	}
-	e.LoadCachedConfig(configPath, cachedConfigFilePath)
+	e.loadCachedConfig(engineConfigOptions.configFile, cachedConfigFileName)
 	go func() {
 		// 刷新缓存
 		for {
-			cachedConfigFileInfo, err := os.Stat(cachedConfigFilePath)
+			cachedConfigFileInfo, err := os.Stat(cachedConfigFileName)
 			if err != nil {
 				err = errors.Annotate(err, errLoadSystemConfig)
 				e.Log(errors.ErrorStack(err))
 				return
 			}
-			if dotenvFile != "" {
-				dotenvFileInfo, err := os.Stat(dotenvFile)
+			if engineConfigOptions.dotenvFile != "" {
+				dotenvFileInfo, err := os.Stat(engineConfigOptions.dotenvFile)
 				if err != nil {
 					err = errors.Annotate(err, errLoadSystemConfig)
 					e.Log(errors.ErrorStack(err))
 					return
 				}
 				if cachedConfigFileInfo.ModTime().Before(dotenvFileInfo.ModTime()) {
-					e.LoadEnvFile(envPrefix, dotenvFile)
-					e.LoadCachedConfig(configPath, cachedConfigFilePath)
+					e.LoadEnvFile(engineConfigOptions.envPrefix, engineConfigOptions.dotenvFile)
+					e.loadCachedConfig(engineConfigOptions.configFile, cachedConfigFileName)
 				}
 			}
-			configFileInfo, err := os.Stat(configPath)
+			configFileInfo, err := os.Stat(engineConfigOptions.configFile)
 			if err != nil {
 				err = errors.Annotate(err, errLoadSystemConfig)
 				e.Log(errors.ErrorStack(err))
 				return
 			}
 			if cachedConfigFileInfo.ModTime().Before(configFileInfo.ModTime()) {
-				e.LoadCachedConfig(configPath, cachedConfigFilePath)
+				e.loadCachedConfig(engineConfigOptions.configFile, cachedConfigFileName)
 			}
 			time.Sleep(defaultConfigReloadTime)
 		}
@@ -368,7 +383,7 @@ func (e *Engine) LoadSystemConfig(configPath string, envPrefix string, dotenvFil
 	return e
 }
 
-func (e *Engine) LoadCachedConfig(configPath string, cachedConfigFilePath string) {
+func (e *Engine) loadCachedConfig(configPath string, cachedConfigFileName string) {
 	configFile, err := os.OpenFile(configPath, os.O_RDONLY, 0644)
 	if err != nil {
 		err = errors.Annotate(err, errLoadCachedConfig)
@@ -389,18 +404,18 @@ func (e *Engine) LoadCachedConfig(configPath string, cachedConfigFilePath string
 		replaceConfigKey := strings.Trim(replaceKey, "%")
 		cachedFileByte = bytes.Replace(cachedFileByte, []byte(replaceKey), []byte(e.configer.GetString(replaceConfigKey)), -1)
 	}
-	err = ioutil.WriteFile(cachedConfigFilePath, cachedFileByte, 0644)
+	err = ioutil.WriteFile(cachedConfigFileName, cachedFileByte, 0644)
 	if err != nil {
 		err = errors.Annotate(err, errLoadCachedConfig)
 		e.Log(errors.ErrorStack(err))
 		return
 	}
-	e.LoadConfig(filepath.Dir(cachedConfigFilePath), strings.Replace(filepath.Base(cachedConfigFilePath), filepath.Ext(cachedConfigFilePath), "", 1))
+	e.loadConfig(filepath.Dir(cachedConfigFileName), strings.Replace(filepath.Base(cachedConfigFileName), filepath.Ext(cachedConfigFileName), "", 1))
 }
-func (e *Engine) LoadConfig(configPath string, configName string) *Engine {
+func (e *Engine) loadConfig(configPath string, configName string) *Engine {
 	var err error
 	if configPath == "" || configName == "" {
-		err = errors.Annotatef(errors.Errorf("config_path or config_name is empty"), errLoadConfig, configPath, configPath)
+		err = errors.Annotatef(errors.Errorf("configPath or configName is empty"), errLoadConfig, configPath, configPath)
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
@@ -491,7 +506,7 @@ func (e *Engine) GetLogger(name string) (*libLog.Logger, error) {
 	return logger, nil
 }
 func (e *Engine) SetLogWriter(logWriter io.Writer) {
-	e.logWriter = logWriter
+	e.EngineOptions.logWriter = logWriter
 }
 func (e *Engine) Log(args ...interface{}) {
 	fmt.Fprintln(e.logWriter, args...)
@@ -502,6 +517,21 @@ func (e *Engine) Startup() (err error) {
 	}
 	e.Log("ltick: Execute file \"" + e.executeFile + "\"")
 	e.Log("ltick: Startup")
+	// 中间件初始化
+	for _, m := range e.Registry.GetMiddlewareMap() {
+		mi, ok := m.(MiddlewareInterface)
+		if !ok {
+			err = errors.Annotate(errors.Errorf("invalid type"), errNew)
+			e.Log(errors.ErrorStack(err))
+			os.Exit(1)
+		}
+		e.Context, err = mi.Initiate(e.Context)
+		if err != nil {
+			err = errors.Annotate(err, errNew)
+			e.Log(errors.ErrorStack(err))
+			os.Exit(1)
+		}
+	}
 	if e.EngineOptions.callback != nil {
 		err = e.Registry.InjectComponentTo([]interface{}{e.EngineOptions.callback})
 		if err != nil {

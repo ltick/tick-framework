@@ -1,8 +1,8 @@
 {
-  "temporary_path": "/tmp",
   "server": {
     "Port": 8081,
     "Router": {
+      "HandlerTimeout": "2s",
       "GracefulStopTimeout": "120s",
       "Callbacks": [
         {"type": "handlerCallback"}

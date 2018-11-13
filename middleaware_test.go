@@ -122,7 +122,8 @@ func (suite *TestSuite) TestMiddleware() {
 	assert.Nil(suite.T(), err)
 	err = r.RegisterMiddleware("testMiddleware2", &testMiddleware2{})
 	assert.Nil(suite.T(), err)
-	a := New(r, EngineLogWriter(ioutil.Discard), EngineConfigFile(suite.configFile), EngineDotenvFile(suite.dotenvFile), EngineEnvPrefix("LTICK"), EngineCallback(&TestCallback{})).
+	a := New(r, EngineLogWriter(ioutil.Discard), EngineCallback(&TestCallback{})).
+		LoadConfig(EngineConfigFile(suite.configFile), EngineConfigDotenvFile(suite.dotenvFile), EngineConfigEnvPrefix("LTICK")).
 		WithValues(values)
 	a.SetContextValue("output", "")
 
