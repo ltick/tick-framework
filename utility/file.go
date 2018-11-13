@@ -1,7 +1,6 @@
 package utility
 
 import (
-	"bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
@@ -16,8 +15,6 @@ import (
 )
 
 var (
-	errGetCacheFile        = "ltick utility: get cache file error"
-	errGetCacheFileContent = "ltick utility: get cache file content error"
 	errCreateTemporaryFile  = "ltick utility: create temporary file error"
 )
 
@@ -63,30 +60,6 @@ func CopyFile(src, dst string) (int64, error) {
 	return cn, nil
 }
 
-func GetCacheFile(cacheFile string, cacheFiles ...string) (file *os.File, err error) {
-	fileExtension := filepath.Ext(cacheFile)
-	cachedFilePath := strings.Replace(cacheFile, fileExtension, "", -1) + ".cached" + fileExtension
-	if len(cacheFiles) >0 {
-		cachedFilePath = strings.Replace(cachedFilePath, filepath.Dir(cachedFilePath), cacheFiles[0], 1)
-	}
-	_, err = os.Stat(cachedFilePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			file, err = NewFile(cachedFilePath, 0644, bytes.NewReader([]byte{}), 0)
-			if err != nil {
-				return nil, errors.New(errGetCacheFile + ": " + err.Error())
-			}
-		} else {
-			return nil, errors.New(errGetCacheFile + ": " + err.Error())
-		}
-	} else {
-		file, err = os.OpenFile(cachedFilePath, os.O_RDWR, 0644)
-		if err != nil {
-			return nil, errors.New(errGetCacheFile + ": " + err.Error())
-		}
-	}
-	return file, err
-}
 func NewFile(filePath string, perm os.FileMode, payload io.Reader, sizes ...int64) (file *os.File, err error) {
 	fileDir := filepath.Dir(filePath)
 	if _, err = os.Stat(fileDir); os.IsNotExist(err) {

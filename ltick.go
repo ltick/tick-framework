@@ -46,6 +46,7 @@ var (
 	errLoadEnv                   = "ltick: load env error [env_prefix:'%s', binded_environment_keys:'%v']"
 	errLoadSystemConfig          = "ltick: load system config error"
 	errLoadEnvFile               = "ltick: load env file error"
+	errGetCacheFile              = "ltick: get cache file error"
 )
 
 type State int8
@@ -307,11 +308,10 @@ func (e *Engine) NewDefaultServer(setters ...ServerOption) *Server {
 func (e *Engine) LoadConfig(setters ...EngineConfigOption) *Engine {
 	var err error
 	engineConfigOptions := &EngineConfigOptions{
-		dotenvFile:      defaultDotenvFile,
-		configFile:      defaultConfigFile,
-		envPrefix:       defaultEnvPrefix,
-		configs:         defaultConfigs,
-		configCacheFile: defaultConfigFile,
+		dotenvFile: defaultDotenvFile,
+		configFile: defaultConfigFile,
+		envPrefix:  defaultEnvPrefix,
+		configs:    defaultConfigs,
 	}
 	for _, setter := range setters {
 		setter(engineConfigOptions)
@@ -333,7 +333,11 @@ func (e *Engine) LoadConfig(setters ...EngineConfigOption) *Engine {
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
-	configCachedFile, err := utility.GetCacheFile(engineConfigOptions.configCacheFile)
+	if e.configCacheFile == "" {
+		fileExtension := filepath.Ext(engineConfigOptions.configCacheFile)
+		engineConfigOptions.configCacheFile = strings.Replace(engineConfigOptions.configCacheFile, fileExtension, "", -1) + ".cached" + fileExtension
+	}
+	configCachedFile, err := e.openCacheConfigFile(engineConfigOptions.configCacheFile)
 	if err != nil {
 		err = errors.Annotate(err, errLoadSystemConfig)
 		e.Log(errors.ErrorStack(err))
@@ -381,6 +385,26 @@ func (e *Engine) LoadConfig(setters ...EngineConfigOption) *Engine {
 		}
 	}()
 	return e
+}
+
+func (e *Engine) openCacheConfigFile(cacheFile string) (file *os.File, err error) {
+	_, err = os.Stat(cacheFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			file, err = utility.NewFile(cacheFile, 0644, bytes.NewReader([]byte{}), 0)
+			if err != nil {
+				return nil, errors.New(errGetCacheFile + ": " + err.Error())
+			}
+		} else {
+			return nil, errors.New(errGetCacheFile + ": " + err.Error())
+		}
+	} else {
+		file, err = os.OpenFile(cacheFile, os.O_RDWR, 0644)
+		if err != nil {
+			return nil, errors.New(errGetCacheFile + ": " + err.Error())
+		}
+	}
+	return file, err
 }
 
 func (e *Engine) loadCachedConfig(configPath string, cachedConfigFileName string) {
