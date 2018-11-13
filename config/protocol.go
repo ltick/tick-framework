@@ -266,11 +266,8 @@ func (c *Config) WithContextValue(ctx context.Context, keymaps map[string]string
 		}
 	}
 }
-func (c *Config) SetValue(key string, value interface{}) {
+func (c *Config) Set(key string, value interface{}) {
 	c.handler.Set(key, value)
-}
-func (c *Config) GetValue(key string) interface{} {
-	return c.handler.Get(key)
 }
 
 // GetString returns the value associated with the key as a string.

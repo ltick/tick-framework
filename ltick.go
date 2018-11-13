@@ -716,3 +716,55 @@ func (e *Engine) ConfigureComponentFileConfig(componentName string, configFile s
 	}
 	return nil
 }
+
+func (e *Engine) GetConfig(key string) interface{} {
+	return e.configer.Get(key)
+}
+
+func (e *Engine) GetConfigString(key string) string {
+	return e.configer.GetString(key)
+}
+
+func (e *Engine) GetConfigBool(key string) bool {
+	return e.configer.GetBool(key)
+}
+
+func (e *Engine) GetConfigInt(key string) int {
+	return e.configer.GetInt(key)
+}
+
+func (e *Engine) GetConfigInt64(key string) int64 {
+	return e.configer.GetInt64(key)
+}
+
+func (e *Engine) GetConfigFloat64(key string) float64 {
+	return e.configer.GetFloat64(key)
+}
+
+func (e *Engine) GetConfigTime(key string) time.Time {
+	return e.configer.GetTime(key)
+}
+
+func (e *Engine) GetConfigDuration(key string) time.Duration {
+	return e.configer.GetDuration(key)
+}
+
+func (e *Engine) GetConfigStringSlice(key string) []string {
+	return e.configer.GetStringSlice(key)
+}
+
+func (e *Engine) GetConfigStringMap(key string) map[string]interface{} {
+	return e.configer.GetStringMap(key)
+}
+
+func (e *Engine) GetConfigStringMapString(key string) map[string]string {
+	return e.configer.GetStringMapString(key)
+}
+
+func (e *Engine) GetConfigStringMapStringSlice(key string) map[string][]string {
+	return e.configer.GetStringMapStringSlice(key)
+}
+
+func (e *Engine) GetConfigSizeInBytes(key string) uint {
+	return e.configer.GetSizeInBytes(key)
+}
