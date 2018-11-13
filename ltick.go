@@ -241,6 +241,13 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
+	// 注入模块
+	err = e.Registry.InjectComponent()
+	if err != nil {
+		err = errors.Annotatef(err, errNew)
+		e.Log(errors.ErrorStack(err))
+		os.Exit(1)
+	}
 	// 模块初始化
 	componentMap := e.Registry.GetComponentMap()
 	for _, name := range e.Registry.GetSortedComponentName() {
@@ -333,9 +340,9 @@ func (e *Engine) LoadConfig(setters ...EngineConfigOption) *Engine {
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
-	if e.configCacheFile == "" {
-		fileExtension := filepath.Ext(engineConfigOptions.configCacheFile)
-		engineConfigOptions.configCacheFile = strings.Replace(engineConfigOptions.configCacheFile, fileExtension, "", -1) + ".cached" + fileExtension
+	if engineConfigOptions.configCacheFile == "" {
+		fileExtension := filepath.Ext(engineConfigOptions.configFile)
+		engineConfigOptions.configCacheFile = strings.Replace(engineConfigOptions.configFile, fileExtension, "", -1) + ".cached" + fileExtension
 	}
 	configCachedFile, err := e.openCacheConfigFile(engineConfigOptions.configCacheFile)
 	if err != nil {
