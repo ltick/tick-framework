@@ -125,13 +125,13 @@ func (c *Config) SetOptions(options map[string]Option) error {
 func (c *Config) Callbacks(ctx context.Context, callbacks map[string]Callback) (context.Context, error) {
 	if callbacks != nil {
 		for key, callback := range callbacks {
-			value := c.GetValue(key)
+			value := c.Get(key)
 			if value != nil {
 				value, err := callback(ctx, value)
 				if err != nil {
 					return ctx, errors.Annotatef(err, "config: callback '%s' error:", key)
 				}
-				c.SetValue(key, value)
+				c.Set(key, value)
 			}
 		}
 	}
