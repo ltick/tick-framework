@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"fmt"
 )
 
 func TestParsetags(t *testing.T) {
@@ -48,7 +49,11 @@ func TestFieldvalidate(t *testing.T) {
 		C string  `param:"<in:query> <len: :4> <nonzero>"`
 		D string  `param:"<in:query> <regexp: ^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$>"`
 	}
-	m, _ := NewApi(&Schema{B: 9.999999}, nil, nil, false)
+	m, err := NewApi(&Schema{B: 9.999999}, nil, nil, false)
+	if err != nil {
+		t.Fatalf("new api error: %s", err.Error())
+	}
+
 	a := m.params[0]
 	if x := len(a.tags); x != 5 {
 		t.Fatal("wrong len", x, a.tags)
@@ -56,7 +61,7 @@ func TestFieldvalidate(t *testing.T) {
 	if x, ok := a.tags[KEY_LEN]; !ok || x != "3:6" {
 		t.Fatal("wrong value", x, ok)
 	}
-	if err := a.validate(reflect.ValueOf(a.rawValue)); err == nil || err.Error() != "This is a custom error!" {
+	if err := a.validate(a.rawValue); err == nil || err.Error() != "This is a custom error!" {
 		t.Fatal("should not validate")
 	}
 	if err := a.validate(reflect.ValueOf("abc")); err != nil {
@@ -70,7 +75,7 @@ func TestFieldvalidate(t *testing.T) {
 	if x := len(b.tags); x != 2 {
 		t.Fatal("wrong len", x)
 	}
-	if err := b.validate(reflect.ValueOf(b.rawValue)); err == nil || !strings.Contains(err.Error(), "small") {
+	if err := b.validate(b.rawValue); err == nil || !strings.Contains(err.Error(), "small") {
 		t.Fatal("should not validate")
 	}
 	if err := b.validate(reflect.ValueOf(10)); err != nil {
@@ -84,13 +89,14 @@ func TestFieldvalidate(t *testing.T) {
 	if x := len(c.tags); x != 3 {
 		t.Fatal("wrong len", x)
 	}
-	if err := c.validate(reflect.ValueOf(c.rawValue)); err != nil {
+	if err := c.validate(c.rawValue); err != nil {
 		t.Fatal("should validate")
 	}
 	if err := c.validate(reflect.ValueOf("a")); err != nil {
 		t.Fatal("should validate", err)
 	}
 	if err := c.validate(reflect.ValueOf("abcde")); err == nil || !strings.Contains(err.Error(), "the length must be no more than") {
+		fmt.Println(err.Error())
 		t.Fatal("should not validate")
 	}
 
@@ -138,7 +144,7 @@ func TestInterfaceNewApiWithEmbedded(t *testing.T) {
 		t.Fatal("error not nil", err)
 	}
 	f := m.params[1]
-	if x, ok := toString(f.rawValue); !ok || x != "Mrs. A" {
+	if x, ok := toString(f.rawValue.Interface()); !ok || x != "Mrs. A" {
 		t.Fatal("wrong value from embedded struct")
 	}
 	f = m.params[3]
@@ -171,7 +177,7 @@ func TestInterfaceNewApi(t *testing.T) {
 		t.Fatal("wrong value")
 	}
 	f = m.params[1]
-	if x, ok := toString(f.rawValue); !ok || x != "orange" {
+	if x, ok := toString(f.rawValue.Interface()); !ok || x != "orange" {
 		t.Fatal("wrong value", x)
 	}
 	if isZero(f.rawValue) {

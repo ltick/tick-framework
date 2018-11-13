@@ -59,6 +59,10 @@ const (
 )
 
 var (
+	errValidateParam = "api: validate param error"
+	errMakeVerifyRules = "api: make verify rules error"
+)
+var (
 	// TagInValues is values for tag 'in'
 	TagInValues = map[string]bool{
 		"path":     true,
@@ -81,7 +85,7 @@ type (
 		tags       map[string]string // struct tags for this param
 		rules      []validation.Rule
 		rawTag     reflect.StructTag // the raw tag
-		rawValue   interface{}       // the raw value
+		rawValue   reflect.Value       // the raw value
 		err        error             // the custom error for binding or validating
 	}
 	// ParamNameMapper maps param name from struct param name
@@ -90,7 +94,7 @@ type (
 
 // Raw gets the param's original value
 func (param *Param) Raw() interface{} {
-	return param.rawValue
+	return param.rawValue.Interface()
 }
 
 // APIName gets ParamsAPI name
@@ -127,7 +131,7 @@ func (param *Param) Error(reason string) error {
 	if param.err != nil {
 		return param.err
 	}
-	return errors.Trace(fmt.Errorf("%s|%s|%s", param.apiName, param.name, reason))
+	return errors.Errorf("api: %s|%s|%s", param.apiName, param.name, reason)
 }
 
 // validate tests if the param conforms to it's validation constraints specified
@@ -147,7 +151,7 @@ func (param *Param) validate(value reflect.Value) (err error) {
 		for i := 0; i < l; i++ {
 			if valueItem := value.Index(i).Interface(); valueItem != nil {
 				if err = validation.Validate(valueItem, param.rules...); err != nil {
-					return err
+					return errors.Annotate(err, errValidateParam)
 				}
 			}
 		}
@@ -155,12 +159,15 @@ func (param *Param) validate(value reflect.Value) (err error) {
 		for _, key := range value.MapKeys() {
 			if valueItem := value.MapIndex(key).Interface(); valueItem != nil {
 				if err = validation.Validate(valueItem, param.rules...); err != nil {
-					return err
+					return errors.Annotate(err, errValidateParam)
 				}
 			}
 		}
+	default:
+		if err = validation.Validate(value.Interface(), param.rules...); err != nil {
+			return errors.Annotate(err, errValidateParam)
+		}
 	}
-
 	return nil
 }
 
@@ -168,7 +175,7 @@ func (param *Param) makeVerifyRules() (err error) {
 	defer func() {
 		p := recover()
 		if p != nil {
-			err = fmt.Errorf("%v", p)
+			err = errors.Annotate(errors.Errorf("%v", p), errMakeVerifyRules)
 		}
 	}()
 	param.rules = make([]validation.Rule, 0)

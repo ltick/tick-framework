@@ -32,8 +32,8 @@ var (
 	errNewDefault                = "ltick: new classic error"
 	errNewServer                 = "ltick: new server error"
 	errGetLogger                 = "ltick: get logger error"
-	errWithValues                = "ltick: with values error [key:'%s']"
-	errWithLoggers               = "ltick: with loggers error [log_name:'%s', log_file:'%s']"
+	errWithValues                = "ltick: with values set value of key '%s' error"
+	errConfigureServer           = "ltick: configure server error"
 	errStartupCallback           = "ltick: startup callback error"
 	errStartupInjectComponent    = "ltick: startup inject component error"
 	errStartupComponentInitiate  = "ltick: startup component '%s' initiate error"
@@ -262,7 +262,18 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 	}
 	return e
 }
-func (e *Engine) NewDefaultServer() *Server {
+
+func (e *Engine) ConfigureServer(s *Server, providers map[string]interface{}, configTag string) *Server {
+	err := e.configer.ConfigureFileConfig(s, e.configFile, providers, "server")
+	if err != nil {
+		err := errors.Annotate(err, errConfigureServer)
+		fmt.Println(errors.ErrorStack(err))
+		os.Exit(1)
+	}
+	return s
+}
+
+func (e *Engine) NewDefaultServer(setters ...ServerOption) *Server {
 	middlewares := make([]MiddlewareInterface, 0)
 	for _, sortedMiddleware := range e.Registry.GetSortedMiddlewares() {
 		middleware, ok := sortedMiddleware.(MiddlewareInterface)
@@ -273,17 +284,17 @@ func (e *Engine) NewDefaultServer() *Server {
 	}
 	var router *ServerRouter = NewServerRouter(e.Context)
 	router.WithAccessLogger(DefaultAccessLogFunc).
-		WithErrorHandler(DefaultFaultLogFunc(), DefaultErrorLogFunc).
-		WithPanicLogger(DefaultFaultLogFunc()).
+		WithErrorHandler(DefaultErrorLogFunc(), DefaultErrorHandler).
+		WithPanicLogger(DefaultErrorLogFunc()).
 		WithTypeNegotiator(JSON, XML, XML2, HTML).
 		WithSlashRemover(http.StatusMovedPermanently).
 		WithLanguageNegotiator("zh-CN", "en-US").
 		WithCors(CorsAllowAll).
 		WithMiddlewares(middlewares)
-	server := NewServer(router, ServerLogWriter(e.logWriter))
+	setters = append(setters, ServerLogWriter(e.logWriter))
+	server := NewServer(router, setters...)
 	server.AddRouteGroup("/")
 	server.Pprof("*", "debug")
-	e.SetServer("default", server)
 	return server
 }
 func (e *Engine) LoadSystemConfig(configPath string, envPrefix string, dotenvFiles ...string) *Engine {
@@ -501,27 +512,17 @@ func (e *Engine) Startup() (err error) {
 	}
 	if e.ServerMap != nil {
 		for _, server := range e.ServerMap {
-			if server.Router.routes != nil && len(server.Router.routes) > 0 {
-				for _, route := range server.Router.routes {
+			if server.Router.Routes != nil && len(server.Router.Routes) > 0 {
+				for _, route := range server.Router.Routes {
 					if _, ok := server.RouteGroups[route.Group]; !ok {
 						server.RouteGroups[route.Group] = server.AddRouteGroup(route.Group)
 					}
-					server.RouteGroups[route.Group].AddRoute(route.Method, route.Path, func(c *routing.Context) error {
-						if c.Request.Host == route.Host {
-							for _, handler := range route.Handlers {
-								err := handler(c)
-								if err != nil {
-									return err
-								}
-							}
-						}
-						return nil
-					})
+					server.RouteGroups[route.Group].AddApiRoute(route.Method, route.Path, route.Handlers...)
 				}
 			}
 			// proxy
-			if server.Router.proxys != nil && len(server.Router.proxys) > 0 {
-				for _, proxy := range server.Router.proxys {
+			if server.Router.Proxys != nil && len(server.Router.Proxys) > 0 {
+				for _, proxy := range server.Router.Proxys {
 					if _, ok := server.RouteGroups[proxy.Group]; !ok {
 						server.RouteGroups[proxy.Group] = server.AddRouteGroup(proxy.Group)
 					}

@@ -8,7 +8,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/ltick/tick-framework/config"
 	"github.com/ltick/tick-framework/utility"
-	"github.com/ltick/tick-routing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
@@ -100,17 +99,6 @@ func (suite *TestSuite) TestComponentCallback() {
 	err = a.Shutdown()
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))
 	assert.Equal(suite.T(), "Startup|testComponent1-Startup||testComponent1-Shutdown|Shutdown", a.GetContextValue("output"))
-}
-
-func (suite *TestSuite) TestDefault() {
-	r, err := NewRegistry()
-	assert.Nil(suite.T(), err)
-	a := Default(r, make(map[string]routing.Handler, 0))
-	a.WithValues(make(map[string]interface{}, 0))
-	a.WithCallback(&TestCallback{})
-	err = a.Startup()
-	assert.Nil(suite.T(), err)
-	err = a.Shutdown()
 }
 
 func TestTestSuite(t *testing.T) {

@@ -148,7 +148,7 @@ func (c *Config) ConfigureFileConfig(target interface{}, configFile string, conf
 		for configProviderName, configProvider := range configProviders {
 			err = oc.Register(configProviderName, configProvider)
 			if err != nil {
-				return errors.Annotatef(err, "config: register config provider '%s'", configProviderName)
+				return errors.Annotatef(err, "config: register config provider '%s' error", configProviderName)
 			}
 		}
 	}
@@ -270,6 +270,11 @@ func (c *Config) SetValue(key string, value interface{}) {
 	c.handler.Set(key, value)
 }
 func (c *Config) GetValue(key string) interface{} {
+	return c.handler.Get(key)
+}
+
+// GetString returns the value associated with the key as a string.
+func (c *Config) Get(key string) interface{} {
 	return c.handler.Get(key)
 }
 

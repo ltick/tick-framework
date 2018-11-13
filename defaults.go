@@ -2,18 +2,15 @@ package ltick
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	libLog "log"
 	"net/http"
-	"os"
-	"strings"
 	"time"
 
-	"github.com/juju/errors"
 	"github.com/ltick/tick-framework/utility"
 	"github.com/ltick/tick-routing"
 	"github.com/ltick/tick-routing/access"
+	"github.com/ltick/tick-routing/content"
 	"github.com/ltick/tick-routing/fault"
 )
 
@@ -23,6 +20,12 @@ var (
 )
 var defaultEnvPrefix = "LTICK"
 var defaultConfigFile = "etc/ltick.json"
+
+var defaultEngineCallback Callback
+
+func SetDefaultEngineCallback(c Callback) {
+	defaultEngineCallback = c
+}
 
 func DefaultConfigFile() string {
 	return defaultConfigFile
@@ -54,20 +57,44 @@ func DefaultLogFunc(ctx context.Context, format string, data ...interface{}) {
 	}
 }
 
-func DefaultErrorLogFunc(c *routing.Context, err error) error {
-	DefaultLogFunc(c.Context, `LTICK|%s|%s|%s|%s|%s`, c.Get("forwardRequestId"), c.Get("requestId"), c.Get("serverAddress"), err.Error(), c.Get("errorStack"))
+func DefaultErrorHandler(c *routing.Context, err error) error {
+	if c == nil {
+		return routing.NewHTTPError(http.StatusInternalServerError)
+	}
+	if httpError, ok := err.(routing.HTTPError); ok {
+		status := httpError.StatusCode()
+		switch status {
+		case http.StatusBadRequest:
+			fallthrough
+		case http.StatusForbidden:
+			fallthrough
+		case http.StatusNotFound:
+			fallthrough
+		case http.StatusRequestTimeout:
+			fallthrough
+		case http.StatusMethodNotAllowed:
+			DefaultLogFunc(c.Context, `LTICK_CLIENT_ERROR|%s|%s|%s|%s|%s`, c.Get("forwardRequestId"), c.Get("requestId"), c.Get("serverAddress"), err.Error(), c.Get("errorStack"))
+		default:
+			DefaultLogFunc(c.Context, `LTICK_SERVER_ERROR|%s|%s|%s|%s|%s`, c.Get("forwardRequestId"), c.Get("requestId"), c.Get("serverAddress"), err.Error(), c.Get("errorStack"))
+		}
+		content.TypeNegotiator(XML, XML2, JSON)(c)
+		return routing.NewHTTPError(status, httpError.Error())
+	} else {
+		DefaultLogFunc(c.Context, `LTICK_SERVER_ERROR|%s|%s|%s|%s|%s`, c.Get("forwardRequestId"), c.Get("requestId"), c.Get("serverAddress"), err.Error(), c.Get("errorStack"))
+		return routing.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
 	return nil
 }
 
-var CustomDefaultFaultLogFunc fault.LogFunc
+var CustomDefaultErrorLogFunc fault.LogFunc
 
-func SetDefaultFaultLogFunc(defaultErrorLogFunc fault.LogFunc) {
-	CustomDefaultFaultLogFunc = defaultErrorLogFunc
+func SetDefaultErrorLogFunc(defaultErrorLogFunc fault.LogFunc) {
+	CustomDefaultErrorLogFunc = defaultErrorLogFunc
 }
 
-func DefaultFaultLogFunc() fault.LogFunc {
-	if CustomDefaultFaultLogFunc != nil {
-		return CustomDefaultFaultLogFunc
+func DefaultErrorLogFunc() fault.LogFunc {
+	if CustomDefaultErrorLogFunc != nil {
+		return CustomDefaultErrorLogFunc
 	} else {
 		return libLog.Printf
 	}
@@ -105,66 +132,4 @@ func DefaultAccessLogFunc(c *routing.Context, rw *access.LogResponseWriter, elap
 	} else {
 		DefaultLogFunc(c.Context, `%s - %s [%s] "%s" %d %d %d %.3f "%s" "%s" %s %s "-" "-"`, clientIP, c.Request.Host, time.Now().Format("2/Jan/2006:15:04:05 -0700"), requestLine, c.Request.ContentLength, rw.Status, rw.BytesWritten, elapsed/1e3, c.Request.Header.Get("Referer"), c.Request.Header.Get("User-Agent"), c.Request.RemoteAddr, serverAddress)
 	}
-}
-func Default(registry *Registry, handlers map[string]routing.Handler, handlerCallbacks ...RouterCallback) (e *Engine) {
-	fmt.Println("asdasda")
-	// configer
-	e = New(registry)
-	s := e.NewDefaultServer()
-	err := e.configer.ConfigureFileConfig(s, e.configFile, nil, "server")
-	if err != nil {
-		err := errors.Annotatef(err, errProxyConfig, e.configer.GetStringMap("server"))
-		fmt.Println(errors.ErrorStack(err))
-		os.Exit(1)
-	}
-	routes := e.configer.GetStringSlice("server.router.route")
-	for i, route := range routes {
-		routeConfig := make(map[string]interface{})
-		err := json.Unmarshal([]byte(route), routeConfig)
-		if err != nil {
-			err := errors.Annotatef(err, errProxyConfig, routes)
-			fmt.Println(errors.ErrorStack(err))
-			os.Exit(1)
-		}
-		routeConfigHandlers, ok := routeConfig["Handlers"].(string)
-		if ok {
-			routeHandlers := make([]string, 0)
-			err = json.Unmarshal([]byte(routeConfigHandlers), routeHandlers)
-			if err != nil {
-				err := errors.Annotatef(err, errProxyConfig, routes)
-				fmt.Println(errors.ErrorStack(err))
-				os.Exit(1)
-			}
-			handlerProviderConfigs := make([]string, len(routeHandlers))
-			for index, handlerName := range routeHandlers {
-				handlerProviderConfigs[index] = `{"type": "` + handlerName + `"}`
-			}
-			routeConfig["Handlers"] = `[` + strings.Join(handlerProviderConfigs, ",") + `]`
-		}
-		routeConfigByte, err := json.Marshal(routeConfig)
-		if err != nil {
-			err := errors.Annotatef(err, errProxyConfig, routes)
-			fmt.Println(errors.ErrorStack(err))
-			os.Exit(1)
-		}
-		routes[i] = string(routeConfigByte)
-	}
-	routesConfig, err := json.Marshal(routes)
-	if err != nil {
-		err := errors.Annotatef(err, errProxyConfig, routes)
-		fmt.Println(errors.ErrorStack(err))
-		os.Exit(1)
-	}
-	handlerProviders := make(map[string]interface{}, len(handlers))
-	for handlerName, handler := range handlers {
-		handlerProviders[handlerName] = handler
-	}
-	fmt.Println(string(routesConfig))
-	err = e.configer.ConfigureJsonConfig(s.Router.routes, routesConfig, handlerProviders)
-	if err != nil {
-		err := errors.Annotatef(err, errProxyConfig, routes)
-		fmt.Println(errors.ErrorStack(err))
-		os.Exit(1)
-	}
-	return e
 }

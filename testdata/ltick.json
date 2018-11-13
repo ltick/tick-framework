@@ -2,28 +2,27 @@
   "temporary_path": "/tmp",
   "server": {
     "Port": 8081,
-    "HandlerTimeout": "0s",
-    "GracefulStopTimeout": "120s",
     "Router": {
-      "Callback": [
-        "RouterCallback"
+      "GracefulStopTimeout": "120s",
+      "Callbacks": [
+        {"type": "handlerCallback"}
       ],
-      "proxy": [
+      "Proxys": [
         {
           "Host": "www.example.com",
           "Group": "/proxy",
-          "Path": "<path:\\d+>",
-          "Upstream": "http://www.example.com/user/<:path>"
+          "Path": "/<path:\\d+>",
+          "Upstream": "http://www.example.com/proxy/<:path>"
         }
       ],
-      "route": [
+      "Routes": [
         {
           "Host": "www.example.com",
           "Method": "ANY",
           "Group": "/test",
-          "Path": "<id>",
+          "Path": "/<id>",
           "Handlers": [
-            "TestHandler"
+            {"type": "TestHandler"}
           ]
         }
       ]
