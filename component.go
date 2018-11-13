@@ -309,11 +309,20 @@ func SortComponent(components []*Component) []string {
 	}
 	// root components
 	roots := []*Component{}
-	for _, c := range components {
-		if len(c.Dependencies) == 0 {
-			roots = append(roots, c)
+	for {
+		rootDependenciesCount := 0
+		for _, c := range components {
+			if len(c.Dependencies) == rootDependenciesCount {
+				roots = append(roots, c)
+			}
+		}
+		if len(roots) > 0 {
+			break
+		} else {
+			rootDependenciesCount++
 		}
 	}
+
 	sortedComponents := make([]string, 0)
 	return sortComponent(components, roots, sortedComponents)
 }
