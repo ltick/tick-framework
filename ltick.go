@@ -490,7 +490,9 @@ func (e *Engine) GetLogger(name string) (*libLog.Logger, error) {
 	}
 	return logger, nil
 }
-
+func (e *Engine) SetLogWriter(logWriter io.Writer) {
+	e.logWriter = logWriter
+}
 func (e *Engine) Log(args ...interface{}) {
 	fmt.Fprintln(e.logWriter, args...)
 }
