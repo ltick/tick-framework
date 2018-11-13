@@ -309,8 +309,8 @@ func SortComponent(components []*Component) []string {
 	}
 	// root components
 	roots := []*Component{}
+	rootDependenciesCount := 0
 	for {
-		rootDependenciesCount := 0
 		for _, c := range components {
 			if len(c.Dependencies) == rootDependenciesCount {
 				roots = append(roots, c)
