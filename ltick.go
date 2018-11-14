@@ -33,7 +33,6 @@ var (
 	errNewDefault                = "ltick: new classic error"
 	errNewServer                 = "ltick: new server error"
 	errGetLogger                 = "ltick: get logger error"
-	errWithValues                = "ltick: with values set value of key '%s' error"
 	errConfigureServer           = "ltick: configure server error"
 	errStartupCallback           = "ltick: startup callback error"
 	errStartupInjectComponent    = "ltick: startup inject component error"
@@ -59,6 +58,7 @@ const (
 
 type (
 	EngineOptions struct {
+		*EngineConfigOptions
 		callback  Callback
 		logWriter io.Writer
 	}
@@ -73,11 +73,8 @@ type (
 		configs         map[string]config.Option
 	}
 
-	EngineConfigOption func(*EngineConfigOptions)
-
 	Engine struct {
 		*EngineOptions
-		*EngineConfigOptions
 		state       State
 		executeFile string
 
@@ -119,45 +116,45 @@ var defaultConfigs map[string]config.Option = map[string]config.Option{
 
 var defaultlogWriter io.Writer = os.Stdout
 
-func EngineConfigFile(configFile string) EngineConfigOption {
-	return func(options *EngineConfigOptions) {
+func EngineConfigFile(configFile string) EngineOption {
+	return func(options *EngineOptions) {
 		configFile, err := filepath.Abs(configFile)
 		if err != nil {
 			err = errors.Annotatef(err, errEngineConfigOption)
 			fmt.Println(errors.ErrorStack(err))
 			os.Exit(1)
 		}
-		options.configFile = configFile
+		options.EngineConfigOptions.configFile = configFile
 	}
 }
 
-func EngineConfigDotenvFile(dotenvFile string) EngineConfigOption {
-	return func(options *EngineConfigOptions) {
+func EngineConfigDotenvFile(dotenvFile string) EngineOption {
+	return func(options *EngineOptions) {
 		dotenvFile, err := filepath.Abs(dotenvFile)
 		if err != nil {
 			err = errors.Annotatef(err, errEngineConfigOption)
 			fmt.Println(errors.ErrorStack(err))
 			os.Exit(1)
 		}
-		options.dotenvFile = dotenvFile
+		options.EngineConfigOptions.dotenvFile = dotenvFile
 	}
 }
 
-func EngineConfigEnvPrefix(envPrefix string) EngineConfigOption {
-	return func(options *EngineConfigOptions) {
-		options.envPrefix = envPrefix
+func EngineConfigEnvPrefix(envPrefix string) EngineOption {
+	return func(options *EngineOptions) {
+		options.EngineConfigOptions.envPrefix = envPrefix
 	}
 }
 
-func EngineConfigConfigs(configs map[string]config.Option) EngineConfigOption {
-	return func(options *EngineConfigOptions) {
-		options.configs = configs
+func EngineConfigConfigs(configs map[string]config.Option) EngineOption {
+	return func(options *EngineOptions) {
+		options.EngineConfigOptions.configs = configs
 	}
 }
 
-func EngineConfigCacheFile(configCacheFile string) EngineConfigOption {
-	return func(options *EngineConfigOptions) {
-		options.configCacheFile = configCacheFile
+func EngineConfigCacheFile(configCacheFile string) EngineOption {
+	return func(options *EngineOptions) {
+		options.EngineConfigOptions.configCacheFile = configCacheFile
 	}
 }
 
@@ -211,6 +208,12 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 		os.Exit(1)
 	}
 	engineOptions := &EngineOptions{
+		EngineConfigOptions: &EngineConfigOptions{
+			dotenvFile: defaultDotenvFile,
+			configFile: defaultConfigFile,
+			envPrefix:  defaultEnvPrefix,
+			configs:    defaultConfigs,
+		},
 		logWriter: defaultlogWriter,
 	}
 	for _, setter := range setters {
@@ -241,12 +244,20 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
+	e.loadConfig(setters...)
 	// 注入模块
 	err = e.Registry.InjectComponent()
 	if err != nil {
 		err = errors.Annotatef(err, errNew)
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
+	}
+	for _, component := range e.Registry.GetComponentMap() {
+		err = e.ConfigureComponentFileConfig(component, e.configer.ConfigFileUsed(), make(map[string]interface{}))
+		if err != nil {
+			err = errors.Annotate(err, errNew)
+			e.Log(errors.ErrorStack(err))
+		}
 	}
 	// 模块初始化
 	componentMap := e.Registry.GetComponentMap()
@@ -267,24 +278,20 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 	return e
 }
 
-func (e *Engine) ConfigureServerFromFile(s *Server, configFile string, providers map[string]interface{}, configTag string) *Server {
+func (e *Engine) ConfigureServerFromFile(s *Server, configFile string, providers map[string]interface{}, configTag string) error {
 	err := e.configer.ConfigureFileConfig(s, configFile, providers, "server")
 	if err != nil {
-		err := errors.Annotate(err, errConfigureServer)
-		fmt.Println(errors.ErrorStack(err))
-		os.Exit(1)
+		return errors.Annotate(err, errConfigureServer)
 	}
-	return s
+	return nil
 }
 
-func (e *Engine) ConfigureServerFromJson(s *Server, configJson []byte, providers map[string]interface{}, configTag string) *Server {
+func (e *Engine) ConfigureServerFromJson(s *Server, configJson []byte, providers map[string]interface{}, configTag string) error {
 	err := e.configer.ConfigureJsonConfig(s, configJson, providers, "server")
 	if err != nil {
-		err := errors.Annotate(err, errConfigureServer)
-		fmt.Println(errors.ErrorStack(err))
-		os.Exit(1)
+		return errors.Annotate(err, errConfigureServer)
 	}
-	return s
+	return nil
 }
 
 func (e *Engine) NewDefaultServer(setters ...ServerOption) *Server {
@@ -312,39 +319,34 @@ func (e *Engine) NewDefaultServer(setters ...ServerOption) *Server {
 	return server
 }
 
-func (e *Engine) LoadConfig(setters ...EngineConfigOption) *Engine {
+
+func (e *Engine) loadConfig(setters ...EngineOption) *Engine {
 	var err error
-	engineConfigOptions := &EngineConfigOptions{
-		dotenvFile: defaultDotenvFile,
-		configFile: defaultConfigFile,
-		envPrefix:  defaultEnvPrefix,
-		configs:    defaultConfigs,
-	}
 	for _, setter := range setters {
-		setter(engineConfigOptions)
+		setter(e.EngineOptions)
 	}
-	err = e.configer.SetOptions(engineConfigOptions.configs)
+	err = e.configer.SetOptions(e.EngineOptions.EngineConfigOptions.configs)
 	if err != nil {
 		err = errors.Annotate(err, errNewDefault)
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
 	// 加载系统配置
-	if !path.IsAbs(engineConfigOptions.configFile) {
-		err = errors.Annotate(fmt.Errorf("ltick: '%s' is not a valid config path", engineConfigOptions.configFile), errNew)
+	if !path.IsAbs(e.EngineOptions.EngineConfigOptions.configFile) {
+		err = errors.Annotate(fmt.Errorf("ltick: '%s' is not a valid config path", e.EngineOptions.EngineConfigOptions.configFile), errNew)
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
-	if !path.IsAbs(engineConfigOptions.dotenvFile) {
-		err = errors.Annotate(fmt.Errorf("ltick: '%s' is not a valid dotenv path", engineConfigOptions.dotenvFile), errNew)
+	if !path.IsAbs(e.EngineOptions.EngineConfigOptions.dotenvFile) {
+		err = errors.Annotate(fmt.Errorf("ltick: '%s' is not a valid dotenv path", e.EngineOptions.EngineConfigOptions.dotenvFile), errNew)
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
-	if engineConfigOptions.configCacheFile == "" {
-		fileExtension := filepath.Ext(engineConfigOptions.configFile)
-		engineConfigOptions.configCacheFile = strings.Replace(engineConfigOptions.configFile, fileExtension, "", -1) + ".cached" + fileExtension
+	if e.EngineOptions.EngineConfigOptions.configCacheFile == "" {
+		fileExtension := filepath.Ext(e.EngineOptions.EngineConfigOptions.configFile)
+		e.EngineOptions.EngineConfigOptions.configCacheFile = strings.Replace(e.EngineOptions.EngineConfigOptions.configFile, fileExtension, "", -1) + ".cached" + fileExtension
 	}
-	configCachedFile, err := e.openCacheConfigFile(engineConfigOptions.configCacheFile)
+	configCachedFile, err := e.openCacheConfigFile(e.EngineOptions.EngineConfigOptions.configCacheFile)
 	if err != nil {
 		err = errors.Annotate(err, errLoadSystemConfig)
 		e.Log(errors.ErrorStack(err))
@@ -352,12 +354,12 @@ func (e *Engine) LoadConfig(setters ...EngineConfigOption) *Engine {
 	}
 	defer configCachedFile.Close()
 	cachedConfigFileName := configCachedFile.Name()
-	if engineConfigOptions.dotenvFile != "" {
-		e.LoadEnvFile(engineConfigOptions.envPrefix, engineConfigOptions.dotenvFile)
+	if e.EngineOptions.EngineConfigOptions.dotenvFile != "" {
+		e.LoadEnvFile(e.EngineOptions.EngineConfigOptions.envPrefix, e.EngineOptions.EngineConfigOptions.dotenvFile)
 	} else {
-		e.LoadEnv(engineConfigOptions.envPrefix)
+		e.LoadEnv(e.EngineOptions.EngineConfigOptions.envPrefix)
 	}
-	e.loadCachedConfig(engineConfigOptions.configFile, cachedConfigFileName)
+	e.loadCachedFileConfig(e.EngineOptions.EngineConfigOptions.configFile, cachedConfigFileName)
 	go func() {
 		// 刷新缓存
 		for {
@@ -367,26 +369,26 @@ func (e *Engine) LoadConfig(setters ...EngineConfigOption) *Engine {
 				e.Log(errors.ErrorStack(err))
 				return
 			}
-			if engineConfigOptions.dotenvFile != "" {
-				dotenvFileInfo, err := os.Stat(engineConfigOptions.dotenvFile)
+			if e.EngineOptions.EngineConfigOptions.dotenvFile != "" {
+				dotenvFileInfo, err := os.Stat(e.EngineOptions.EngineConfigOptions.dotenvFile)
 				if err != nil {
 					err = errors.Annotate(err, errLoadSystemConfig)
 					e.Log(errors.ErrorStack(err))
 					return
 				}
 				if cachedConfigFileInfo.ModTime().Before(dotenvFileInfo.ModTime()) {
-					e.LoadEnvFile(engineConfigOptions.envPrefix, engineConfigOptions.dotenvFile)
-					e.loadCachedConfig(engineConfigOptions.configFile, cachedConfigFileName)
+					e.LoadEnvFile(e.EngineOptions.EngineConfigOptions.envPrefix, e.EngineOptions.EngineConfigOptions.dotenvFile)
+					e.loadCachedFileConfig(e.EngineOptions.EngineConfigOptions.configFile, cachedConfigFileName)
 				}
 			}
-			configFileInfo, err := os.Stat(engineConfigOptions.configFile)
+			configFileInfo, err := os.Stat(e.EngineOptions.EngineConfigOptions.configFile)
 			if err != nil {
 				err = errors.Annotate(err, errLoadSystemConfig)
 				e.Log(errors.ErrorStack(err))
 				return
 			}
 			if cachedConfigFileInfo.ModTime().Before(configFileInfo.ModTime()) {
-				e.loadCachedConfig(engineConfigOptions.configFile, cachedConfigFileName)
+				e.loadCachedFileConfig(e.EngineOptions.EngineConfigOptions.configFile, cachedConfigFileName)
 			}
 			time.Sleep(defaultConfigReloadTime)
 		}
@@ -414,7 +416,7 @@ func (e *Engine) openCacheConfigFile(cacheFile string) (file *os.File, err error
 	return file, err
 }
 
-func (e *Engine) loadCachedConfig(configPath string, cachedConfigFileName string) {
+func (e *Engine) loadCachedFileConfig(configPath string, cachedConfigFileName string) {
 	configFile, err := os.OpenFile(configPath, os.O_RDONLY, 0644)
 	if err != nil {
 		err = errors.Annotate(err, errLoadCachedConfig)
@@ -441,9 +443,9 @@ func (e *Engine) loadCachedConfig(configPath string, cachedConfigFileName string
 		e.Log(errors.ErrorStack(err))
 		return
 	}
-	e.loadConfig(filepath.Dir(cachedConfigFileName), strings.Replace(filepath.Base(cachedConfigFileName), filepath.Ext(cachedConfigFileName), "", 1))
+	e.loadFileConfig(filepath.Dir(cachedConfigFileName), strings.Replace(filepath.Base(cachedConfigFileName), filepath.Ext(cachedConfigFileName), "", 1))
 }
-func (e *Engine) loadConfig(configPath string, configName string) *Engine {
+func (e *Engine) loadFileConfig(configPath string, configName string) *Engine {
 	var err error
 	if configPath == "" || configName == "" {
 		err = errors.Annotatef(errors.Errorf("configPath or configName is empty"), errLoadConfig, configPath, configPath)
@@ -468,13 +470,6 @@ func (e *Engine) loadConfig(configPath string, configName string) *Engine {
 		err := errors.Annotatef(err, errLoadConfig, configPath, configPath)
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
-	}
-	for _, component := range e.Registry.GetComponentMap() {
-		err = e.ConfigureComponentFileConfig(component, e.configer.ConfigFileUsed(), make(map[string]interface{}))
-		if err != nil {
-			err = errors.Annotate(err, errNew)
-			e.Log(errors.ErrorStack(err))
-		}
 	}
 	return e
 }
@@ -506,17 +501,6 @@ func (e *Engine) LoadEnvFile(envPrefix string, dotenvFile string) *Engine {
 func (e *Engine) WithCallback(callback Callback) *Engine {
 	if callback != nil {
 		e.EngineOptions.callback = callback
-	}
-	return e
-}
-func (e *Engine) WithValues(values map[string]interface{}) *Engine {
-	for key, value := range values {
-		err := e.Registry.RegisterValue(key, value)
-		if err != nil {
-			err := errors.Annotatef(err, errWithValues, key)
-			e.Log(errors.ErrorStack(err))
-			os.Exit(1)
-		}
 	}
 	return e
 }

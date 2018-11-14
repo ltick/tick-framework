@@ -50,12 +50,14 @@ func (f *TestCallback) OnShutdown(e *Engine) error {
 }
 
 func (suite *TestSuite) TestAppCallback() {
-	var values map[string]interface{} = make(map[string]interface{}, 0)
 	r, err := NewRegistry()
 	assert.Nil(suite.T(), err)
-	a := New(r, EngineLogWriter(ioutil.Discard), EngineCallback(&TestCallback{})).
-		LoadConfig(EngineConfigFile(suite.configFile), EngineConfigDotenvFile(suite.dotenvFile), EngineConfigEnvPrefix("LTICK")).
-		WithValues(values)
+	a := New(r,
+		EngineLogWriter(ioutil.Discard),
+		EngineCallback(&TestCallback{}),
+		EngineConfigFile(suite.configFile),
+		EngineConfigDotenvFile(suite.dotenvFile),
+		EngineConfigEnvPrefix("LTICK"))
 	a.SetContextValue("output", "")
 	err = a.Startup()
 	assert.Nil(suite.T(), err)
@@ -68,7 +70,6 @@ func (suite *TestSuite) TestAppCallback() {
 }
 
 func (suite *TestSuite) TestComponentCallback() {
-	var values map[string]interface{} = make(map[string]interface{}, 0)
 	var components []*Component = []*Component{
 		&Component{Name: "TestComponent1", Component: &testComponent1{}},
 	}
@@ -90,10 +91,12 @@ func (suite *TestSuite) TestComponentCallback() {
 	assert.True(suite.T(), ok)
 	err = configer.SetOptions(options)
 	assert.Nil(suite.T(), err)
-
-	a := New(r, EngineLogWriter(ioutil.Discard), EngineCallback(&TestCallback{})).
-		LoadConfig(EngineConfigFile(suite.configFile), EngineConfigDotenvFile(suite.dotenvFile), EngineConfigEnvPrefix("LTICK")).
-		WithValues(values)
+	a := New(r,
+		EngineLogWriter(ioutil.Discard),
+		EngineCallback(&TestCallback{}),
+		EngineConfigFile(suite.configFile),
+		EngineConfigDotenvFile(suite.dotenvFile),
+		EngineConfigEnvPrefix("LTICK"))
 	a.SetContextValue("output", "")
 	err = a.Startup()
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))

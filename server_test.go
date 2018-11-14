@@ -187,14 +187,16 @@ func (suite *TestServerSuite) SetupTest() {
 	assert.Nil(suite.T(), err)
 	suite.testAppLog, err = filepath.Abs("testdata/app.log")
 	assert.Nil(suite.T(), err)
-	var values map[string]interface{} = make(map[string]interface{}, 0)
 	registry, err := NewRegistry()
 	assert.Nil(suite.T(), err)
 	registry.UseComponent("Log")
 	// Engine
-	suite.engine = New(registry, EngineLogWriter(ioutil.Discard), EngineCallback(&ServerAppCallback{})).
-		LoadConfig(EngineConfigFile(suite.configFile), EngineConfigDotenvFile(suite.dotenvFile), EngineConfigEnvPrefix("LTICK")).
-		WithValues(values)
+	suite.engine = New(registry,
+		EngineLogWriter(ioutil.Discard),
+		EngineCallback(&ServerAppCallback{}),
+		EngineConfigFile(suite.configFile),
+		EngineConfigDotenvFile(suite.dotenvFile),
+		EngineConfigEnvPrefix("LTICK"))
 	accessLogger, err := suite.engine.GetLogger("access")
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), accessLogger)
@@ -293,14 +295,16 @@ func (suite *TestServerSuite) TestConfigureServer() {
 	providers["TestHandler"] = func() api.Handler {
 		return &TestHandler{}
 	}
-	suite.engine.ConfigureServerFromFile(suite.defaultServer, suite.engine.GetConfigCacheFile(), providers, "server")
-
-	err := suite.engine.Startup()
+	err := suite.engine.ConfigureServerFromFile(suite.defaultServer, suite.engine.GetConfigCacheFile(), providers, "server")
 	assert.Nil(suite.T(), err)
-	res := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/test/1", nil)
-	suite.defaultServer.ServeHTTP(res, req)
-	assert.Equal(suite.T(), "1", res.Body.String())
+	if err == nil {
+		err = suite.engine.Startup()
+		assert.Nil(suite.T(), err)
+		res := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/test/1", nil)
+		suite.defaultServer.ServeHTTP(res, req)
+		assert.Equal(suite.T(), "1", res.Body.String())
+	}
 }
 
 func (suite *TestServerSuite) TestServer() {

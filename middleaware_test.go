@@ -128,9 +128,16 @@ func (suite *TestSuite) TestMiddleware() {
 		Middleware: &testMiddleware2{},
 	})
 	assert.Nil(suite.T(), err)
-	a := New(r, EngineLogWriter(ioutil.Discard), EngineCallback(&TestCallback{})).
-		LoadConfig(EngineConfigFile(suite.configFile), EngineConfigDotenvFile(suite.dotenvFile), EngineConfigEnvPrefix("LTICK")).
-		WithValues(values)
+	for key, value := range values {
+		err := r.RegisterValue(key, value)
+		assert.Nil(suite.T(), err)
+	}
+	a := New(r,
+		EngineLogWriter(ioutil.Discard),
+		EngineCallback(&TestCallback{}),
+		EngineConfigFile(suite.configFile),
+		EngineConfigDotenvFile(suite.dotenvFile),
+		EngineConfigEnvPrefix("LTICK"))
 	a.SetContextValue("output", "")
 
 	router := NewServerRouter(a.Context, ServerRouterTimeoutHandler(func(c *routing.Context) error {
