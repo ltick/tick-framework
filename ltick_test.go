@@ -80,13 +80,13 @@ func (suite *TestSuite) TestComponentCallback() {
 	err = r.RegisterValue("Foo1", "Bar1")
 	assert.Nil(suite.T(), err)
 	for _, c := range components {
-		err = r.RegisterComponent(c.Name, c.Component, true)
+		err = r.RegisterComponent(c, true)
 		assert.Nil(suite.T(), err)
 	}
 	configComponent, err := r.GetComponentByName("Config")
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), configComponent)
-	configer, ok := configComponent.(*config.Config)
+	configer, ok := configComponent.Component.(*config.Config)
 	assert.True(suite.T(), ok)
 	err = configer.SetOptions(options)
 	assert.Nil(suite.T(), err)

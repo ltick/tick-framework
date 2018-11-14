@@ -235,7 +235,7 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
-	e.configer, ok = configComponent.(*config.Config)
+	e.configer, ok = configComponent.Component.(*config.Config)
 	if !ok {
 		err = errors.Annotate(errors.New("ltick: invalid 'Config' type"), errNew)
 		e.Log(errors.ErrorStack(err))
@@ -251,7 +251,7 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 	// 模块初始化
 	componentMap := e.Registry.GetComponentMap()
 	for _, name := range e.Registry.GetSortedComponentName() {
-		ci, ok := componentMap[name].(ComponentInterface)
+		ci, ok := componentMap[name].Component.(ComponentInterface)
 		if !ok {
 			err = errors.Annotate(errors.Errorf("invalid type"), errNew)
 			e.Log(errors.ErrorStack(err))
@@ -290,7 +290,7 @@ func (e *Engine) ConfigureServerFromJson(s *Server, configJson []byte, providers
 func (e *Engine) NewDefaultServer(setters ...ServerOption) *Server {
 	middlewares := make([]MiddlewareInterface, 0)
 	for _, sortedMiddleware := range e.Registry.GetSortedMiddlewares() {
-		middleware, ok := sortedMiddleware.(MiddlewareInterface)
+		middleware, ok := sortedMiddleware.Middleware.(MiddlewareInterface)
 		if !ok {
 			continue
 		}
@@ -469,8 +469,8 @@ func (e *Engine) loadConfig(configPath string, configName string) *Engine {
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
-	for _, name := range e.Registry.GetSortedComponentName() {
-		err = e.ConfigureComponentFileConfig(name, e.configer.ConfigFileUsed(), make(map[string]interface{}))
+	for _, component := range e.Registry.GetComponentMap() {
+		err = e.ConfigureComponentFileConfig(component, e.configer.ConfigFileUsed(), make(map[string]interface{}))
 		if err != nil {
 			err = errors.Annotate(err, errNew)
 			e.Log(errors.ErrorStack(err))
@@ -526,7 +526,7 @@ func (e *Engine) GetLogger(name string) (*libLog.Logger, error) {
 	if err != nil {
 		return nil, errors.Annotate(err, errGetLogger)
 	}
-	log, ok := loggerComponent.(*log.Logger)
+	log, ok := loggerComponent.Component.(*log.Logger)
 	if !ok {
 		return nil, errors.Annotate(errors.Errorf("invalid 'Logger' component type"), errGetLogger)
 	}
@@ -550,7 +550,7 @@ func (e *Engine) Startup() (err error) {
 	e.Log("ltick: Startup")
 	// 中间件初始化
 	for _, m := range e.Registry.GetMiddlewareMap() {
-		mi, ok := m.(MiddlewareInterface)
+		mi, ok := m.Middleware.(MiddlewareInterface)
 		if !ok {
 			err = errors.Annotate(errors.Errorf("invalid type"), errNew)
 			e.Log(errors.ErrorStack(err))
@@ -618,7 +618,7 @@ func (e *Engine) Startup() (err error) {
 	sortedComponenetName := e.Registry.GetSortedComponentName()
 	// 模块初始化
 	for index, c := range e.Registry.GetSortedComponents() {
-		ci, ok := c.(ComponentInterface)
+		ci, ok := c.Component.(ComponentInterface)
 		if !ok {
 			return errors.Annotatef(errors.Errorf("invalid type"), errStartupComponentInitiate, sortedComponenetName[index])
 		}
@@ -629,7 +629,7 @@ func (e *Engine) Startup() (err error) {
 	}
 	// 模块启动
 	for index, c := range e.Registry.GetSortedComponents() {
-		ci, ok := c.(ComponentInterface)
+		ci, ok := c.Component.(ComponentInterface)
 		if !ok {
 			return errors.Annotatef(errors.Errorf("invalid type"), errStartupComponentStartup, sortedComponenetName[index])
 		}
@@ -654,7 +654,7 @@ func (e *Engine) Shutdown() (err error) {
 	e.Log("ltick: Shutdown")
 	sortedComponenetName := e.Registry.GetSortedComponentName()
 	for index, c := range e.Registry.GetSortedComponents() {
-		component, ok := c.(ComponentInterface)
+		component, ok := c.Component.(ComponentInterface)
 		if !ok {
 			return errors.Annotatef(errors.Errorf("invalid type"), errShutdownComponentShutdown, sortedComponenetName[index])
 		}
@@ -725,24 +725,49 @@ func (e *Engine) GetContextValueString(key string) string {
 	}
 }
 
-func (e *Engine) ConfigureComponentFileConfig(componentName string, configFile string, configProviders map[string]interface{}, configTag ...string) (err error) {
-	canonicalComponentName := strings.ToUpper(componentName[0:1]) + componentName[1:]
+func (e *Engine) ConfigureComponentFileConfig(component *Component, configFile string, configProviders map[string]interface{}, configTag ...string) (err error) {
 	// configer
-	for _, component := range OptionalComponents {
-		canonicalExistsComponentName := strings.ToUpper(component.Name[0:1]) + component.Name[1:]
-		if canonicalComponentName == canonicalExistsComponentName {
-			if len(configTag) > 0 {
-				// create a Config object
-				err = e.configer.ConfigureFileConfig(component, configFile, configProviders, configTag...)
-				if err != nil {
-					return errors.Annotatef(err, errConfigureComponentFileConfig, canonicalComponentName)
-				}
-			} else if component.ConfigurePath != "" {
-				err = e.configer.ConfigureFileConfig(component.Component, configFile, configProviders, component.ConfigurePath)
-				if err != nil {
-					return errors.Annotatef(err, errConfigureComponentFileConfig, canonicalComponentName)
-				}
-			}
+	if len(configTag) > 0 {
+		// create a Config object
+		err = e.configer.ConfigureFileConfig(component.Component, configFile, configProviders, configTag...)
+		if err != nil {
+			return errors.Annotatef(err, errConfigureComponentFileConfig, component)
+		}
+	} else if component.ConfigurePath != "" {
+		err = e.configer.ConfigureFileConfig(component.Component, configFile, configProviders, component.ConfigurePath)
+		if err != nil {
+			return errors.Annotatef(err, errConfigureComponentFileConfig, component)
+		}
+	} else {
+		err = e.configer.ConfigureFileConfig(component.Component, configFile, configProviders)
+		if err != nil {
+			return errors.Annotatef(err, errConfigureComponentFileConfig, component)
+		}
+	}
+	return nil
+}
+
+func (e *Engine) ConfigureComponentFileConfigByName(name string, configFile string, configProviders map[string]interface{}, configTag ...string) (err error) {
+	// configer
+	component, err := e.Registry.GetComponentByName(name)
+	if err != nil {
+		return errors.Annotatef(err, errConfigureComponentFileConfigByName, name)
+	}
+	if len(configTag) > 0 {
+		// create a Config object
+		err = e.configer.ConfigureFileConfig(component.Component, configFile, configProviders, configTag...)
+		if err != nil {
+			return errors.Annotatef(err, errConfigureComponentFileConfigByName, name)
+		}
+	} else if component.ConfigurePath != "" {
+		err = e.configer.ConfigureFileConfig(component.Component, configFile, configProviders, component.ConfigurePath)
+		if err != nil {
+			return errors.Annotatef(err, errConfigureComponentFileConfigByName, name)
+		}
+	} else {
+		err = e.configer.ConfigureFileConfig(component.Component, configFile, configProviders)
+		if err != nil {
+			return errors.Annotatef(err, errConfigureComponentFileConfigByName, name)
 		}
 	}
 	return nil

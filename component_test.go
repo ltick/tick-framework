@@ -109,7 +109,10 @@ func (f *testComponent4) OnShutdown(ctx context.Context) (context.Context, error
 func (suite *TestSuite) TestComponentInjection() {
 	r, err := NewRegistry()
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))
-	err = r.RegisterComponent("TestComponent1", &testComponent1{})
+	err = r.RegisterComponent(&Component{
+		Name:      "TestComponent1",
+		Component: &testComponent1{},
+	})
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))
 	testComponent, err := r.GetComponentByName("TestComponent1")
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))
@@ -117,23 +120,28 @@ func (suite *TestSuite) TestComponentInjection() {
 	err = r.RegisterValue("Foo1", "Bar1")
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))
 	if testComponent != nil {
-		testComponent1, ok := testComponent.(*testComponent1)
+		testComponent1, ok := testComponent.Component.(*testComponent1)
 		assert.Equal(suite.T(), true, ok)
-		err = r.RegisterComponent("TestComponent2", &testComponent2{})
+		err = r.RegisterComponent(&Component{
+			Name:      "TestComponent2",
+			Component: &testComponent2{},
+		})
 		assert.Nil(suite.T(), err, errors.ErrorStack(err))
 		testComponent, err = r.GetComponentByName("TestComponent2")
 		assert.Nil(suite.T(), err, errors.ErrorStack(err))
 		if testComponent != nil {
-			testComponent2, ok := testComponent.(*testComponent2)
+			testComponent2, ok := testComponent.Component.(*testComponent2)
 			assert.Equal(suite.T(), true, ok)
-			err = r.RegisterComponent("TestComponent3", &testComponent3{})
+			err = r.RegisterComponent(&Component{
+				Name:      "TestComponent3",
+				Component: &testComponent3{},
+			})
 			assert.Nil(suite.T(), err, errors.ErrorStack(err))
 			testComponent, err = r.GetComponentByName("TestComponent3")
 			assert.Nil(suite.T(), err, errors.ErrorStack(err))
 			if testComponent != nil {
-				testComponent3, ok := testComponent.(*testComponent3)
+				testComponent3, ok := testComponent.Component.(*testComponent3)
 				assert.Equal(suite.T(), true, ok)
-
 				err = r.InjectComponentByName([]string{"TestComponent1", "TestComponent2", "TestComponent3"})
 				assert.Nil(suite.T(), err, errors.ErrorStack(err))
 				assert.NotNil(suite.T(), testComponent1, "testComponent1 is nil")
@@ -161,7 +169,7 @@ func (suite *TestSuite) TestUseComponent() {
 	r, err := NewRegistry()
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))
 	for _, c := range components {
-		err = r.RegisterComponent(c.Name, c.Component, true)
+		err = r.RegisterComponent(c, true)
 		assert.Nil(suite.T(), err, errors.ErrorStack(err))
 	}
 	configComponent, err := r.GetComponentByName("Config")
@@ -197,24 +205,27 @@ func (suite *TestSuite) TestComponentConfig() {
 	err = r.RegisterValue("Foo1", "Bar1")
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))
 	for _, c := range components {
-		err = r.RegisterComponent(c.Name, c.Component, true)
+		err = r.RegisterComponent(c, true)
 		assert.Nil(suite.T(), err, errors.ErrorStack(err))
 	}
 	configComponent, err := r.GetComponentByName("Config")
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))
 	assert.NotNil(suite.T(), configComponent)
-	configer, ok := configComponent.(*config.Config)
+	configer, ok := configComponent.Component.(*config.Config)
 	assert.True(suite.T(), ok)
 	err = configer.SetOptions(options)
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))
-	err = r.RegisterComponent("TestComponent1", &testComponent1{})
+	err = r.RegisterComponent(&Component{
+		Name: "TestComponent1",
+		Component: &testComponent1{},
+	})
 	assert.NotNil(suite.T(), err, errors.ErrorStack(err))
 	assert.Equal(suite.T(), "ltick: component 'TestComponent1' exists", err.Error())
 	err = r.InjectComponent()
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))
 	testComponent, err := r.GetComponentByName("testComponent1")
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))
-	component, ok := testComponent.(*testComponent1)
+	component, ok := testComponent.Component.(*testComponent1)
 	assert.Equal(suite.T(), true, ok)
 	assert.Equal(suite.T(), "Bar", component.Foo)
 	err = r.ConfigureComponentFileConfig("testComponent1", suite.configFile, nil, "components.TestComponent1")

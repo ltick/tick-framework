@@ -114,13 +114,19 @@ func (suite *TestSuite) TestMiddleware() {
 	configComponent, err := r.GetComponentByName("Config")
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), configComponent)
-	configer, ok := configComponent.(*config.Config)
+	configer, ok := configComponent.Component.(*config.Config)
 	assert.True(suite.T(), ok)
 	err = configer.SetOptions(options)
 	assert.Nil(suite.T(), err)
-	err = r.RegisterMiddleware("testMiddleware1", &testMiddleware1{})
+	err = r.RegisterMiddleware(&Middleware{
+		Name:       "testMiddleware1",
+		Middleware: &testMiddleware1{},
+	})
 	assert.Nil(suite.T(), err)
-	err = r.RegisterMiddleware("testMiddleware2", &testMiddleware2{})
+	err = r.RegisterMiddleware(&Middleware{
+		Name:       "testMiddleware2",
+		Middleware: &testMiddleware2{},
+	})
 	assert.Nil(suite.T(), err)
 	a := New(r, EngineLogWriter(ioutil.Discard), EngineCallback(&TestCallback{})).
 		LoadConfig(EngineConfigFile(suite.configFile), EngineConfigDotenvFile(suite.dotenvFile), EngineConfigEnvPrefix("LTICK")).
