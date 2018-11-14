@@ -243,11 +243,12 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 		os.Exit(1)
 	}
 	for _, component := range e.Registry.GetComponentMap() {
-		err = e.ConfigureComponentFileConfig(component, e.configer.ConfigFileUsed(), make(map[string]interface{}))
-		if err != nil {
+		e.ConfigureComponentFileConfig(component, e.configer.ConfigFileUsed(), make(map[string]interface{}))
+		// ignore error
+		/*if err != nil {
 			err = errors.Annotate(err, errNew)
 			e.Log(errors.ErrorStack(err))
-		}
+		}*/
 	}
 	// 模块初始化
 	componentMap := e.Registry.GetComponentMap()
