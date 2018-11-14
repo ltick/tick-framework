@@ -66,11 +66,10 @@ type (
 	EngineOption func(*EngineOptions)
 
 	EngineConfigOptions struct {
-		configFile      string
-		configCacheFile string
-		dotenvFile      string
-		envPrefix       string
-		configs         map[string]config.Option
+		configFile string
+		dotenvFile string
+		envPrefix  string
+		configs    map[string]config.Option
 	}
 
 	Engine struct {
@@ -78,10 +77,11 @@ type (
 		state       State
 		executeFile string
 
-		configer  *config.Config
-		Registry  *Registry
-		Context   context.Context
-		ServerMap map[string]*Server
+		cachedConfigFileName string
+		configer             *config.Config
+		Registry             *Registry
+		Context              context.Context
+		ServerMap            map[string]*Server
 	}
 	Callback interface {
 		OnStartup(*Engine) error  // Execute On After All Engine Component OnStartup
@@ -152,12 +152,6 @@ func EngineConfigConfigs(configs map[string]config.Option) EngineOption {
 	}
 }
 
-func EngineConfigCacheFile(configCacheFile string) EngineOption {
-	return func(options *EngineOptions) {
-		options.EngineConfigOptions.configCacheFile = configCacheFile
-	}
-}
-
 func EngineCallback(callback Callback) EngineOption {
 	return func(options *EngineOptions) {
 		options.callback = callback
@@ -180,10 +174,6 @@ func (e *Engine) GetConfigDotenvFile() string {
 
 func (e *Engine) GetConfigEnvPrefix() string {
 	return e.EngineConfigOptions.envPrefix
-}
-
-func (e *Engine) GetConfigCacheFile() string {
-	return e.EngineConfigOptions.configCacheFile
 }
 
 func (e *Engine) GetConfigConfigs() map[string]config.Option {
@@ -319,7 +309,6 @@ func (e *Engine) NewDefaultServer(setters ...ServerOption) *Server {
 	return server
 }
 
-
 func (e *Engine) loadConfig(setters ...EngineOption) *Engine {
 	var err error
 	for _, setter := range setters {
@@ -342,28 +331,26 @@ func (e *Engine) loadConfig(setters ...EngineOption) *Engine {
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
-	if e.EngineOptions.EngineConfigOptions.configCacheFile == "" {
-		fileExtension := filepath.Ext(e.EngineOptions.EngineConfigOptions.configFile)
-		e.EngineOptions.EngineConfigOptions.configCacheFile = strings.Replace(e.EngineOptions.EngineConfigOptions.configFile, fileExtension, "", -1) + ".cached" + fileExtension
-	}
-	configCachedFile, err := e.openCacheConfigFile(e.EngineOptions.EngineConfigOptions.configCacheFile)
+	fileExtension := filepath.Ext(e.EngineOptions.EngineConfigOptions.configFile)
+	configCacheFileName := strings.Replace(e.EngineOptions.EngineConfigOptions.configFile, fileExtension, "", -1) + ".cached" + fileExtension
+	configCachedFile, err := e.openCacheConfigFile(configCacheFileName)
 	if err != nil {
 		err = errors.Annotate(err, errLoadSystemConfig)
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
 	defer configCachedFile.Close()
-	cachedConfigFileName := configCachedFile.Name()
+	e.cachedConfigFileName = configCachedFile.Name()
 	if e.EngineOptions.EngineConfigOptions.dotenvFile != "" {
 		e.LoadEnvFile(e.EngineOptions.EngineConfigOptions.envPrefix, e.EngineOptions.EngineConfigOptions.dotenvFile)
 	} else {
 		e.LoadEnv(e.EngineOptions.EngineConfigOptions.envPrefix)
 	}
-	e.loadCachedFileConfig(e.EngineOptions.EngineConfigOptions.configFile, cachedConfigFileName)
+	e.loadCachedFileConfig(e.EngineOptions.EngineConfigOptions.configFile, e.cachedConfigFileName)
 	go func() {
 		// 刷新缓存
 		for {
-			cachedConfigFileInfo, err := os.Stat(cachedConfigFileName)
+			cachedConfigFileInfo, err := os.Stat(e.cachedConfigFileName)
 			if err != nil {
 				err = errors.Annotate(err, errLoadSystemConfig)
 				e.Log(errors.ErrorStack(err))
@@ -378,7 +365,7 @@ func (e *Engine) loadConfig(setters ...EngineOption) *Engine {
 				}
 				if cachedConfigFileInfo.ModTime().Before(dotenvFileInfo.ModTime()) {
 					e.LoadEnvFile(e.EngineOptions.EngineConfigOptions.envPrefix, e.EngineOptions.EngineConfigOptions.dotenvFile)
-					e.loadCachedFileConfig(e.EngineOptions.EngineConfigOptions.configFile, cachedConfigFileName)
+					e.loadCachedFileConfig(e.EngineOptions.EngineConfigOptions.configFile, e.cachedConfigFileName)
 				}
 			}
 			configFileInfo, err := os.Stat(e.EngineOptions.EngineConfigOptions.configFile)
@@ -388,7 +375,7 @@ func (e *Engine) loadConfig(setters ...EngineOption) *Engine {
 				return
 			}
 			if cachedConfigFileInfo.ModTime().Before(configFileInfo.ModTime()) {
-				e.loadCachedFileConfig(e.EngineOptions.EngineConfigOptions.configFile, cachedConfigFileName)
+				e.loadCachedFileConfig(e.EngineOptions.EngineConfigOptions.configFile, e.cachedConfigFileName)
 			}
 			time.Sleep(defaultConfigReloadTime)
 		}
@@ -503,6 +490,9 @@ func (e *Engine) WithCallback(callback Callback) *Engine {
 		e.EngineOptions.callback = callback
 	}
 	return e
+}
+func (e *Engine) GetConfigCachedFileName() string {
+	return e.cachedConfigFileName
 }
 
 func (e *Engine) GetLogger(name string) (*libLog.Logger, error) {

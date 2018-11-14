@@ -241,7 +241,7 @@ func (suite *TestServerSuite) SetupTest() {
 		WithSlashRemover(http.StatusMovedPermanently).
 		WithLanguageNegotiator("zh-CN", "en-US").
 		WithCors(CorsAllowAll)
-	suite.server = NewServer(router, ServerPort(8080))
+	suite.server = NewServer(router, ServerLogWriter(ioutil.Discard), ServerPort(8080))
 	suite.engine.SetServer("test", suite.server)
 
 	suite.defaultServer = suite.engine.NewDefaultServer()
@@ -295,7 +295,7 @@ func (suite *TestServerSuite) TestConfigureServer() {
 	providers["TestHandler"] = func() api.Handler {
 		return &TestHandler{}
 	}
-	err := suite.engine.ConfigureServerFromFile(suite.defaultServer, suite.engine.GetConfigCacheFile(), providers, "server")
+	err := suite.engine.ConfigureServerFromFile(suite.defaultServer, suite.engine.GetConfigCachedFileName(), providers, "server")
 	assert.Nil(suite.T(), err)
 	if err == nil {
 		err = suite.engine.Startup()
