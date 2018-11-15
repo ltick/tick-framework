@@ -1,19 +1,21 @@
 package ltick
 
 import (
-	"github.com/juju/errors"
 	"context"
+
+	"github.com/juju/errors"
+	"github.com/ltick/tick-framework/config"
 )
 
 const INJECT_TAG = "inject"
 
 type (
 	Registry struct {
-		Components           []interface{}
-		ComponentMap         map[string]interface{}
+		Components           []*Component
+		ComponentMap         map[string]*Component
 		SortedComponentName  []string
-		Middlewares          []interface{}
-		MiddlewareMap        map[string]interface{}
+		Middlewares          []*Middleware
+		MiddlewareMap        map[string]*Middleware
 		SortedMiddlewareName []string
 		Values               map[string]interface{}
 	}
@@ -21,26 +23,28 @@ type (
 
 func NewRegistry() (r *Registry, err error) {
 	r = &Registry{
-		Components:           make([]interface{}, 0),
-		ComponentMap:         make(map[string]interface{}),
+		Components:           make([]*Component, 0),
+		ComponentMap:         make(map[string]*Component),
 		SortedComponentName:  make([]string, 0),
-		Middlewares:          make([]interface{}, 0),
-		MiddlewareMap:        make(map[string]interface{}),
+		Middlewares:          make([]*Middleware, 0),
+		MiddlewareMap:        make(map[string]*Middleware),
 		SortedMiddlewareName: make([]string, 0),
 		Values:               make(map[string]interface{}),
 	}
 	// 注册内置模块
-	for _, component := range BuiltinComponents {
-		err = r.RegisterComponent(component.Name, component.Component, true)
-		if err != nil {
-			e := errors.Annotate(err, errNew)
-			return nil, e
-		}
-		_, err = component.Component.Initiate(context.Background())
-		if err != nil {
-			e := errors.Annotate(err, errNew)
-			return nil, e
-		}
+	configer := &config.Config{}
+	err = r.RegisterComponent(&Component{
+		Name:      "Config",
+		Component: configer,
+	}, true)
+	if err != nil {
+		e := errors.Annotate(err, errNew)
+		return nil, e
+	}
+	_, err = configer.Initiate(context.Background())
+	if err != nil {
+		e := errors.Annotate(err, errNew)
+		return nil, e
 	}
 	return r, nil
 }

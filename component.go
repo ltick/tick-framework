@@ -18,21 +18,18 @@ import (
 )
 
 var (
-	errComponentExists         = "ltick: component '%s' exists"
-	errComponentNotExists      = "ltick: component '%s' not exists"
-	errRegisterComponent       = "ltick: register component '%s' error"
-	errUnregisterComponent     = "ltick: unregister component '%s' error"
-	errInjectComponent         = "ltick: inject component '%s' field '%s' error"
-	errInjectComponentTo       = "ltick: inject component '%s' field '%s' error"
-	errUseComponent            = "ltick: use component '%s' error"
-	errValueExists             = "ltick: value '%s' exists"
-	errValueNotExists          = "ltick: value '%s' not exists"
-	errLoadComponentFileConfig = "ltick: load component '%s' file config  error"
+	errComponentExists                    = "ltick: component '%s' exists"
+	errComponentNotExists                 = "ltick: component '%s' not exists"
+	errRegisterComponent                  = "ltick: register component '%s' error"
+	errUnregisterComponent                = "ltick: unregister component '%s' error"
+	errInjectComponent                    = "ltick: inject component '%s' field '%s' error"
+	errInjectComponentTo                  = "ltick: inject component '%s' field '%s' error"
+	errUseComponent                       = "ltick: use component '%s' error"
+	errValueExists                        = "ltick: value '%s' exists"
+	errValueNotExists                     = "ltick: value '%s' not exists"
+	errConfigureComponentFileConfigByName = "ltick: configure component '%s' file config error"
+	errConfigureComponentFileConfig       = "ltick: configure component '%v' file config error"
 )
-
-func (r *Registry) GetComponentMap() map[string]interface{} {
-	return r.ComponentMap
-}
 
 type ComponentInterface interface {
 	Initiate(ctx context.Context) (context.Context, error)
@@ -40,47 +37,50 @@ type ComponentInterface interface {
 	OnShutdown(ctx context.Context) (context.Context, error)
 }
 
+type Components []*Component
+
+func (cs Components) Get(name string) *Component {
+	for _, c := range cs {
+		canonicalName := canonicalName(name)
+		if canonicalName == c.Name {
+			return c
+		}
+	}
+	return nil
+}
+
 type Component struct {
-	Name         string
-	Component    ComponentInterface
-	Dependencies []*Component
+	Name          string
+	Component     ComponentInterface
+	ConfigurePath string
+	Dependencies  []*Component
 }
 
 var (
-	BuiltinComponents = []*Component{
-		&Component{Name: "Log", Component: &log.Logger{}},
-		&Component{Name: "Config", Component: &config.Config{}},
-	}
-	Components = []*Component{
-		&Component{Name: "Database", Component: &database.Database{}},
-		&Component{Name: "Kvstore", Component: &kvstore.Kvstore{}},
-		&Component{Name: "Queue", Component: &queue.Queue{}},
-		&Component{Name: "Filesystem", Component: &filesystem.Filesystem{}},
-		&Component{Name: "Session", Component: &session.Session{}},
+	OptionalComponents = Components{
+		&Component{Name: "Log", Component: &log.Logger{}, ConfigurePath: "components.log"},
+		&Component{Name: "Database", Component: &database.Database{}, ConfigurePath: "components.database"},
+		&Component{Name: "Kvstore", Component: &kvstore.Kvstore{}, ConfigurePath: "components.kvstore"},
+		&Component{Name: "Queue", Component: &queue.Queue{}, ConfigurePath: "components.queue"},
+		&Component{Name: "Filesystem", Component: &filesystem.Filesystem{}, ConfigurePath: "components.filesystem"},
+		&Component{Name: "Session", Component: &session.Session{}, ConfigurePath: "components.session"},
 	}
 )
 
 /**************** Component ****************/
-
 func (r *Registry) UseComponent(componentNames ...string) error {
 	var err error
-	// 内置模块注册
 	components := make([]*Component, 0)
 	for _, componentName := range componentNames {
-		canonicalComponentName := strings.ToUpper(componentName[0:1]) + componentName[1:]
-		componentExists := false
-		for _, component := range Components {
-			canonicalExistsComponentName := strings.ToUpper(component.Name[0:1]) + component.Name[1:]
-			if canonicalComponentName == canonicalExistsComponentName {
-				componentExists = true
-				components = append(components, component)
-				err = r.RegisterComponent(strings.ToLower(component.Name[0:1])+component.Name[1:], component.Component, true)
-				if err != nil {
-					return errors.Annotatef(err, errUseComponent, component.Name)
-				}
+		canonicalComponentName := canonicalName(componentName)
+		component := OptionalComponents.Get(canonicalComponentName)
+		if component != nil {
+			components = append(components, component)
+			err = r.RegisterComponent(component, true)
+			if err != nil {
+				return errors.Annotatef(err, errUseComponent, component.Name)
 			}
-		}
-		if !componentExists {
+		} else {
 			return errors.Annotatef(err, errComponentNotExists, canonicalComponentName)
 		}
 	}
@@ -99,24 +99,24 @@ func (r *Registry) UseComponent(componentNames ...string) error {
 }
 
 // Register As Component
-func (r *Registry) RegisterComponent(componentName string, component ComponentInterface, ignoreIfExistses ...bool) error {
-	canonicalComponentName := strings.ToUpper(componentName[0:1]) + componentName[1:]
+func (r *Registry) RegisterComponent(component *Component, ignoreIfExistses ...bool) error {
+	canonicalName := canonicalName(component.Name)
 	ignoreIfExists := false
 	if len(ignoreIfExistses) > 0 {
 		ignoreIfExists = ignoreIfExistses[0]
 	}
-	if _, ok := r.ComponentMap[canonicalComponentName]; ok {
+	if _, ok := r.ComponentMap[canonicalName]; ok {
 		if !ignoreIfExists {
-			return errors.Errorf(errComponentExists, canonicalComponentName)
+			return errors.Errorf(errComponentExists, canonicalName)
 		}
-		err := r.UnregisterComponent(canonicalComponentName)
+		err := r.UnregisterComponent(canonicalName)
 		if err != nil {
-			return errors.Annotatef(err, errRegisterComponent+": %s", canonicalComponentName)
+			return errors.Annotatef(err, errRegisterComponent+": %s", canonicalName)
 		}
 	}
+	r.SortedComponentName = append(r.SortedComponentName, canonicalName)
 	r.Components = append(r.Components, component)
-	r.ComponentMap[canonicalComponentName] = component
-	r.SortedComponentName = append(r.SortedComponentName, canonicalComponentName)
+	r.ComponentMap[canonicalName] = component
 	return nil
 }
 
@@ -124,7 +124,7 @@ func (r *Registry) RegisterComponent(componentName string, component ComponentIn
 func (r *Registry) UnregisterComponent(componentNames ...string) error {
 	if len(componentNames) > 0 {
 		for _, componentName := range componentNames {
-			canonicalComponentName := strings.ToUpper(componentName[0:1]) + componentName[1:]
+			canonicalComponentName := canonicalName(componentName)
 			// r.ComponentMap
 			delete(r.ComponentMap, canonicalComponentName)
 			// r.SortedComponentName
@@ -135,10 +135,8 @@ func (r *Registry) UnregisterComponent(componentNames ...string) error {
 			}
 			// r.Components
 			for index, c := range r.Components {
-				if component, ok := c.(*Component); ok {
-					if canonicalComponentName == component.Name {
-						r.Components = append(r.Components[:index], r.Components[index+1:]...)
-					}
+				if canonicalComponentName == c.Name {
+					r.Components = append(r.Components[:index], r.Components[index+1:]...)
 				}
 			}
 		}
@@ -146,16 +144,24 @@ func (r *Registry) UnregisterComponent(componentNames ...string) error {
 	return nil
 }
 
-func (r *Registry) GetComponentByName(componentName string) (interface{}, error) {
-	canonicalComponentName := strings.ToUpper(componentName[0:1]) + componentName[1:]
-	if _, ok := r.ComponentMap[canonicalComponentName]; !ok {
-		return nil, errors.Errorf(errComponentNotExists, canonicalComponentName)
-	}
-	return r.ComponentMap[canonicalComponentName], nil
+func (r *Registry) GetComponentMap() map[string]*Component {
+	return r.ComponentMap
 }
 
-func (r *Registry) GetSortedComponents(reverses ...bool) []interface{} {
-	components := make([]interface{}, len(r.Components))
+func (r *Registry) GetComponentByName(name string) (*Component, error) {
+	name = canonicalName(name)
+	if _, ok := r.ComponentMap[name]; !ok {
+		return nil, errors.Errorf(errComponentNotExists, name)
+	}
+	return r.ComponentMap[name], nil
+}
+
+func (r *Registry) GetSortedComponentName() []string {
+	return r.SortedComponentName
+}
+
+func (r *Registry) GetSortedComponents(reverses ...bool) []*Component {
+	components := make([]*Component, len(r.Components))
 	if len(r.SortedComponentName) > 0 {
 		index := 0
 		reverse := false
@@ -181,21 +187,17 @@ func (r *Registry) GetSortedComponents(reverses ...bool) []interface{} {
 	return components
 }
 
-func (r *Registry) GetSortedComponentName() []string {
-	return r.SortedComponentName
-}
-
 // Register As Value
 func (r *Registry) RegisterValue(key string, value interface{}, forceOverwrites ...bool) error {
-	Key := strings.ToUpper(key[0:1]) + key[1:]
+	key = canonicalName(key)
 	forceOverwrite := false
 	if len(forceOverwrites) > 0 {
 		forceOverwrite = forceOverwrites[0]
 	}
-	if _, ok := r.Values[Key]; ok && !forceOverwrite {
-		return errors.Errorf(errValueExists, Key)
+	if _, ok := r.Values[key]; ok && !forceOverwrite {
+		return errors.Errorf(errValueExists, key)
 	}
-	r.Values[Key] = value
+	r.Values[key] = value
 	return nil
 }
 
@@ -203,22 +205,22 @@ func (r *Registry) RegisterValue(key string, value interface{}, forceOverwrites 
 func (r *Registry) UnregisterValue(keys ...string) error {
 	if len(keys) > 0 {
 		for _, key := range keys {
-			Key := strings.ToUpper(key[0:1]) + key[1:]
-			if _, ok := r.Values[Key]; !ok {
-				return errors.Errorf(errValueNotExists, Key)
+			key = canonicalName(key)
+			if _, ok := r.Values[key]; !ok {
+				return errors.Errorf(errValueNotExists, key)
 			}
-			delete(r.Values, Key)
+			delete(r.Values, key)
 		}
 	}
 	return nil
 }
 
 func (r *Registry) GetValue(key string) (interface{}, error) {
-	Key := strings.ToUpper(key[0:1]) + key[1:]
-	if _, ok := r.Values[Key]; !ok {
-		return nil, errors.Errorf(errValueNotExists, Key)
+	key = canonicalName(key)
+	if _, ok := r.Values[key]; !ok {
+		return nil, errors.Errorf(errValueNotExists, key)
 	}
-	return r.Values[Key], nil
+	return r.Values[key], nil
 }
 
 func (r *Registry) GetValues() map[string]interface{} {
@@ -226,16 +228,21 @@ func (r *Registry) GetValues() map[string]interface{} {
 }
 
 func (r *Registry) InjectComponent() error {
-	return r.InjectComponentTo(r.GetSortedComponents())
+	components := r.GetSortedComponents()
+	injectTargets := make([]interface{}, len(components))
+	for i, c := range components {
+		injectTargets[i] = c.Component
+	}
+	return r.InjectComponentTo(injectTargets)
 }
 
 func (r *Registry) InjectComponentByName(componentNames []string) error {
 	componentMap := r.GetComponentMap()
 	injectTargets := make([]interface{}, 0)
 	for _, componentName := range componentNames {
-		canonicalComponentName := strings.ToUpper(componentName[0:1]) + componentName[1:]
+		canonicalComponentName := canonicalName(componentName)
 		if injectTarget, ok := componentMap[canonicalComponentName]; ok {
-			injectTargets = append(injectTargets, injectTarget)
+			injectTargets = append(injectTargets, injectTarget.Component)
 		}
 	}
 	return r.InjectComponentTo(injectTargets)
@@ -258,7 +265,7 @@ func (r *Registry) InjectComponentTo(injectTargets []interface{}) error {
 					if _, ok := f.Value().(ComponentInterface); ok {
 						fieldInjected := false
 						if _, ok := r.ComponentMap[f.Name()]; ok {
-							err := f.Set(r.ComponentMap[f.Name()])
+							err := f.Set(r.ComponentMap[f.Name()].Component)
 							if err != nil {
 								return errors.Annotatef(err, errInjectComponentTo, injectTargetValue.String(), f.Name())
 							}
@@ -281,27 +288,29 @@ func (r *Registry) InjectComponentTo(injectTargets []interface{}) error {
 	return nil
 }
 
-func (r *Registry) LoadComponentFileConfig(componentName string, configFile string, configProviders map[string]interface{}, configTag ...string) (err error) {
-	canonicalComponentName := strings.ToUpper(componentName[0:1]) + componentName[1:]
-	component, err := r.GetComponentByName(canonicalComponentName)
-	if err != nil {
-		if !strings.Contains(err.Error(), "not exists") {
-			return err
-		}
-	}
-	// configer
+
+func (r *Registry) ConfigureComponentFileConfig(name string, configFile string, configProviders map[string]interface{}, configTag ...string) (err error) {
+	canonicalComponentName := canonicalName(name)
 	configComponent, err := r.GetComponentByName("Config")
 	if err != nil {
-		return errors.Annotatef(err, errLoadComponentFileConfig, canonicalComponentName)
+		return errors.Annotatef(err, errConfigureComponentFileConfig, canonicalComponentName)
 	}
-	configer, ok := configComponent.(*config.Config)
+	configer, ok := configComponent.Component.(*config.Config)
 	if !ok {
-		return errors.Annotatef(errors.Errorf("invalid 'Config' component type"), errLoadComponentFileConfig, canonicalComponentName)
+		return errors.Annotatef(errors.Errorf("invalid 'Config' component type"), errConfigureComponentFileConfig, canonicalComponentName)
 	}
-	// create a Config object
-	err = configer.LoadComponentFileConfig(component, componentName, configFile, configProviders, configTag...)
-	if err != nil {
-		return errors.Annotatef(err, errLoadComponentFileConfig, canonicalComponentName)
+	// configer
+	for componentName, component := range r.ComponentMap {
+		canonicalExistsComponentName := canonicalName(componentName)
+		if canonicalComponentName == canonicalExistsComponentName {
+			if len(configTag) > 0 {
+				// create a Config object
+				err = configer.ConfigureFileConfig(component.Component, configFile, configProviders, configTag...)
+				if err != nil {
+					return errors.Annotatef(err, errConfigureComponentFileConfig, canonicalComponentName)
+				}
+			}
+		}
 	}
 	return nil
 }
@@ -331,11 +340,20 @@ func SortComponent(components []*Component) []string {
 	}
 	// root components
 	roots := []*Component{}
-	for _, c := range components {
-		if len(c.Dependencies) == 0 {
-			roots = append(roots, c)
+	rootDependenciesCount := 0
+	for {
+		for _, c := range components {
+			if len(c.Dependencies) == rootDependenciesCount {
+				roots = append(roots, c)
+			}
+		}
+		if len(roots) > 0 {
+			break
+		} else {
+			rootDependenciesCount++
 		}
 	}
+
 	sortedComponents := make([]string, 0)
 	return sortComponent(components, roots, sortedComponents)
 }
@@ -368,4 +386,9 @@ func sortComponent(components []*Component, currentComponents []*Component, sort
 		}
 	}
 	return sortedComponents
+}
+
+/******** Common Function ********/
+func canonicalName(name string) string {
+	return strings.ToUpper(name[0:1]) + name[1:]
 }

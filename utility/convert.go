@@ -27,7 +27,6 @@ func ConvertAssign(dest reflect.Value, src ...string) (err error) {
 			err = fmt.Errorf("%v", p)
 		}
 	}()
-
 	switch dest.Interface().(type) {
 	case string:
 		dest.Set(reflect.ValueOf(src[0]))

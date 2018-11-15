@@ -1,48 +1,61 @@
 {
-  "temporary_path": "/tmp",
   "server": {
-    "port": 8081,
-    "max_idle_conns_per_host": 10,
-    "request_timeout": "0s",
-    "graceful_stop_timeout": "120s"
-  },
-  "router": {
-    "proxy": {
-      "www.example.com": [
-        {"group":"/proxy", "path": "<path:\\d+>", "upstream": "http://www.example.com/user/<:path>"}
-      ]
-    },
-    "handler": {
-      "www.example.com": [
-        {"group":"/user", "path":"<id>", "handler":"UserHandler"}
+    "Port": 8081,
+    "Router": {
+      "HandlerTimeout": "2s",
+      "GracefulStopTimeout": "120s",
+      "Callbacks": [
+        {"type": "handlerCallback"}
+      ],
+      "Proxys": [
+        {
+          "Host": "www.example.com",
+          "Group": "/proxy",
+          "Path": "/<path:\\d+>",
+          "Upstream": "http://www.example.com/proxy/<:path>"
+        }
+      ],
+      "Routes": [
+        {
+          "Host": "www.example.com",
+          "Method": "ANY",
+          "Group": "/test",
+          "Path": "/<id>",
+          "Handlers": [
+            {"type": "TestHandler"}
+          ]
+        }
       ]
     }
   },
-  "component": {
-    "Logger": {
-      "Targets": {
-        "access": {
+  "components": {
+    "log": {
+      "Logs" :[
+        {
+          "Name" : "access",
           "Type": "%ACCESS_LOG_TYPE%",
           "Writer": "%ACCESS_LOG_WRITER%",
           "Filename": "%ACCESS_LOG_FILENAME%",
           "MaxLevel": "%ACCESS_LOG_MAX_LEVEL%",
           "Formatter": "%ACCESS_LOG_FORMATTER%"
         },
-        "debug": {
+        {
+          "Name" : "debug",
           "Type": "%DEBUG_LOG_TYPE%",
           "Writer": "%DEBUG_LOG_WRITER%",
           "Filename": "%DEBUG_LOG_FILENAME%",
           "MaxLevel": "%DEBUG_LOG_MAX_LEVEL%",
           "Formatter": "%DEBUG_LOG_FORMATTER%"
         },
-        "system": {
+        {
+          "Name" : "system",
           "Type": "%SYSTEM_LOG_TYPE%",
           "Writer": "%SYSTEM_LOG_WRITER%",
           "Filename": "%SYSTEM_LOG_FILENAME%",
           "MaxLevel": "%SYSTEM_LOG_MAX_LEVEL%",
           "Formatter": "%SYSTEM_LOG_FORMATTER%"
         }
-      }
+      ]
     },
     "TestComponent1": {
       "Foo": "Bar"

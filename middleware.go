@@ -3,19 +3,18 @@ package ltick
 import (
 	"context"
 	"fmt"
-	"reflect"
-	"strings"
 
-	"github.com/fatih/structs"
+	"github.com/juju/errors"
 	"github.com/ltick/tick-routing"
 )
 
 var (
-	errMiddlewareExists                 = "ltick: middleware '%s' exists"
-	errMiddlewareNotExists              = "ltick: middleware '%s' not exists"
-	errRegisterMiddleware               = "ltick: register middleware '%s' error"
-	errUnRegisterMiddleware             = "ltick: unregister middleware '%s' error"
-	errInjectMiddlewareTo               = "ltick: inject middleware '%s' field '%s' error"
+	errGetMiddlewareByName  = "ltick: get middleware by name error"
+	errMiddlewareExists     = "ltick: middleware '%s' exists"
+	errMiddlewareNotExists  = "ltick: middleware '%s' not exists"
+	errRegisterMiddleware   = "ltick: register middleware '%s' error"
+	errUnRegisterMiddleware = "ltick: unregister middleware '%s' error"
+	errInjectMiddlewareTo   = "ltick: inject middleware '%s' field '%s' error"
 )
 
 type MiddlewareInterface interface {
@@ -31,9 +30,9 @@ type Middleware struct {
 
 /**************** Middleware ****************/
 // Register As Middleware
-func (r *Registry) RegisterMiddleware(middlewareName string, middleware MiddlewareInterface, ignoreIfExistses ...bool) error {
+func (r *Registry) RegisterMiddleware(middleware *Middleware, ignoreIfExistses ...bool) error {
 	var err error
-	canonicalMiddlewareName := strings.ToUpper(middlewareName[0:1]) + middlewareName[1:]
+	canonicalMiddlewareName := canonicalName(middleware.Name)
 	ignoreIfExists := false
 	if len(ignoreIfExistses) > 0 {
 		ignoreIfExists = ignoreIfExistses[0]
@@ -57,7 +56,7 @@ func (r *Registry) RegisterMiddleware(middlewareName string, middleware Middlewa
 func (r *Registry) UnregisterMiddleware(middlewareNames ...string) error {
 	if len(middlewareNames) > 0 {
 		for _, middlewareName := range middlewareNames {
-			canonicalMiddlewareName := strings.ToUpper(middlewareName[0:1]) + middlewareName[1:]
+			canonicalMiddlewareName := canonicalName(middlewareName)
 			_, ok := r.MiddlewareMap[canonicalMiddlewareName]
 			if !ok {
 				return fmt.Errorf(errMiddlewareNotExists, canonicalMiddlewareName)
@@ -68,10 +67,8 @@ func (r *Registry) UnregisterMiddleware(middlewareNames ...string) error {
 				}
 			}
 			for index, m := range r.Middlewares {
-				if middleware, ok := m.(*Middleware); ok {
-					if canonicalMiddlewareName == middleware.Name {
-						r.Middlewares = append(r.Middlewares[:index], r.Middlewares[index+1:]...)
-					}
+				if canonicalMiddlewareName == m.Name {
+					r.Middlewares = append(r.Middlewares[:index], r.Middlewares[index+1:]...)
 				}
 			}
 			delete(r.MiddlewareMap, canonicalMiddlewareName)
@@ -80,76 +77,41 @@ func (r *Registry) UnregisterMiddleware(middlewareNames ...string) error {
 	return nil
 }
 
-func (r *Registry) GetMiddleware(middlewareName string) (interface{}, error) {
-	canonicalMiddlewareName := strings.ToUpper(middlewareName[0:1]) + middlewareName[1:]
+func (r *Registry) GetMiddlewareByName(middlewareName string) (*Middleware, error) {
+	canonicalMiddlewareName := canonicalName(middlewareName)
 	if _, ok := r.MiddlewareMap[canonicalMiddlewareName]; !ok {
-		return nil, fmt.Errorf(errMiddlewareNotExists, canonicalMiddlewareName)
+		return nil, errors.Annotate(errors.Errorf(errMiddlewareNotExists, canonicalMiddlewareName), errGetMiddlewareByName)
 	}
 	return r.MiddlewareMap[canonicalMiddlewareName], nil
 }
 
-func (r *Registry) GetMiddlewareMap() map[string]interface{} {
+func (r *Registry) GetMiddlewareMap() map[string]*Middleware {
 	return r.MiddlewareMap
 }
 
 func (r *Registry) InjectMiddleware() error {
-	return r.InjectMiddlewareTo(r.GetSortedMiddlewares())
+	middlewares := r.GetSortedMiddlewares()
+	injectTargets := make([]interface{}, len(middlewares))
+	for i, c := range middlewares {
+		injectTargets[i] = c.Middleware
+	}
+	return r.InjectComponentTo(injectTargets)
 }
 
-func (r *Registry) InjectMiddlewareByName(componentNames []string) error {
-	componentMap := r.GetMiddlewareMap()
+func (r *Registry) InjectMiddlewareByName(middlewareNames []string) error {
+	middlewareMap := r.GetMiddlewareMap()
 	injectTargets := make([]interface{}, 0)
-	for _, componentName := range componentNames {
-		canonicalMiddlewareName := strings.ToUpper(componentName[0:1]) + componentName[1:]
-		if injectTarget, ok := componentMap[canonicalMiddlewareName]; ok {
-			injectTargets = append(injectTargets, injectTarget)
+	for _, middlewareName := range middlewareNames {
+		canonicalMiddlewareName := canonicalName(middlewareName)
+		if injectTarget, ok := middlewareMap[canonicalMiddlewareName]; ok {
+			injectTargets = append(injectTargets, injectTarget.Middleware)
 		}
 	}
-	return r.InjectMiddlewareTo(injectTargets)
+	return r.InjectComponentTo(injectTargets)
 }
 
-func (r *Registry) InjectMiddlewareTo(injectTargets []interface{}) error {
-	for _, injectTarget := range injectTargets {
-		injectTargetValue := reflect.ValueOf(injectTarget)
-		for injectTargetValue.Kind() == reflect.Ptr {
-			injectTargetValue = injectTargetValue.Elem()
-		}
-		if injectTargetValue.Kind() != reflect.Struct {
-			continue
-		}
-		s := structs.New(injectTarget)
-		componentType := reflect.TypeOf((*ComponentInterface)(nil)).Elem()
-		for _, f := range s.Fields() {
-			if f.IsExported() && f.Tag(INJECT_TAG) == "true" {
-				if reflect.TypeOf(f.Value()).Implements(componentType) {
-					if _, ok := f.Value().(ComponentInterface); ok {
-						fieldInjected := false
-						if _, ok := r.ComponentMap[f.Name()]; ok {
-							err := f.Set(r.ComponentMap[f.Name()])
-							if err != nil {
-								return fmt.Errorf(errInjectMiddlewareTo+": %s", injectTargetValue.String(), f.Name(), err.Error())
-							}
-							fieldInjected = true
-						}
-						if !fieldInjected {
-							return fmt.Errorf(errInjectMiddlewareTo+": component or key not exists", injectTargetValue.String(), f.Name())
-						}
-					}
-				}
-				if _, ok := r.Values[f.Name()]; ok {
-					err := f.Set(r.Values[f.Name()])
-					if err != nil {
-						return fmt.Errorf(errInjectMiddlewareTo+": %s", injectTargetValue.String(), f.Name(), err.Error())
-					}
-				}
-			}
-		}
-	}
-	return nil
-}
-
-func (r *Registry) GetSortedMiddlewares(reverses ...bool) []interface{} {
-	middlewares := make([]interface{}, len(r.Middlewares))
+func (r *Registry) GetSortedMiddlewares(reverses ...bool) []*Middleware {
+	middlewares := make([]*Middleware, len(r.Middlewares))
 	if len(r.SortedMiddlewareName) > 0 {
 		index := 0
 		reverse := false

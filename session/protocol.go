@@ -60,7 +60,7 @@ type Session struct {
 	Config      *config.Config     `inject:"true"`
 	DebugLog    libUtility.LogFunc `inject:"true"`
 	SystemLog   libUtility.LogFunc `inject:"true"`
-	handlerName string
+	Provider string
 	handler     Handler
 
 	provider         string
@@ -109,26 +109,16 @@ func (s *Session) Initiate(ctx context.Context) (context.Context, error) {
 	}
 	err = Register("mysql", NewMysqlHandler)
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), s.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), s.Provider))
 	}
 	err = Register("redis", NewRedisHandler)
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), s.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), s.Provider))
 	}
 	return ctx, nil
 }
 
 func (s *Session) OnStartup(ctx context.Context) (context.Context, error) {
-	if s.DebugLog != nil {
-		debugLog = s.DebugLog
-	} else {
-		debugLog = libUtility.DefaultLogFunc
-	}
-	if s.SystemLog != nil {
-		systemLog = s.SystemLog
-	} else {
-		systemLog = libUtility.DefaultLogFunc
-	}
 	if s.Cache == nil {
 		return ctx, errors.New(errMissCache)
 	}
@@ -151,15 +141,15 @@ func (s *Session) OnShutdown(ctx context.Context) (context.Context, error) {
 	return ctx, nil
 }
 
-func (s *Session) HandlerName() string {
-	return s.handlerName
+func (s *Session) GetProvider() string {
+	return s.Provider
 }
-func (s *Session) Use(ctx context.Context, handlerName string) error {
-	handler, err := Use(handlerName)
+func (s *Session) Use(ctx context.Context, Provider string) error {
+	handler, err := Use(Provider)
 	if err != nil {
 		return err
 	}
-	s.handlerName = handlerName
+	s.Provider = Provider
 	s.handler = handler()
 	switch s.provider {
 	case "redis":
@@ -169,7 +159,7 @@ func (s *Session) Use(ctx context.Context, handlerName string) error {
 			"CACHE_REDIS_KEY_PREFIX": s.sessionKeyPrefix,
 		})
 		if err != nil {
-			return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), s.handlerName))
+			return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), s.Provider))
 		}
 	case "mysql":
 		err = s.handler.Initiate(ctx, s.sessionMaxAge, map[string]interface{}{
@@ -184,7 +174,7 @@ func (s *Session) Use(ctx context.Context, handlerName string) error {
 			"DATABASE_MYSQL_MAX_IDLE_CONNS": s.Config.GetString("DATABASE_MYSQL_MAX_IDLE_CONNS"),
 		})
 		if err != nil {
-			return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), s.handlerName))
+			return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), s.Provider))
 		}
 	}
 

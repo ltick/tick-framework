@@ -20,6 +20,14 @@ import (
 	"github.com/ltick/tick-routing"
 )
 
+var (
+	errBindFields = "api: bind fields error"
+	errBindAt     = "api: bind at error"
+	errBindNew    = "api: bind new error"
+	errNewApi    = "api: new api error"
+	errAddFields    = "api: add fields error"
+)
+
 type (
 	// Api defines a parameter model for an web api.
 	Api struct {
@@ -193,11 +201,11 @@ func NewApi(
 	name := reflect.TypeOf(structPointer).String()
 	v := reflect.ValueOf(structPointer)
 	if v.Kind() != reflect.Ptr {
-		return nil, errors.Trace(fmt.Errorf("%s|%s|%s", name, "*", "the binding object must be a struct pointer"))
+		return nil, errors.Annotate(fmt.Errorf("api: %s|%s|%s", name, "*", "the binding object must be a struct pointer"), errNewApi)
 	}
 	v = reflect.Indirect(v)
 	if v.Kind() != reflect.Struct {
-		return nil, errors.Trace(fmt.Errorf("%s|%s|%s", name, "*", "the binding object must be a struct pointer"))
+		return nil, errors.Annotate(fmt.Errorf("api: %s|%s|%s", name, "*", "the binding object must be a struct pointer"), errNewApi)
 	}
 	var api = &Api{
 		name:             name,
@@ -251,7 +259,7 @@ func (a *Api) addFields(parentIndexPath []int, t reflect.Type, v reflect.Value) 
 		if !ok {
 			if field.Anonymous && field.Type.Kind() == reflect.Struct {
 				if err = a.addFields(indexPath, field.Type, v.Field(i)); err != nil {
-					return err
+					return errors.Annotate(err, errAddFields)
 				}
 			}
 			continue
@@ -261,12 +269,12 @@ func (a *Api) addFields(parentIndexPath []int, t reflect.Type, v reflect.Value) 
 			continue
 		}
 		if field.Type.Kind() == reflect.Ptr && field.Type.String() != fileTypeString && field.Type.String() != cookieTypeString {
-			return errors.Trace(fmt.Errorf("%s|%s|%s", t.String(), field.Name, "field can not be a pointer"))
+			return errors.Annotate(fmt.Errorf("api: %s|%s|%s", t.String(), field.Name, "field can not be a pointer"), errAddFields)
 		}
 
 		var value = v.Field(i)
 		if !value.CanSet() {
-			return errors.Trace(fmt.Errorf("%s|%s|%s", t.String(), field.Name, "field can not be a unexported field"))
+			return errors.Annotate(fmt.Errorf("api: %s|%s|%s", t.String(), field.Name, "field can not be a unexported field"), errAddFields)
 		}
 
 		var parsedTags = ParseTags(tag)
@@ -276,26 +284,26 @@ func (a *Api) addFields(parentIndexPath []int, t reflect.Type, v reflect.Value) 
 		switch paramTypeString {
 		case fileTypeString, filesTypeString, fileTypeString2, filesTypeString2:
 			if paramPosition != "formData" {
-				return errors.Trace(fmt.Errorf("%s|%s|%s", t.String(), field.Name, "when field type is `"+paramTypeString+"`, tag `in` value must be `formData`"))
+				return errors.Annotate(fmt.Errorf("api: %s|%s|%s", t.String(), field.Name, "when field type is `"+paramTypeString+"`, tag `in` value must be `formData`"), errAddFields)
 			}
 		case cookieTypeString, cookieTypeString2 /*, fasthttpCookieTypeString*/ :
 			if paramPosition != "cookie" {
-				return errors.Trace(fmt.Errorf("%s|%s|%s", t.String(), field.Name, "when field type is `"+paramTypeString+"`, tag `in` value must be `cookie`"))
+				return errors.Annotate(fmt.Errorf("api: %s|%s|%s", t.String(), field.Name, "when field type is `"+paramTypeString+"`, tag `in` value must be `cookie`"), errAddFields)
 			}
 		}
 
 		switch paramPosition {
 		case "formData":
 			if hasBody {
-				return errors.Trace(fmt.Errorf("%s|%s|%s", t.String(), field.Name, "tags of `in(formData)` and `in(body)` can not exist at the same time"))
+				return errors.Annotate(fmt.Errorf("api: %s|%s|%s", t.String(), field.Name, "tags of `in(formData)` and `in(body)` can not exist at the same time"), errAddFields)
 			}
 			hasFormData = true
 		case "body":
 			if hasFormData {
-				return errors.Trace(fmt.Errorf("%s|%s|%s", t.String(), field.Name, "tags of `in(formData)` and `in(body)` can not exist at the same time"))
+				return errors.Annotate(fmt.Errorf("api: %s|%s|%s", t.String(), field.Name, "tags of `in(formData)` and `in(body)` can not exist at the same time"), errAddFields)
 			}
 			if hasBody {
-				return errors.Trace(fmt.Errorf("%s|%s|%s", t.String(), field.Name, "there should not be more than one tag `in(body)`"))
+				return errors.Annotate(fmt.Errorf("api: %s|%s|%s", t.String(), field.Name, "there should not be more than one tag `in(body)`"), errAddFields)
 			}
 			hasBody = true
 		case "path":
@@ -308,14 +316,14 @@ func (a *Api) addFields(parentIndexPath []int, t reflect.Type, v reflect.Value) 
 			// 	}
 		default:
 			if !TagInValues[paramPosition] {
-				return errors.Trace(fmt.Errorf("%s|%s|%s", t.String(), field.Name, "invalid tag `in` value, refer to the following: `path`, `query`, `formData`, `body`, `header` or `cookie`"))
+				return errors.Annotate(fmt.Errorf("api: %s|%s|%s", t.String(), field.Name, "invalid tag `in` value, refer to the following: `path`, `query`, `formData`, `body`, `header` or `cookie`"), errAddFields)
 			}
 		}
 		if _, ok := parsedTags[KEY_LEN]; ok {
 			switch paramTypeString {
 			case "string", "[]string", "[]int", "[]int8", "[]int16", "[]int32", "[]int64", "[]uint", "[]uint8", "[]uint16", "[]uint32", "[]uint64", "[]float32", "[]float64":
 			default:
-				return errors.Trace(fmt.Errorf("%s|%s|%s", t.String(), field.Name, "invalid `len` tag for non-string or non-basetype-slice field"))
+				return errors.Annotate(fmt.Errorf("api: %s|%s|%s", t.String(), field.Name, "invalid `len` tag for non-string or non-basetype-slice field"), errAddFields)
 			}
 		}
 		if _, ok := parsedTags[KEY_RANGE]; ok {
@@ -323,18 +331,18 @@ func (a *Api) addFields(parentIndexPath []int, t reflect.Type, v reflect.Value) 
 			case "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64", "float32", "float64":
 			case "[]int", "[]int8", "[]int16", "[]int32", "[]int64", "[]uint", "[]uint8", "[]uint16", "[]uint32", "[]uint64", "[]float32", "[]float64":
 			default:
-				return errors.Trace(fmt.Errorf("%s|%s|%s", t.String(), field.Name, "invalid `range` tag for non-number field"))
+				return errors.Annotate(fmt.Errorf("api: %s|%s|%s", t.String(), field.Name, "invalid `range` tag for non-number field"), errAddFields)
 			}
 		}
 		if _, ok := parsedTags[KEY_REGEXP]; ok {
 			if paramTypeString != "string" && paramTypeString != "[]string" {
-				return errors.Trace(fmt.Errorf("%s|%s|%s", t.String(), field.Name, "invalid `"+KEY_REGEXP+"` tag for non-string field"))
+				return errors.Annotate(fmt.Errorf("api: %s|%s|%s", t.String(), field.Name, "invalid `"+KEY_REGEXP+"` tag for non-string field"), errAddFields)
 			}
 		}
 		if a, ok := parsedTags[KEY_MAXMB]; ok {
 			i, err := strconv.ParseInt(a, 10, 64)
 			if err != nil {
-				return errors.Trace(fmt.Errorf("%s|%s|%s", t.String(), field.Name, "invalid `maxmb` tag, it must be positive integer"))
+				return errors.Annotate(fmt.Errorf("api: %s|%s|%s", t.String(), field.Name, "invalid `maxmb` tag, it must be positive integer"), errAddFields)
 			}
 			if i > maxMemoryMB {
 				maxMemoryMB = i
@@ -346,7 +354,7 @@ func (a *Api) addFields(parentIndexPath []int, t reflect.Type, v reflect.Value) 
 			indexPath: indexPath,
 			tags:      parsedTags,
 			rawTag:    field.Tag,
-			rawValue:  value.Interface(),
+			rawValue:  value,
 		}
 
 		if errStr, ok := param.tags[KEY_ERR]; ok {
@@ -371,7 +379,7 @@ func (a *Api) addFields(parentIndexPath []int, t reflect.Type, v reflect.Value) 
 		}
 
 		if err = param.makeVerifyRules(); err != nil {
-			return errors.Trace(fmt.Errorf("%s|%s|%s", t.String(), field.Name, "initial validation failed:"+err.Error()))
+			return errors.Annotate(fmt.Errorf("api: %s|%s|%s", t.String(), field.Name, "initial validation failed:"+err.Error()), errAddFields)
 		}
 		a.params = append(a.params, param)
 	}
@@ -399,11 +407,15 @@ func (a *Api) BindAt(
 	if name != a.name {
 		return errors.New("the structPointer's type `" + name + "` does not match type `" + a.name + "`")
 	}
-	return a.BindFields(
+	err := a.BindFields(
 		a.fieldsForBinding(reflect.ValueOf(structPointer).Elem()),
 		req,
 		apiParams,
 	)
+	if err != nil {
+		return errors.Annotate(err, errBindAt)
+	}
+	return nil
 }
 
 // BindNew binds the net/http api params to a struct pointer and validate it.
@@ -416,7 +428,10 @@ func (a *Api) BindNew(
 ) {
 	structPrinter, fields := a.NewReceiver()
 	err := a.BindFields(fields, req, apiParams)
-	return structPrinter, err
+	if err != nil {
+		return structPrinter, errors.Annotate(err, errBindNew)
+	}
+	return structPrinter, nil
 }
 
 // NewReceiver creates a new struct pointer and the field's values  for its receive parameters it.
@@ -465,7 +480,7 @@ func (a *Api) BindFields(
 	var queryValues url.Values
 	defer func() {
 		if p := recover(); p != nil {
-			err = errors.Trace(fmt.Errorf("%s|%s|%s", a.name, "?", fmt.Sprint(p)))
+			err = errors.Annotate(fmt.Errorf("api: %s|%s|%s", a.name, "?", fmt.Sprint(p)), errBindFields)
 		}
 	}()
 	for i, param := range a.params {
@@ -474,15 +489,15 @@ func (a *Api) BindFields(
 		case "path":
 			paramValue, ok := apiParams.Get(param.name)
 			if !ok {
-				return errors.New("missing path param")
+				return errors.Annotate(errors.New("missing path param"), errBindFields)
 			}
 			paramValueString, ok := paramValue.(string)
 			if !ok {
-				return errors.New("invalid path param")
+				return errors.Annotate(errors.New("missing path param"), errBindFields)
 			}
 			// fmt.Printf("paramName:%s\nvalue:%#v\n\n", param.name, paramValueString)
 			if err = utility.ConvertAssign(value, []string{paramValueString}...); err != nil {
-				return errors.New(err.Error())
+				return errors.Annotate(err, errBindFields)
 			}
 
 		case "query":
@@ -495,10 +510,10 @@ func (a *Api) BindFields(
 			paramValues, ok := queryValues[param.name]
 			if ok {
 				if err = utility.ConvertAssign(value, paramValues...); err != nil {
-					return errors.New(err.Error())
+					return errors.Annotate(err, errBindFields)
 				}
 			} else if param.IsRequired() {
-				return errors.New("missing query param")
+				return errors.Annotate(errors.New("missing query param"), errBindFields)
 			}
 
 		case "formData":
@@ -508,9 +523,8 @@ func (a *Api) BindFields(
 					fhs := req.MultipartForm.File[param.name]
 					if len(fhs) == 0 {
 						if param.IsRequired() {
-							return errors.New("missing formData param")
+							return errors.Annotate(errors.New("missing formData param"), errBindFields)
 						}
-						continue
 					}
 					typ := value.Type()
 					switch typ.String() {
@@ -534,25 +548,24 @@ func (a *Api) BindFields(
 						)
 					}
 				} else if param.IsRequired() {
-					return errors.New("missing formData param")
+					return errors.Annotate(errors.New("missing formData param"), errBindFields)
 				}
-				continue
 			}
 			if req.MultipartForm != nil {
 				paramValues, ok := req.MultipartForm.Value[param.name]
 				if ok {
 					if err = utility.ConvertAssign(value, paramValues...); err != nil {
-						return errors.New(err.Error())
+						return errors.Annotate(err, errBindFields)
 					}
 				}
 			}
 			paramValues, ok := req.PostForm[param.name]
 			if ok {
 				if err = utility.ConvertAssign(value, paramValues...); err != nil {
-					return errors.New(err.Error())
+					return errors.Annotate(err, errBindFields)
 				}
 			} else if param.IsRequired() {
-				return errors.New("missing formData param")
+				return errors.Annotate(errors.New("missing formData param"), errBindFields)
 			}
 		case "body":
 			// Theoretically there should be at most one `body` param, and can not exist with `formData` at the same time
@@ -561,20 +574,20 @@ func (a *Api) BindFields(
 			req.Body.Close()
 			if err == nil {
 				if err = a.bodydecoder(value, body); err != nil {
-					return errors.New(err.Error())
+					return errors.Annotate(err, errBindFields)
 				}
 			} else if param.IsRequired() {
-				return errors.New("missing body param")
+				return errors.Annotate(errors.New("missing body param"), errBindFields)
 			}
 
 		case "header":
 			paramValues, ok := req.Header[param.name]
 			if ok {
 				if err = utility.ConvertAssign(value, paramValues...); err != nil {
-					return errors.New(err.Error())
+					return errors.Annotate(err, errBindFields)
 				}
 			} else if param.IsRequired() {
-				return errors.New("missing header param")
+				return errors.Annotate(errors.New("missing header param"), errBindFields)
 			}
 
 		case "cookie":
@@ -587,15 +600,15 @@ func (a *Api) BindFields(
 					value.Set(reflect.ValueOf(c).Elem())
 				default:
 					if err = utility.ConvertAssign(value, []string{c.Value}...); err != nil {
-						return errors.New(err.Error())
+						return errors.Annotate(err, errBindFields)
 					}
 				}
 			} else if param.IsRequired() {
-				return errors.New("missing cookie param")
+				return errors.Annotate(errors.New("missing cookie param"), errBindFields)
 			}
 		}
 		if err = param.validate(value); err != nil {
-			return err
+			return errors.Annotate(err, errBindFields)
 		}
 	}
 	return

@@ -19,14 +19,13 @@ var (
 )
 
 func NewDatabase() *Database {
-	instance := &Database{
-	}
+	instance := &Database{}
 	return instance
 }
 
 type Database struct {
 	Config           *config.Config `inject:"true"`
-	handlerName      string
+	Provider         string
 	handler          Handler
 	nosqlHandlerName string
 	nosqlHandler     NosqlHandler
@@ -54,19 +53,19 @@ func (d *Database) Initiate(ctx context.Context) (context.Context, error) {
 	}
 	err = Register("mysql", NewMysqlHandler)
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.Provider))
 	}
 	err = d.Use(ctx, "mysql")
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.Provider))
 	}
 	err = NosqlRegister("hbase", NewHbaseHandler)
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.Provider))
 	}
 	err = d.NosqlUse(ctx, "hbase")
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.Provider))
 	}
 	return ctx, nil
 }
@@ -79,26 +78,26 @@ func (d *Database) OnStartup(ctx context.Context) (context.Context, error) {
 		err = d.Use(ctx, "mysql")
 	}
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), d.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), d.Provider))
 	}
 	return ctx, nil
 }
 func (d *Database) OnShutdown(ctx context.Context) (context.Context, error) {
 	return ctx, nil
 }
-func (d *Database) HandlerName() string {
-	return d.handlerName
+func (d *Database) GetProvider() string {
+	return d.Provider
 }
-func (d *Database) Use(ctx context.Context, handlerName string) error {
-	handler, err := Use(handlerName)
+func (d *Database) Use(ctx context.Context, Provider string) error {
+	handler, err := Use(Provider)
 	if err != nil {
 		return err
 	}
-	d.handlerName = handlerName
+	d.Provider = Provider
 	d.handler = handler()
 	err = d.handler.Initiate(ctx)
 	if err != nil {
-		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.handlerName))
+		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.Provider))
 	}
 	return nil
 }
@@ -258,16 +257,16 @@ func Use(name string) (databaseHandler, error) {
 }
 
 /****************** Nosql ******************/
-func (d *Database) NosqlUse(ctx context.Context, handlerName string) error {
-	nosqlHandler, err := NosqlUse(handlerName)
+func (d *Database) NosqlUse(ctx context.Context, Provider string) error {
+	nosqlHandler, err := NosqlUse(Provider)
 	if err != nil {
 		return err
 	}
-	d.nosqlHandlerName = handlerName
+	d.nosqlHandlerName = Provider
 	d.nosqlHandler = nosqlHandler()
 	err = d.nosqlHandler.Initiate(ctx)
 	if err != nil {
-		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.handlerName))
+		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.Provider))
 	}
 	return nil
 }

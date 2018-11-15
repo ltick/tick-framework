@@ -1,62 +1,65 @@
 package utility
 
 import (
-	"bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
 	"io"
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/klauspost/crc32"
+	"fmt"
 )
 
 var (
-	errGetCachedFile        = "ltick utility: get cached file error"
-	errGetCachedFileContent = "ltick utility: get cached file content error"
 	errCreateTemporaryFile  = "ltick utility: create temporary file error"
 )
 
-func Md5File(f *os.File) (string, error) {
-	md5hash := md5.New()
-	if _, err := io.Copy(md5hash, f); err != nil {
-		return "", err
-	}
-	return string(md5hash.Sum(nil)), nil
-}
+const BUFFERSIZE  = 1024
 
-//获取给定byte的MD5
-func Md5Byte(text []byte) string {
-	hasher := md5.New()
-	hasher.Write(text)
-	return hex.EncodeToString(hasher.Sum(nil))
-}
-
-func GetCachedFile(filePath string) (file *os.File, err error) {
-	fileExtension := path.Ext(filePath)
-	cachedFilePath := strings.Replace(filePath, fileExtension, "", -1) + ".cached" + fileExtension
-	_, err = os.Stat(cachedFilePath)
+func CopyFile(src, dst string) (int64, error) {
+	sourceFileStat, err := os.Stat(src)
 	if err != nil {
-		if os.IsNotExist(err) {
-			file, err = NewFile(cachedFilePath, 0644, bytes.NewReader([]byte{}), 0)
-			if err != nil {
-				return nil, errors.New(errGetCachedFile + ": " + err.Error())
-			}
-		} else {
-			return nil, errors.New(errGetCachedFile + ": " + err.Error())
+		return 0, err
+	}
+
+	if !sourceFileStat.Mode().IsRegular() {
+		return 0, fmt.Errorf("%s is not a regular file", src)
+	}
+
+	source, err := os.Open(src)
+	if err != nil {
+		return 0, err
+	}
+	defer source.Close()
+
+	destination, err := os.Create(dst)
+	if err != nil {
+		return 0, err
+	}
+	defer destination.Close()
+	buf := make([]byte, BUFFERSIZE)
+	var cn int64
+	for {
+		n, err := source.Read(buf)
+		if err != nil && err != io.EOF {
+			return 0, err
 		}
-	} else {
-		file, err = os.OpenFile(cachedFilePath, os.O_RDWR, 0644)
-		if err != nil {
-			return nil, errors.New(errGetCachedFile + ": " + err.Error())
+		cn += int64(n)
+		if n == 0 {
+			break
+		}
+
+		if _, err := destination.Write(buf[:n]); err != nil {
+			return 0, err
 		}
 	}
-	return file, err
+	return cn, nil
 }
+
 func NewFile(filePath string, perm os.FileMode, payload io.Reader, sizes ...int64) (file *os.File, err error) {
 	fileDir := filepath.Dir(filePath)
 	if _, err = os.Stat(fileDir); os.IsNotExist(err) {
@@ -146,4 +149,19 @@ func FileExists(name string) bool {
 		return !os.IsNotExist(err)
 	}
 	return true
+}
+
+func Md5File(f *os.File) (string, error) {
+	md5hash := md5.New()
+	if _, err := io.Copy(md5hash, f); err != nil {
+		return "", err
+	}
+	return string(md5hash.Sum(nil)), nil
+}
+
+//获取给定byte的MD5
+func Md5Byte(text []byte) string {
+	hasher := md5.New()
+	hasher.Write(text)
+	return hex.EncodeToString(hasher.Sum(nil))
 }

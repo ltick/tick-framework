@@ -48,7 +48,11 @@ func TestFieldvalidate(t *testing.T) {
 		C string  `param:"<in:query> <len: :4> <nonzero>"`
 		D string  `param:"<in:query> <regexp: ^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$>"`
 	}
-	m, _ := NewApi(&Schema{B: 9.999999}, nil, nil, false)
+	m, err := NewApi(&Schema{B: 9.999999}, nil, nil, false)
+	if err != nil {
+		t.Fatalf("new api error: %s", err.Error())
+	}
+
 	a := m.params[0]
 	if x := len(a.tags); x != 5 {
 		t.Fatal("wrong len", x, a.tags)
@@ -59,10 +63,10 @@ func TestFieldvalidate(t *testing.T) {
 	if err := a.validate(a.rawValue); err == nil || err.Error() != "This is a custom error!" {
 		t.Fatal("should not validate")
 	}
-	if err := a.validate("abc"); err != nil {
+	if err := a.validate(reflect.ValueOf("abc")); err != nil {
 		t.Fatal("should validate", err)
 	}
-	if err := a.validate("abcdefg"); err == nil || err.Error() != "This is a custom error!" {
+	if err := a.validate(reflect.ValueOf("abcdefg")); err == nil || err.Error() != "This is a custom error!" {
 		t.Fatal("should not validate")
 	}
 
@@ -73,10 +77,10 @@ func TestFieldvalidate(t *testing.T) {
 	if err := b.validate(b.rawValue); err == nil || !strings.Contains(err.Error(), "small") {
 		t.Fatal("should not validate")
 	}
-	if err := b.validate(10); err != nil {
+	if err := b.validate(reflect.ValueOf(10)); err != nil {
 		t.Fatal("should validate", err)
 	}
-	if err := b.validate(21); err == nil || !strings.Contains(err.Error(), "bigger") {
+	if err := b.validate(reflect.ValueOf(21)); err == nil || !strings.Contains(err.Error(), "bigger") {
 		t.Fatal("should not validate")
 	}
 
@@ -87,10 +91,10 @@ func TestFieldvalidate(t *testing.T) {
 	if err := c.validate(c.rawValue); err != nil {
 		t.Fatal("should validate")
 	}
-	if err := c.validate("a"); err != nil {
+	if err := c.validate(reflect.ValueOf("a")); err != nil {
 		t.Fatal("should validate", err)
 	}
-	if err := c.validate("abcde"); err == nil || !strings.Contains(err.Error(), "the length must be no more than") {
+	if err := c.validate(reflect.ValueOf("abcde")); err == nil || !strings.Contains(err.Error(), "the length must be no more than") {
 		t.Fatal("should not validate")
 	}
 
@@ -98,10 +102,10 @@ func TestFieldvalidate(t *testing.T) {
 	if x := len(d.tags); x != 2 {
 		t.Fatal("wrong len", x)
 	}
-	if err := d.validate("gggg@gmail.com"); err != nil {
+	if err := d.validate(reflect.ValueOf("gggg@gmail.com")); err != nil {
 		t.Fatal("should validate", err)
 	}
-	if err := d.validate("www.google.com"); err == nil || !strings.Contains(err.Error(), "must be in a valid format") {
+	if err := d.validate(reflect.ValueOf("www.google.com")); err == nil || !strings.Contains(err.Error(), "must be in a valid format") {
 		t.Fatal("should not validate", err)
 	}
 }
@@ -138,7 +142,7 @@ func TestInterfaceNewApiWithEmbedded(t *testing.T) {
 		t.Fatal("error not nil", err)
 	}
 	f := m.params[1]
-	if x, ok := toString(f.rawValue); !ok || x != "Mrs. A" {
+	if x, ok := toString(f.rawValue.Interface()); !ok || x != "Mrs. A" {
 		t.Fatal("wrong value from embedded struct")
 	}
 	f = m.params[3]
@@ -171,7 +175,7 @@ func TestInterfaceNewApi(t *testing.T) {
 		t.Fatal("wrong value")
 	}
 	f = m.params[1]
-	if x, ok := toString(f.rawValue); !ok || x != "orange" {
+	if x, ok := toString(f.rawValue.Interface()); !ok || x != "orange" {
 		t.Fatal("wrong value", x)
 	}
 	if isZero(f.rawValue) {

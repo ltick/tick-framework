@@ -16,15 +16,14 @@ var (
 )
 
 func NewQueue() *Queue {
-	instance := &Queue{
-	}
+	instance := &Queue{}
 	return instance
 }
 
 type Queue struct {
-	Config      *config.Config `inject:"true"`
-	handlerName string
-	handler     Handler
+	Config   *config.Config `inject:"true"`
+	Provider string
+	handler  Handler
 }
 
 func (q *Queue) Initiate(ctx context.Context) (context.Context, error) {
@@ -34,13 +33,13 @@ func (q *Queue) Initiate(ctx context.Context) (context.Context, error) {
 		"QUEUE_KAFKA_EVENT_GROUP": config.Option{Type: config.String, EnvironmentKey: "QUEUE_KAFKA_EVENT_GROUP"},
 		"QUEUE_KAFKA_EVENT_TOPIC": config.Option{Type: config.String, EnvironmentKey: "QUEUE_KAFKA_EVENT_TOPIC"},
 	}
-	err := q.Config.SetOptions( configs)
+	err := q.Config.SetOptions(configs)
 	if err != nil {
 		return ctx, fmt.Errorf(errInitiate+": %s", err.Error())
 	}
 	err = Register("kafka", NewKafkaHandler)
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), q.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), q.Provider))
 	}
 
 	return ctx, nil
@@ -54,26 +53,26 @@ func (q *Queue) OnStartup(ctx context.Context) (context.Context, error) {
 		err = q.Use(ctx, "kafka")
 	}
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), q.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), q.Provider))
 	}
 	err = q.handler.Initiate(ctx)
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), q.handlerName))
+		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), q.Provider))
 	}
 	return ctx, nil
 }
 func (q *Queue) OnShutdown(ctx context.Context) (context.Context, error) {
 	return ctx, nil
 }
-func (q *Queue) HandlerName() string {
-	return q.handlerName
+func (q *Queue) GetProvider() string {
+	return q.Provider
 }
-func (q *Queue) Use(ctx context.Context, handlerName string) error {
-	handler, err := Use(handlerName)
+func (q *Queue) Use(ctx context.Context, Provider string) error {
+	handler, err := Use(Provider)
 	if err != nil {
 		return err
 	}
-	q.handlerName = handlerName
+	q.Provider = Provider
 	q.handler = handler()
 	return nil
 }

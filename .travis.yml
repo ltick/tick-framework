@@ -1,0 +1,51 @@
+language: go
+install: true
+sudo: required
+addons:
+  apt:
+    packages:
+      - rsyslog
+      - xmlsec1
+      - rpm
+# test stage automatically added for each go version
+go:
+  - 1.7.x
+  - 1.8.x
+  - 1.9.x
+  - 1.10.x
+  - 1.11.x
+# script used in the automatically added test stage
+script:
+  - 'if [ "${JOB}" = "test" ]; then make test; fi'
+  - 'if [ "${JOB}" = "lint" ]; then make lint; fi'
+  - 'if [ "${JOB}" = "race" ]; then make race; fi'
+  - 'if [ "${JOB}" = "coverage" ]; then make coverage; fi'
+  - 'if [ "${JOB}" = "coverhtml" ]; then make coverhtml; fi'
+env:
+  global:
+    - GOARCH=amd64
+  matrix:
+    - JOB=test
+#    - JOB=lint
+#    - JOB=race
+#    - JOB=coverage
+    - JOB=coverhtml
+jobs:
+  fast_finish: true
+  allow_failures:
+    - go: master
+  exclude:
+    - go: master
+      env: JOB=test
+    - go: master
+      env: JOB=lint
+    - go: master
+      env: JOB=race
+    - go: master
+      env: JOB=coverage
+    - go: master
+      env: JOB=coverhtml
+notifications:
+  email:
+    on_success: change
+    on_failure: always

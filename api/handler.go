@@ -1,11 +1,15 @@
 package api
 
 import (
-	"errors"
-	"reflect"
 	"net/http"
+	"reflect"
 
+	"github.com/juju/errors"
 	"github.com/ltick/tick-framework/utility"
+)
+
+var (
+	errBindByName = "api: bind by name error"
 )
 
 type (
@@ -39,9 +43,10 @@ type (
 
 // common errors
 var (
-	ErrNotStructPtr   = errors.New("handler must be a structure type or a structure pointer type")
-	ErrNoParamHandler = errors.New("handler does not define any parameter tags")
+	errNotStructPtr   = "api: handler must be a structure type or a structure pointer type"
+	errNoParamHandler = "api: handler does not define any parameter tags"
 )
+
 // The default body decoder is json format decoding
 var (
 	defaultParamNameMapper = utility.SnakeString
@@ -51,7 +56,7 @@ var (
 func ToAPIHandler(handler Handler, noDefaultParams bool) (*apiHandler, error) {
 	v := reflect.Indirect(reflect.ValueOf(handler))
 	if v.Kind() != reflect.Struct {
-		return nil, ErrNotStructPtr
+		return nil, errors.New(errNotStructPtr)
 	}
 
 	var structPointer = v.Addr().Interface()
@@ -64,7 +69,7 @@ func ToAPIHandler(handler Handler, noDefaultParams bool) (*apiHandler, error) {
 		return nil, err
 	}
 	if api.Number() == 0 {
-		return nil, ErrNoParamHandler
+		return nil, errors.New(errNoParamHandler)
 	}
 
 	// Reduce the creation of unnecessary field paramValues.
@@ -91,8 +96,6 @@ func IsHandlerWithoutPath(handler Handler, noDefaultParams bool) bool {
 	return true
 }
 
-
-
 // BindByName binds the net/http api params to a new struct and validate it.
 func BindByName(
 	apiName string,
@@ -104,9 +107,13 @@ func BindByName(
 ) {
 	api, err := GetApi(apiName)
 	if err != nil {
-		return nil, err
+		return nil, errors.Annotate(err, errBindByName)
 	}
-	return api.BindNew(req, apiParams)
+	structPrinter, err := api.BindNew(req, apiParams)
+	if err != nil {
+		return nil, errors.Annotate(err, errBindByName)
+	}
+	return structPrinter, nil
 }
 
 // Bind binds the net/http api params to the `structPointer` param and validate it.

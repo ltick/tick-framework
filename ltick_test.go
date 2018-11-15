@@ -5,9 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ltick/tick-framework/config"
-	"github.com/stretchr/testify/assert"
 	"github.com/juju/errors"
+	"github.com/ltick/tick-framework/config"
+	"github.com/ltick/tick-framework/utility"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -25,6 +26,10 @@ func (suite *TestSuite) SetupTest() {
 	suite.dotenvFile, err = filepath.Abs("testdata/.env")
 	assert.Nil(suite.T(), err)
 	suite.testAppLog, err = filepath.Abs("testdata/app.log")
+	assert.Nil(suite.T(), err)
+	_, err = utility.CopyFile("testdata/ltick.json", "etc/ltick.json")
+	assert.Nil(suite.T(), err)
+	_, err = utility.CopyFile("testdata/.env", ".env")
 	assert.Nil(suite.T(), err)
 }
 
@@ -45,13 +50,14 @@ func (f *TestCallback) OnShutdown(e *Engine) error {
 }
 
 func (suite *TestSuite) TestAppCallback() {
-	var values map[string]interface{} = make(map[string]interface{}, 0)
 	r, err := NewRegistry()
 	assert.Nil(suite.T(), err)
-	a := New(suite.configFile, suite.dotenvFile, "LTICK", r).
-		WithCallback(&TestCallback{}).
-		WithValues(values)
-	a.SetSystemLogWriter(ioutil.Discard)
+	a := New(r,
+		EngineLogWriter(ioutil.Discard),
+		EngineCallback(&TestCallback{}),
+		EngineConfigFile(suite.configFile),
+		EngineConfigDotenvFile(suite.dotenvFile),
+		EngineConfigEnvPrefix("LTICK"))
 	a.SetContextValue("output", "")
 	err = a.Startup()
 	assert.Nil(suite.T(), err)
@@ -64,7 +70,6 @@ func (suite *TestSuite) TestAppCallback() {
 }
 
 func (suite *TestSuite) TestComponentCallback() {
-	var values map[string]interface{} = make(map[string]interface{}, 0)
 	var components []*Component = []*Component{
 		&Component{Name: "TestComponent1", Component: &testComponent1{}},
 	}
@@ -76,21 +81,22 @@ func (suite *TestSuite) TestComponentCallback() {
 	err = r.RegisterValue("Foo1", "Bar1")
 	assert.Nil(suite.T(), err)
 	for _, c := range components {
-		err = r.RegisterComponent(c.Name, c.Component, true)
+		err = r.RegisterComponent(c, true)
 		assert.Nil(suite.T(), err)
 	}
 	configComponent, err := r.GetComponentByName("Config")
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), configComponent)
-	configer, ok := configComponent.(*config.Config)
+	configer, ok := configComponent.Component.(*config.Config)
 	assert.True(suite.T(), ok)
 	err = configer.SetOptions(options)
 	assert.Nil(suite.T(), err)
-
-	a := New(suite.configFile, suite.dotenvFile, "LTICK", r).
-		WithCallback(&TestCallback{}).
-		WithValues(values)
-	a.SetSystemLogWriter(ioutil.Discard)
+	a := New(r,
+		EngineLogWriter(ioutil.Discard),
+		EngineCallback(&TestCallback{}),
+		EngineConfigFile(suite.configFile),
+		EngineConfigDotenvFile(suite.dotenvFile),
+		EngineConfigEnvPrefix("LTICK"))
 	a.SetContextValue("output", "")
 	err = a.Startup()
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))
