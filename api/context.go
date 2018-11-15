@@ -187,8 +187,8 @@ func (ctx *Context) SessionRegenerateID() {
 	if _, err := ctx.getSessionStore(); err != nil {
 		return
 	}
-	ctx.sessionStore.SessionRelease(ctx.ResponseWriter)
-	ctx.sessionStore = ctx.Session.SessionRegenerateID(ctx, ctx.ResponseWriter, ctx.Request)
+	ctx.sessionStore.Release(ctx.ResponseWriter)
+	ctx.sessionStore = ctx.Session.RegenerateID(ctx, ctx.ResponseWriter, ctx.Request)
 }
 
 // DestroySession cleans session data and session cookie.
@@ -198,7 +198,7 @@ func (ctx *Context) DestroySession() {
 	}
 	ctx.sessionStore.Flush()
 	ctx.sessionStore = nil
-	ctx.Session.SessionDestroy(ctx, ctx.ResponseWriter, ctx.Request)
+	ctx.Session.Destroy(ctx, ctx.ResponseWriter, ctx.Request)
 }
 
 // Redirect replies to the request with a redirect to url,
@@ -217,7 +217,7 @@ func (ctx *Context) Redirect(status int, urlStr string) error {
 func (ctx *Context) beforeWriteHeader() {
 	if ctx.enableSession {
 		if ctx.sessionStore != nil {
-			ctx.sessionStore.SessionRelease(ctx.ResponseWriter)
+			ctx.sessionStore.Release(ctx.ResponseWriter)
 			ctx.sessionStore = nil
 		}
 	}

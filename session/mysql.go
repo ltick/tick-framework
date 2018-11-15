@@ -83,7 +83,7 @@ func (m *MysqlHandler) Initiate(ctx context.Context, maxAge int64, config map[st
 	}
 	return nil
 }
-func (m *MysqlHandler) SessionRead(ctx context.Context, sessionId string) (Store, error) {
+func (m *MysqlHandler) Read(ctx context.Context, sessionId string) (Store, error) {
 	//获取cookie验证是否登录
 	sessionStoreData := &MysqlStoreData{}
 	selectModel := m.sessionDatabaseProvider.New().Model(&MysqlStoreData{})
@@ -107,7 +107,7 @@ func (m *MysqlHandler) SessionRead(ctx context.Context, sessionId string) (Store
 	}
 	return sessionStore, nil
 }
-func (m *MysqlHandler) SessionExist(ctx context.Context, sessionId string) (bool, error) {
+func (m *MysqlHandler) Exist(ctx context.Context, sessionId string) (bool, error) {
 	//获取cookie验证是否登录
 	sessionStoreData := &MysqlStoreData{}
 	selectModel := m.sessionDatabaseProvider.New().Model(&MysqlStoreData{})
@@ -120,7 +120,7 @@ func (m *MysqlHandler) SessionExist(ctx context.Context, sessionId string) (bool
 	}
 	return true, nil
 }
-func (m *MysqlHandler) SessionRegenerate(ctx context.Context, oldSessionId, sessionId string) (Store, error) {
+func (m *MysqlHandler) Regenerate(ctx context.Context, oldSessionId, sessionId string) (Store, error) {
 	sessionStoreData := &MysqlStoreData{}
 	selectModel := m.sessionDatabaseProvider.New().Model(&MysqlStoreData{})
 	err := selectModel.Where(&MysqlStoreData{SessionId: oldSessionId}).Find(&sessionStoreData).Error()
@@ -154,7 +154,7 @@ func (m *MysqlHandler) SessionRegenerate(ctx context.Context, oldSessionId, sess
 	}
 	return sessionStore, nil
 }
-func (m *MysqlHandler) SessionDestroy(ctx context.Context, sessionId string) error {
+func (m *MysqlHandler) Destroy(ctx context.Context, sessionId string) error {
 	deleteModel := m.sessionDatabaseProvider.New().Model(&MysqlStoreData{})
 	err := deleteModel.Unscoped().Delete(&MysqlStoreData{
 		SessionId: sessionId,
@@ -164,7 +164,7 @@ func (m *MysqlHandler) SessionDestroy(ctx context.Context, sessionId string) err
 	}
 	return nil
 }
-func (m *MysqlHandler) SessionAll(ctx context.Context) (count int, err error) {
+func (m *MysqlHandler) All(ctx context.Context) (count int, err error) {
 	selectModel := m.sessionDatabaseProvider.New().Model(&MysqlStoreData{})
 	err = selectModel.Unscoped().Count(&count).Error()
 	if err != nil {
@@ -172,7 +172,7 @@ func (m *MysqlHandler) SessionAll(ctx context.Context) (count int, err error) {
 	}
 	return count, nil
 }
-func (m *MysqlHandler) SessionGC(ctx context.Context) {
+func (m *MysqlHandler) GC(ctx context.Context) {
 	m.sessionDatabaseProvider.New().Model(&MysqlStoreData{}).Unscoped().Where("expired_at < ?", time.Now().Unix()).Delete(&MysqlStoreData{})
 }
 
@@ -212,13 +212,13 @@ func (m *MysqlStore) Flush() error {
 }
 
 // SessionID get session id of this mysql session store
-func (m *MysqlStore) SessionID() string {
+func (m *MysqlStore) ID() string {
 	return m.sessionId
 }
 
 // SessionRelease save mysql session sessionData to database.
 // must call this method to save sessionData to database.
-func (m *MysqlStore) SessionRelease(w http.ResponseWriter) {
+func (m *MysqlStore) Release(w http.ResponseWriter) {
 	b, err := EncodeGob(m.sessionData)
 	if err != nil {
 		return
