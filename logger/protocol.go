@@ -21,21 +21,25 @@ var (
 )
 
 type LogConfig struct {
-	Name      string
-	Formatter string
-	Type      string
-	Filename  string
-	Writer    string // the writer name of writer (stdout, stderr, discard)
-	MaxLevel  string
+	Name            string
+	Formatter       string
+	Type            string
+	FileName        string
+	FileRotate      string
+	FileBackupCount string
+	Writer          string // the writer name of writer (stdout, stderr, discard)
+	MaxLevel        string
 }
 
 type Log struct {
-	Name      string
-	Formatter Formatter
-	Type      Type
-	Filename  string
-	Writer    Writer // the writer name of writer (stdout, stderr, discard)
-	MaxLevel  Level
+	Name            string
+	Formatter       Formatter
+	Type            Type
+	FileName        string
+	FileRotate      bool
+	FileBackupCount int64
+	Writer          Writer // the writer name of writer (stdout, stderr, discard)
+	MaxLevel        Level
 }
 
 // Formatter describes the formatter of a log message.
@@ -205,14 +209,24 @@ func (l *Logger) Initiate(ctx context.Context) (context.Context, error) {
 					break
 				}
 			}
+			logConfigFileRotate, err := strconv.ParseBool(logConfig.FileRotate)
+			if err != nil {
+				return ctx, errors.Annotatef(err, errInitiate)
+			}
+			logConfigFileBackupCount, err := strconv.ParseInt(logConfig.FileBackupCount, 10, 64)
+			if err != nil {
+				return ctx, errors.Annotatef(err, errInitiate)
+			}
 			switch StringToType(logConfig.Type) {
 			case TypeFile:
 				logs = append(logs, &Log{
-					Name:      logConfig.Name,
-					Type:      TypeFile,
-					Formatter: StringToFormatter(logConfig.Formatter),
-					Filename:  logConfig.Filename,
-					MaxLevel:  logConfigMaxLevel,
+					Name:            logConfig.Name,
+					Type:            TypeFile,
+					Formatter:       StringToFormatter(logConfig.Formatter),
+					FileName:        logConfig.FileName,
+					FileRotate:      logConfigFileRotate,
+					FileBackupCount: logConfigFileBackupCount,
+					MaxLevel:        logConfigMaxLevel,
 				})
 			case TypeConsole:
 				logs = append(logs, &Log{
@@ -231,14 +245,14 @@ func (l *Logger) Initiate(ctx context.Context) (context.Context, error) {
 		for index, lg := range logs {
 			switch lg.Type {
 			case TypeFile:
-				logFilename, err := filepath.Abs(lg.Filename)
+				logFileName, err := filepath.Abs(lg.FileName)
 				if err != nil {
 					return ctx, err
 				}
-				_, err = os.Stat(logFilename)
+				_, err = os.Stat(logFileName)
 				if err != nil {
 					if os.IsNotExist(err) {
-						_, err = os.Create(logFilename)
+						_, err = os.Create(logFileName)
 						if err != nil {
 							return ctx, err
 						}
@@ -246,14 +260,32 @@ func (l *Logger) Initiate(ctx context.Context) (context.Context, error) {
 						return ctx, err
 					}
 				}
+				logFileRotate := "true"
+				if !lg.FileRotate {
+					logFileRotate = "false"
+				}
+				if lg.FileBackupCount == 0 {
+					lg.FileBackupCount = -1
+				}
 				logConfigProviderName := lg.Name + "FileTarget"
 				logProviders[logConfigProviderName] = NewFileTarget
-				logConfigProviderConfigs[index] = `"` + lg.Name + `":{"type": "` + logConfigProviderName + `","FileName":"` + logFilename + `","Rotate":true,"MaxBytes":` + strconv.Itoa(1<<22) + `}`
+				logConfigProviderConfigs[index] = `
+"` + lg.Name + `":{
+	"type": "` + logConfigProviderName + `",
+	"FileName":"` + logFileName + `",
+	"Rotate": ` + logFileRotate + `,,
+	"BackupCount": ` + strconv.FormatInt(lg.FileBackupCount, 10) + `,
+	"MaxBytes":` + strconv.Itoa(1<<22) + `
+}`
 			case TypeConsole:
 				logWriter := lg.Writer
 				logConfigProviderName := lg.Name + "ConsoleTarget"
 				logProviders[logConfigProviderName] = NewConsoleTarget
-				logConfigProviderConfigs[index] = `"` + lg.Name + `":{"type": "` + logConfigProviderName + `","WriterName":"` + logWriter.String() + `"}`
+				logConfigProviderConfigs[index] = `
+"` + lg.Name + `":{
+	"type": "` + logConfigProviderName + `",
+	"WriterName":"` + logWriter.String() + `"
+}`
 				index++
 			}
 		}
