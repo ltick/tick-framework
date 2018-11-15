@@ -206,19 +206,19 @@ type Store interface {
 	Set(key, value interface{}) error     //set session value
 	Get(key interface{}) interface{}      //get session value
 	Delete(key interface{}) error         //delete session value
-	SessionID() string                    //back current sessionID
-	SessionRelease(w http.ResponseWriter) // release the resource & save data to provider & return the data
+	ID() string                    //back current sessionID
+	Release(w http.ResponseWriter) // release the resource & save data to provider & return the data
 	Flush() error                         //delete all data
 }
 
 type Handler interface {
 	Initiate(ctx context.Context, maxAge int64, config map[string]interface{}) error
-	SessionRead(ctx context.Context, sessionId string) (Store, error)
-	SessionExist(ctx context.Context, sessionId string) (bool, error)
-	SessionRegenerate(ctx context.Context, oldSessionId, sessionId string) (Store, error)
-	SessionDestroy(ctx context.Context, sessionId string) error
-	SessionAll(ctx context.Context) (count int, err error)
-	SessionGC(ctx context.Context)
+	Read(ctx context.Context, sessionId string) (Store, error)
+	Exist(ctx context.Context, sessionId string) (bool, error)
+	Regenerate(ctx context.Context, oldId, sessionId string) (Store, error)
+	Destroy(ctx context.Context, sessionId string) error
+	All(ctx context.Context) (count int, err error)
+	GC(ctx context.Context)
 }
 
 // getSid retrieves session identifier from HTTP Request.
@@ -262,12 +262,12 @@ func (s *Session) SessionStart(ctx context.Context, w http.ResponseWriter, r *ht
 	if err != nil {
 		return nil, err
 	}
-	exist, err := s.handler.SessionExist(ctx, sid)
+	exist, err := s.handler.Exist(ctx, sid)
 	if err != nil {
 		return nil, err
 	}
 	if sid != "" && exist {
-		return s.handler.SessionRead(ctx, sid)
+		return s.handler.Read(ctx, sid)
 	}
 
 	// Generate a new session
@@ -276,7 +276,7 @@ func (s *Session) SessionStart(ctx context.Context, w http.ResponseWriter, r *ht
 		return nil, err
 	}
 
-	session, err = s.handler.SessionRead(ctx, sid)
+	session, err = s.handler.Read(ctx, sid)
 	if err != nil {
 		return nil, err
 	}
@@ -305,8 +305,8 @@ func (s *Session) SessionStart(ctx context.Context, w http.ResponseWriter, r *ht
 	return
 }
 
-// SessionDestroy Destroy session by its id in http request cookie.
-func (s *Session) SessionDestroy(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+// Destroy Destroy session by its id in http request cookie.
+func (s *Session) Destroy(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	if s.EnableSidInHttpHeader {
 		r.Header.Del(s.SessionNameInHttpHeader)
 		w.Header().Del(s.SessionNameInHttpHeader)
@@ -318,7 +318,7 @@ func (s *Session) SessionDestroy(ctx context.Context, w http.ResponseWriter, r *
 	}
 
 	sid, _ := url.QueryUnescape(cookie.Value)
-	s.handler.SessionDestroy(ctx, sid)
+	s.handler.Destroy(ctx, sid)
 	if s.EnableSetCookie {
 		expiration := time.Now()
 		cookie = &http.Cookie{Name: s.CookieName,
@@ -339,30 +339,30 @@ func (s *Session) GetSessionStore(ctx context.Context, w http.ResponseWriter, r 
 	if err != nil {
 		return nil, err
 	}
-	exist, err := s.handler.SessionExist(ctx, sid)
+	exist, err := s.handler.Exist(ctx, sid)
 	if err != nil {
 		return nil, err
 	}
 	if sid != "" && exist {
-		return s.handler.SessionRead(ctx, sid)
+		return s.handler.Read(ctx, sid)
 	}
 	return nil, errNotExist
 }
 
 // GetSessionStore Get SessionStore by its id.
 func (s *Session) GetSessionStoreById(ctx context.Context, sid string) (Store, error) {
-	return s.handler.SessionRead(ctx, sid)
+	return s.handler.Read(ctx, sid)
 }
 
 // GC Start session gc process.
 // it can do gc in times after gc lifetime.
 func (s *Session) GC(ctx context.Context) {
-	s.handler.SessionGC(ctx)
+	s.handler.All(ctx)
 	time.AfterFunc(time.Duration(s.Gclifetime)*time.Second, func() { s.GC(ctx) })
 }
 
-// SessionRegenerateID Regenerate a session id for this SessionStore who's id is saving in http request.
-func (s *Session) SessionRegenerateID(ctx context.Context, w http.ResponseWriter, r *http.Request) (session Store) {
+// RegenerateID Regenerate a session id for this SessionStore who's id is saving in http request.
+func (s *Session) RegenerateID(ctx context.Context, w http.ResponseWriter, r *http.Request) (session Store) {
 	sid, err := s.sessionID()
 	if err != nil {
 		return
@@ -370,7 +370,7 @@ func (s *Session) SessionRegenerateID(ctx context.Context, w http.ResponseWriter
 	cookie, err := r.Cookie(s.CookieName)
 	if err != nil || cookie.Value == "" {
 		//delete old cookie
-		session, _ = s.handler.SessionRead(ctx, sid)
+		session, _ = s.handler.Read(ctx, sid)
 		cookie = &http.Cookie{Name: s.CookieName,
 			Value:    url.QueryEscape(sid),
 			Path:     "/",
@@ -380,7 +380,7 @@ func (s *Session) SessionRegenerateID(ctx context.Context, w http.ResponseWriter
 		}
 	} else {
 		oldsid, _ := url.QueryUnescape(cookie.Value)
-		session, _ = s.handler.SessionRegenerate(ctx, oldsid, sid)
+		session, _ = s.handler.Regenerate(ctx, oldsid, sid)
 		cookie.Value = url.QueryEscape(sid)
 		cookie.HttpOnly = true
 		cookie.Path = "/"
@@ -404,7 +404,7 @@ func (s *Session) SessionRegenerateID(ctx context.Context, w http.ResponseWriter
 
 // GetActiveSession Get all active sessions count number.
 func (s *Session) GetActiveSession(ctx context.Context) (int, error) {
-	return s.handler.SessionAll(ctx)
+	return s.handler.All(ctx)
 }
 
 // SetSecure Set cookie with https.

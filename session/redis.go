@@ -4,17 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"net/http"
+	"sync"
 
 	"github.com/ltick/tick-framework/kvstore"
 )
+
 type RedisStore struct {
-	sessionMaxAge int64
+	sessionMaxAge        int64
 	sessionCacheProvider kvstore.KvstoreHandler
-	sessionId               string
-	lock                    sync.RWMutex
-	sessionData             map[interface{}]interface{}
+	sessionId            string
+	lock                 sync.RWMutex
+	sessionData          map[interface{}]interface{}
 }
 type RedisHandler struct {
 	Cache *kvstore.Kvstore
@@ -29,7 +30,7 @@ func NewRedisHandler() Handler {
 }
 
 var (
-	errRedisInitiate         = "session redis: initiate error"
+	errRedisInitiate          = "session redis: initiate error"
 	errRedisSessionExists     = "session redis: session exists error"
 	errRedisSessionRead       = "session redis: session read error"
 	errRedisSessionRegenerate = "session redis: session regenerate error"
@@ -62,7 +63,7 @@ func (m *RedisHandler) Initiate(ctx context.Context, maxAge int64, config map[st
 	return nil
 }
 
-func (m *RedisHandler) SessionRead(ctx context.Context, sessionId string) (Store, error) {
+func (m *RedisHandler) Read(ctx context.Context, sessionId string) (Store, error) {
 	sessionStoreData, err := m.sessionCacheProvider.Get(sessionId)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf(errRedisSessionRead+": [sessionId:'%s', error:'%s']", sessionId, err.Error()))
@@ -72,7 +73,7 @@ func (m *RedisHandler) SessionRead(ctx context.Context, sessionId string) (Store
 		sessionData = make(map[interface{}]interface{})
 	} else {
 		sessionDataByte, ok := sessionStoreData.([]byte)
-		if  !ok {
+		if !ok {
 			return nil, errors.New(fmt.Sprintf(errRedisSessionRead+": [sessionId:'%s', error:'invalid session data type']", sessionId))
 		}
 		sessionData, err = DecodeGob(sessionDataByte)
@@ -81,14 +82,14 @@ func (m *RedisHandler) SessionRead(ctx context.Context, sessionId string) (Store
 		}
 	}
 	sessionStore := &RedisStore{
-		sessionMaxAge: m.sessionMaxAge,
+		sessionMaxAge:        m.sessionMaxAge,
 		sessionCacheProvider: m.sessionCacheProvider,
-		sessionId:               sessionId,
-		sessionData:             sessionData,
+		sessionId:            sessionId,
+		sessionData:          sessionData,
 	}
 	return sessionStore, nil
 }
-func (m *RedisHandler) SessionExist(ctx context.Context, sessionId string) (bool, error) {
+func (m *RedisHandler) Exist(ctx context.Context, sessionId string) (bool, error) {
 	//获取cookie验证是否登录
 	_, err := m.sessionCacheProvider.Get(sessionId)
 	if err != nil {
@@ -99,7 +100,7 @@ func (m *RedisHandler) SessionExist(ctx context.Context, sessionId string) (bool
 	}
 	return true, nil
 }
-func (m *RedisHandler) SessionRegenerate(ctx context.Context, oldSessionId, sessionId string) (Store, error) {
+func (m *RedisHandler) Regenerate(ctx context.Context, oldSessionId, sessionId string) (Store, error) {
 	sessionStoreData, err := m.sessionCacheProvider.Get(oldSessionId)
 	if err != nil {
 		if kvstore.ErrNil(err) {
@@ -122,7 +123,7 @@ func (m *RedisHandler) SessionRegenerate(ctx context.Context, oldSessionId, sess
 		sessionData = make(map[interface{}]interface{})
 	} else {
 		sessionDataByte, ok := sessionStoreData.([]byte)
-		if  !ok {
+		if !ok {
 			return nil, errors.New(fmt.Sprintf(errRedisSessionRegenerate+": [oldSessionId:'%s', sessionId:'%s', error:'invalid session data type']", oldSessionId, sessionId))
 		}
 		sessionData, err = DecodeGob(sessionDataByte)
@@ -131,21 +132,21 @@ func (m *RedisHandler) SessionRegenerate(ctx context.Context, oldSessionId, sess
 		}
 	}
 	sessionStore := &RedisStore{
-		sessionMaxAge: m.sessionMaxAge,
+		sessionMaxAge:        m.sessionMaxAge,
 		sessionCacheProvider: m.sessionCacheProvider,
-		sessionId:               sessionId,
-		sessionData:             sessionData,
+		sessionId:            sessionId,
+		sessionData:          sessionData,
 	}
 	return sessionStore, nil
 }
-func (m *RedisHandler) SessionDestroy(ctx context.Context, sessionId string) error {
+func (m *RedisHandler) Destroy(ctx context.Context, sessionId string) error {
 	_, err := m.sessionCacheProvider.Del(sessionId)
 	if err != nil {
 		return errors.New(fmt.Sprintf(errRedisSessionDestory+": [sessionId:'%s', error:'%s']", sessionId, err.Error()))
 	}
 	return nil
 }
-func (m *RedisHandler) SessionAll(ctx context.Context) (count int, err error) {
+func (m *RedisHandler) All(ctx context.Context) (count int, err error) {
 	nextCursor, keys, err := m.sessionCacheProvider.Scan("", "", 0)
 	if err != nil {
 		return 0, errors.New(fmt.Sprintf(errRedisSessionAll+": [error:'%s']", err.Error()))
@@ -159,7 +160,7 @@ func (m *RedisHandler) SessionAll(ctx context.Context) (count int, err error) {
 	}
 	return count, nil
 }
-func (m *RedisHandler) SessionGC(ctx context.Context) {
+func (m *RedisHandler) GC(ctx context.Context) {
 	return
 }
 
@@ -199,13 +200,13 @@ func (m *RedisStore) Flush() error {
 }
 
 // SessionID get session id of this redis session store
-func (m *RedisStore) SessionID() string {
+func (m *RedisStore) ID() string {
 	return m.sessionId
 }
 
 // SessionRelease save redis session sessionData to cache.
 // must call this method to save sessionData to cache.
-func (m *RedisStore) SessionRelease(w http.ResponseWriter) {
+func (m *RedisStore) Release(w http.ResponseWriter) {
 	b, err := EncodeGob(m.sessionData)
 	if err != nil {
 		return
