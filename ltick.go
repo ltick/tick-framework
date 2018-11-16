@@ -306,7 +306,6 @@ func (e *Engine) NewDefaultServer(setters ...ServerOption) *Server {
 	setters = append(setters, ServerLogWriter(e.logWriter))
 	server := NewServer(router, setters...)
 	server.AddRouteGroup("/")
-	server.Pprof("*", "debug")
 	return server
 }
 

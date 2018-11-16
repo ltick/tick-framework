@@ -393,6 +393,9 @@ func (a *Api) addFields(parentIndexPath []int, t reflect.Type, v reflect.Value) 
 
 // Number returns the number of parameters to be bound
 func (a *Api) Number() int {
+	if a.params == nil {
+		return 0
+	}
 	return len(a.params)
 }
 
@@ -436,7 +439,7 @@ func (a *Api) BindNew(
 
 // NewReceiver creates a new struct pointer and the field's values  for its receive parameters it.
 func (a *Api) NewReceiver() (interface{}, []reflect.Value) {
-	object := reflect.New(a.structType)
+	object := reflect.ValueOf(a.rawStructPointer)
 	if len(a.defaultValues) > 0 {
 		// fmt.Printf("setting default value: %s\n", a.structType.String())
 		de := gob.NewDecoder(bytes.NewReader(a.defaultValues))
