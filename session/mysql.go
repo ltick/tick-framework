@@ -62,7 +62,7 @@ func (m *MysqlHandler) Initiate(ctx context.Context, maxAge int64, config map[st
 	if err != nil {
 		return errors.New(errMysqlInitiate + ": " + err.Error())
 	}
-	m.sessionDatabaseProvider, err = m.Database.NewDatabase(ctx, "session", map[string]interface{}{
+	m.sessionDatabaseProvider, err = m.Database.NewConnection("session", map[string]interface{}{
 		"DATABASE_MYSQL_HOST":           config["DATABASE_MYSQL_HOST"],
 		"DATABASE_MYSQL_PORT":           config["DATABASE_MYSQL_PORT"],
 		"DATABASE_MYSQL_USER":           config["DATABASE_MYSQL_USER"],

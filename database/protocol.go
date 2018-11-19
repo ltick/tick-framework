@@ -9,13 +9,14 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/ltick/tick-framework/config"
 	"github.com/tsuna/gohbase/hrpc"
+	"strings"
 )
 
 var (
-	errInitiate    = "database: initiate '%s' error"
-	errStartup     = "database: startup '%s' error"
-	errNewDatabase = "database: new '%s' database error"
-	errGetDatabase = "database: get '%s' database error"
+	errInitiate      = "database: initiate '%s' error"
+	errStartup       = "database: startup '%s' error"
+	errNewConnection = "database: new '%s' connection error"
+	errGetConnection = "database: get '%s' connection error"
 )
 
 func NewDatabase() *Database {
@@ -107,10 +108,10 @@ func (d *Database) Use(ctx context.Context, Provider string) error {
 	}
 	return nil
 }
-func (d *Database) NewDatabase(ctx context.Context, name string, config map[string]interface{}) (DatabaseHandler, error) {
-	database, err := d.GetDatabase(name)
+func (d *Database) NewConnection(name string, config map[string]interface{}) (DatabaseHandler, error) {
+	databaseHandler, err := d.GetConnection(name)
 	if err == nil {
-		return database, nil
+		return databaseHandler, nil
 	}
 	if _, ok := config["DATABASE_MYSQL_HOST"]; !ok {
 		config["DATABASE_MYSQL_HOST"] = d.Config.GetString("DATABASE_MYSQL_HOST")
@@ -145,27 +146,30 @@ func (d *Database) NewDatabase(ctx context.Context, name string, config map[stri
 	if _, ok := config["DATABASE_MYSQL_MAX_IDLE_CONNS"]; !ok {
 		config["DATABASE_MYSQL_MAX_IDLE_CONNS"] = d.Config.GetInt("DATABASE_MYSQL_MAX_IDLE_CONNS")
 	}
-	database, err = d.handler.NewDatabase(ctx, name, config)
+	databaseHandler, err = d.handler.NewConnection(name, config)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf(errNewDatabase+": "+err.Error(), name))
+		return nil, errors.New(fmt.Sprintf(errNewConnection+": "+err.Error(), name))
 	}
-	if database == nil {
-		return nil, errors.New(fmt.Sprintf(errNewDatabase+": empty database", name))
+	if databaseHandler == nil {
+		return nil, errors.New(fmt.Sprintf(errNewConnection+": empty database", name))
 	}
-	return database, nil
+	return databaseHandler, nil
 }
-func (d *Database) GetDatabase(name string) (DatabaseHandler, error) {
-	handlerDatabase, err := d.handler.GetDatabase(name)
+func (d *Database) GetConnection(name string) (DatabaseHandler, error) {
+	databaseHandler, err := d.handler.GetConnection(name)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf(errGetDatabase+": "+err.Error(), name))
+		if ConnectionNotExists(err) {
+			databaseHandler, err = d.handler.NewConnection(name, map[string]interface{}{})
+		}
+		return nil, errors.New(fmt.Sprintf(errGetConnection+": "+err.Error(), name))
 	}
-	return handlerDatabase, err
+	return databaseHandler, err
 }
 
 type Handler interface {
 	Initiate(ctx context.Context) error
-	NewDatabase(ctx context.Context, name string, config map[string]interface{}) (DatabaseHandler, error)
-	GetDatabase(name string) (DatabaseHandler, error)
+	NewConnection(name string, config map[string]interface{}) (DatabaseHandler, error)
+	GetConnection(name string) (DatabaseHandler, error)
 }
 
 type DatabaseCallback interface {
@@ -276,8 +280,8 @@ func (d *Database) NosqlUse(ctx context.Context, Provider string) error {
 	}
 	return nil
 }
-func (d *Database) NewNosqlDatabase(ctx context.Context, name string, config map[string]interface{}) (NosqlDatabaseHandler, error) {
-	database, err := d.GetNosqlDatabase(name)
+func (d *Database) NewNosqlConnection(ctx context.Context, name string, config map[string]interface{}) (NosqlDatabaseHandler, error) {
+	database, err := d.GetNosqlConnection(name)
 	if err == nil {
 		return database, nil
 	}
@@ -302,27 +306,30 @@ func (d *Database) NewNosqlDatabase(ctx context.Context, name string, config map
 	if _, ok := config["DATABASE_HBASE_MAX_ACTIVE"]; !ok {
 		config["DATABASE_HBASE_MAX_ACTIVE"] = d.Config.GetInt("DATABASE_HBASE_MAX_ACTIVE")
 	}
-	database, err = d.nosqlHandler.NewDatabase(ctx, name, config)
+	database, err = d.nosqlHandler.NewConnection(name, config)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf(errNewDatabase+": "+err.Error(), name))
+		return nil, errors.New(fmt.Sprintf(errNewConnection+": "+err.Error(), name))
 	}
 	if database == nil {
-		return nil, errors.New(fmt.Sprintf(errNewDatabase+": empty database", name))
+		return nil, errors.New(fmt.Sprintf(errNewConnection+": empty database", name))
 	}
 	return database, nil
 }
-func (d *Database) GetNosqlDatabase(name string) (NosqlDatabaseHandler, error) {
-	handlerDatabase, err := d.nosqlHandler.GetDatabase(name)
+func (d *Database) GetNosqlConnection(name string) (NosqlDatabaseHandler, error) {
+	databaseHandler, err := d.nosqlHandler.GetConnection(name)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf(errGetDatabase+": "+err.Error(), name))
+		if ConnectionNotExists(err) {
+			databaseHandler, err = d.nosqlHandler.NewConnection(name, map[string]interface{}{})
+		}
+		return nil, errors.New(fmt.Sprintf(errGetConnection+": "+err.Error(), name))
 	}
-	return handlerDatabase, err
+	return databaseHandler, err
 }
 
 type NosqlHandler interface {
 	Initiate(ctx context.Context) error
-	NewDatabase(ctx context.Context, name string, config map[string]interface{}) (NosqlDatabaseHandler, error)
-	GetDatabase(name string) (NosqlDatabaseHandler, error)
+	NewConnection(name string, config map[string]interface{}) (NosqlDatabaseHandler, error)
+	GetConnection(name string) (NosqlDatabaseHandler, error)
 }
 type NosqlDatabaseCallback interface {
 }
@@ -362,6 +369,9 @@ func NosqlUse(name string) (nosqlDatabaseHandler, error) {
 	if _, dup := nosqlDatabaseHandlers[name]; !dup {
 		return nil, errors.New(fmt.Sprintf("database: unknown nosql database '%s' (forgotten register?)", name))
 	}
-
 	return nosqlDatabaseHandlers[name], nil
+}
+
+func ConnectionNotExists(err error) bool {
+	return strings.Contains(err.Error(), errMysqlConnectionNotExists)
 }

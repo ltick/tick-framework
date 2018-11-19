@@ -1,11 +1,11 @@
 package kvstore
 
-import "testing"
 import (
-	"context"
 	"fmt"
-	"github.com/stretchr/testify/assert"
+	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var configs = map[string]interface{}{
@@ -20,7 +20,7 @@ var configs = map[string]interface{}{
 
 func TestGet(t *testing.T) {
 	redisHandler := NewRedisHandler()
-	myredis, err := redisHandler.NewConnection(context.Background(), "test", configs)
+	myredis, err := redisHandler.NewConnection("test", configs)
 	assert.Nil(t, err)
 	if err == nil {
 		k := "1503037240RBW1Ti"
@@ -32,7 +32,7 @@ func TestGet(t *testing.T) {
 }
 func TestSet(t *testing.T) {
 	redisHandler := NewRedisHandler()
-	myredis, err := redisHandler.NewConnection(context.Background(), "test", configs)
+	myredis, err := redisHandler.NewConnection("test", configs)
 	assert.Nil(t, err)
 	if err == nil {
 		k := "abc"
@@ -46,7 +46,7 @@ func TestSet(t *testing.T) {
 }
 func TestDel(t *testing.T) {
 	redisHandler := NewRedisHandler()
-	myredis, err := redisHandler.NewConnection(context.Background(), "test", configs)
+	myredis, err := redisHandler.NewConnection("test", configs)
 	assert.Nil(t, err)
 	if err == nil {
 		k := "abc"
@@ -63,7 +63,7 @@ func TestDel(t *testing.T) {
 }
 func TestSetExpire(t *testing.T) {
 	redisHandler := NewRedisHandler()
-	myredis, err := redisHandler.NewConnection(context.Background(), "test", configs)
+	myredis, err := redisHandler.NewConnection("test", configs)
 	assert.Nil(t, err)
 	if err == nil {
 		k := "abc"

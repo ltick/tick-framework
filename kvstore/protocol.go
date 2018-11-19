@@ -7,6 +7,7 @@ import (
 
 	"github.com/ltick/tick-framework/config"
 	"github.com/ltick/tick-routing"
+	"strings"
 )
 
 var (
@@ -91,7 +92,7 @@ func (c *Kvstore) Use(ctx context.Context, Provider string) error {
 	}
 	return nil
 }
-func (c *Kvstore) NewConnection(ctx context.Context, name string, config map[string]interface{}) (KvstoreHandler, error) {
+func (c *Kvstore) NewConnection(name string, config map[string]interface{}) (KvstoreHandler, error) {
 	kvstoreHandler, err := c.GetConnection(name)
 	if err == nil {
 		return kvstoreHandler, nil
@@ -117,7 +118,7 @@ func (c *Kvstore) NewConnection(ctx context.Context, name string, config map[str
 	if _, ok := config["KVSTORE_REDIS_MAX_IDLE"]; !ok {
 		config["KVSTORE_REDIS_MAX_IDLE"] = c.Config.GetInt("KVSTORE_REDIS_MAX_IDLE")
 	}
-	kvstoreHandler, err = c.handler.NewConnection(ctx, name, config)
+	kvstoreHandler, err = c.handler.NewConnection(name, config)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf(errNewConnection+": "+err.Error(), name))
 	}
@@ -129,6 +130,9 @@ func (c *Kvstore) NewConnection(ctx context.Context, name string, config map[str
 func (c *Kvstore) GetConnection(name string) (KvstoreHandler, error) {
 	kvstoreHandler, err := c.handler.GetConnection(name)
 	if err != nil {
+		if ConnectionNotExists(err) {
+			kvstoreHandler, err = c.handler.NewConnection(name, map[string]interface{}{})
+		}
 		return nil, errors.New(fmt.Sprintf(errGetConnection+": "+err.Error(), name))
 	}
 	return kvstoreHandler, err
@@ -136,7 +140,7 @@ func (c *Kvstore) GetConnection(name string) (KvstoreHandler, error) {
 
 type Handler interface {
 	Initiate(ctx context.Context) error
-	NewConnection(ctx context.Context, name string, config map[string]interface{}) (KvstoreHandler, error)
+	NewConnection(name string, config map[string]interface{}) (KvstoreHandler, error)
 	GetConnection(name string) (KvstoreHandler, error)
 }
 
@@ -191,4 +195,8 @@ func Use(name string) (kvstoreHandler, error) {
 
 func ErrNil(err error) bool {
 	return RedisErrNil(err)
+}
+
+func ConnectionNotExists(err error) bool {
+	return strings.Contains(err.Error(), errRedisConnectionNotExists)
 }

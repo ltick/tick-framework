@@ -65,7 +65,7 @@ func (this *HbaseHandler) Initiate(ctx context.Context) error {
 	return nil
 }
 
-func (this *HbaseHandler) NewDatabase(ctx context.Context, name string, config map[string]interface{}) (NosqlDatabaseHandler, error) {
+func (this *HbaseHandler) NewConnection(name string, config map[string]interface{}) (NosqlDatabaseHandler, error) {
 	db := &HbaseDatabaseHandler{}
 	db.MaxActive = DEFAULT_MAX_ACTIVE
 	db.Timeout = DEFAULT_TIMEOUT
@@ -123,7 +123,7 @@ func (this *HbaseHandler) NewDatabase(ctx context.Context, name string, config m
 }
 
 // 从连接池里取出连接
-func (this *HbaseHandler) GetDatabase(name string) (NosqlDatabaseHandler, error) {
+func (this *HbaseHandler) GetConnection(name string) (NosqlDatabaseHandler, error) {
 	handlerDatabase, ok := this.databases[name]
 	if !ok {
 		return nil, errors.New(fmt.Sprintf(errHbaseDatabaseNotExists, name))
