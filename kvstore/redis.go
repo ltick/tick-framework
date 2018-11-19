@@ -119,7 +119,7 @@ func (this *RedisHandler) NewConnection(ctx context.Context, name string, config
 		this.pools[name] = pool
 		return pool, nil
 	}
-	return nil,  errors.New(errRedisNewConnection + ": pool.Host is empty")
+	return nil, errors.New(errRedisNewConnection + ": pool.Host is empty")
 }
 
 func (this *RedisHandler) GetConnection(name string) (KvstoreHandler, error) {

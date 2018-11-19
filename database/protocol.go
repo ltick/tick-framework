@@ -24,11 +24,11 @@ func NewDatabase() *Database {
 }
 
 type Database struct {
-	Config           *config.Config `inject:"true"`
-	Provider         string
-	handler          Handler
-	nosqlHandlerName string
-	nosqlHandler     NosqlHandler
+	Config        *config.Config `inject:"true"`
+	provider      string
+	handler       Handler
+	nosqlProvider string
+	nosqlHandler  NosqlHandler
 }
 
 func (d *Database) Initiate(ctx context.Context) (context.Context, error) {
@@ -43,6 +43,7 @@ func (d *Database) Initiate(ctx context.Context) (context.Context, error) {
 		"DATABASE_MYSQL_MAX_OPEN_CONNS": config.Option{Type: config.Int, EnvironmentKey: "DATABASE_MYSQL_MAX_OPEN_CONNS"},
 		"DATABASE_MYSQL_MAX_IDLE_CONNS": config.Option{Type: config.Int, EnvironmentKey: "DATABASE_MYSQL_MAX_IDLE_CONNS"},
 
+		"DATABASE_NOSQL_PROVIDER":   config.Option{Type: config.String, EnvironmentKey: "DATABASE_PROVIDER"},
 		"DATABASE_HBASE_HOST":       config.Option{Type: config.String, EnvironmentKey: "DATABASE_HBASE_HOST"},
 		"DATABASE_HBASE_TIMEOUT":    config.Option{Type: config.String, EnvironmentKey: "DATABASE_HBASE_TIMEOUT"},
 		"DATABASE_HBASE_MAX_ACTIVE": config.Option{Type: config.Int, EnvironmentKey: "DATABASE_HBASE_MAX_ACTIVE"},
@@ -53,19 +54,19 @@ func (d *Database) Initiate(ctx context.Context) (context.Context, error) {
 	}
 	err = Register("mysql", NewMysqlHandler)
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.Provider))
+		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.provider))
 	}
 	err = d.Use(ctx, "mysql")
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.Provider))
+		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.provider))
 	}
 	err = NosqlRegister("hbase", NewHbaseHandler)
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.Provider))
+		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.nosqlProvider))
 	}
 	err = d.NosqlUse(ctx, "hbase")
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.Provider))
+		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.nosqlProvider))
 	}
 	return ctx, nil
 }
@@ -74,11 +75,16 @@ func (d *Database) OnStartup(ctx context.Context) (context.Context, error) {
 	databaseProvider := d.Config.GetString("DATABASE_PROVIDER")
 	if databaseProvider != "" {
 		err = d.Use(ctx, databaseProvider)
-	} else {
-		err = d.Use(ctx, "mysql")
+		if err != nil {
+			return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), d.provider))
+		}
 	}
-	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), d.Provider))
+	databaseNosqlProvider := d.Config.GetString("DATABASE_NOSQL_PROVIDER")
+	if databaseNosqlProvider != "" {
+		err = d.NosqlUse(ctx, databaseNosqlProvider)
+		if err != nil {
+			return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), d.nosqlProvider))
+		}
 	}
 	return ctx, nil
 }
@@ -86,18 +92,18 @@ func (d *Database) OnShutdown(ctx context.Context) (context.Context, error) {
 	return ctx, nil
 }
 func (d *Database) GetProvider() string {
-	return d.Provider
+	return d.provider
 }
 func (d *Database) Use(ctx context.Context, Provider string) error {
 	handler, err := Use(Provider)
 	if err != nil {
 		return err
 	}
-	d.Provider = Provider
+	d.provider = Provider
 	d.handler = handler()
 	err = d.handler.Initiate(ctx)
 	if err != nil {
-		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.Provider))
+		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.provider))
 	}
 	return nil
 }
@@ -262,11 +268,11 @@ func (d *Database) NosqlUse(ctx context.Context, Provider string) error {
 	if err != nil {
 		return err
 	}
-	d.nosqlHandlerName = Provider
+	d.nosqlProvider = Provider
 	d.nosqlHandler = nosqlHandler()
 	err = d.nosqlHandler.Initiate(ctx)
 	if err != nil {
-		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.Provider))
+		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.provider))
 	}
 	return nil
 }

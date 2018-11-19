@@ -42,6 +42,14 @@ func (c *Kvstore) Initiate(ctx context.Context) (context.Context, error) {
 	if err != nil {
 		return ctx, fmt.Errorf(errInitiate+": %s", err.Error())
 	}
+	err = Register("redis", NewRedisHandler)
+	if err != nil {
+		return ctx, errors.New(fmt.Sprintf(errInitiate + ": " + err.Error()))
+	}
+	err = c.Use(ctx, "redis")
+	if err != nil {
+		return ctx, errors.New(fmt.Sprintf(errInitiate + ": " + err.Error()))
+	}
 	return ctx, nil
 }
 func (c *Kvstore) OnStartup(ctx context.Context) (context.Context, error) {
@@ -50,14 +58,11 @@ func (c *Kvstore) OnStartup(ctx context.Context) (context.Context, error) {
 	if err != nil {
 		return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), c.Provider))
 	}
-	kvstoreProvider := c.Config.GetString("KVSTORE_PROVIDER")
-	if kvstoreProvider != "" {
+	if kvstoreProvider := c.Config.GetString("KVSTORE_PROVIDER"); kvstoreProvider != "" {
 		err = c.Use(ctx, kvstoreProvider)
-	} else {
-		err = c.Use(ctx, "redis")
-	}
-	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), c.Provider))
+		if err != nil {
+			return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), c.Provider))
+		}
 	}
 	return ctx, nil
 }
