@@ -60,6 +60,10 @@ type Config struct {
 	bindedEnvironmentKeys []string
 }
 
+func (c *Config) Prepare(ctx context.Context) (context.Context, error) {
+	return ctx, nil
+}
+
 func (c *Config) Initiate(ctx context.Context) (context.Context, error) {
 	if c.options == nil {
 		c.options = make(map[string]Option)

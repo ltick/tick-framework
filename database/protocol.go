@@ -5,14 +5,15 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jinzhu/gorm"
 	"github.com/ltick/tick-framework/config"
 	"github.com/tsuna/gohbase/hrpc"
-	"strings"
 )
 
 var (
+	errPrepare       = "database: prepare '%s' error"
 	errInitiate      = "database: initiate '%s' error"
 	errStartup       = "database: startup '%s' error"
 	errNewConnection = "database: new '%s' connection error"
@@ -33,7 +34,7 @@ type Database struct {
 	nosqlHandler  NosqlHandler
 }
 
-func (d *Database) Initiate(ctx context.Context) (context.Context, error) {
+func (d *Database) Prepare(ctx context.Context) (context.Context, error) {
 	var configs map[string]config.Option = map[string]config.Option{
 		"DATABASE_PROVIDER":             config.Option{Type: config.String, EnvironmentKey: "DATABASE_PROVIDER"},
 		"DATABASE_MYSQL_HOST":           config.Option{Type: config.String, EnvironmentKey: "DATABASE_MYSQL_HOST"},
@@ -52,9 +53,13 @@ func (d *Database) Initiate(ctx context.Context) (context.Context, error) {
 	}
 	err := d.Config.SetOptions(configs)
 	if err != nil {
-		return ctx, fmt.Errorf(errInitiate+": %s", err.Error())
+		return ctx, fmt.Errorf(errPrepare+": %s", err.Error())
 	}
-	err = Register("mysql", NewMysqlHandler)
+	return ctx, nil
+}
+
+func (d *Database) Initiate(ctx context.Context) (context.Context, error) {
+	err := Register("mysql", NewMysqlHandler)
 	if err != nil {
 		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.provider))
 	}

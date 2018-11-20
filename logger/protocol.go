@@ -189,7 +189,9 @@ type Logger struct {
 	Logs     []*LogConfig
 	handler  Handler
 }
-
+func (l *Logger) Prepare(ctx context.Context) (context.Context, error) {
+	return ctx, nil
+}
 func (l *Logger) Initiate(ctx context.Context) (context.Context, error) {
 	err := Register("tick", NewTickHandler)
 	if err != nil {

@@ -223,6 +223,21 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
+	componentMap := e.Registry.GetComponentMap()
+	for _, name := range e.Registry.GetSortedComponentName() {
+		ci, ok := componentMap[name].Component.(ComponentInterface)
+		if !ok {
+			err = errors.Annotate(errors.Errorf("invalid type"), errNew)
+			e.Log(errors.ErrorStack(err))
+			os.Exit(1)
+		}
+		e.Context, err = ci.Prepare(e.Context)
+		if err != nil {
+			err = errors.Annotate(err, errNew)
+			e.Log(errors.ErrorStack(err))
+			os.Exit(1)
+		}
+	}
 	// configer
 	configComponent, err := registry.GetComponentByName("Config")
 	if err != nil {
@@ -253,7 +268,6 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 		}*/
 	}
 	// 模块初始化
-	componentMap := e.Registry.GetComponentMap()
 	for _, name := range e.Registry.GetSortedComponentName() {
 		ci, ok := componentMap[name].Component.(ComponentInterface)
 		if !ok {

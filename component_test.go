@@ -12,7 +12,9 @@ type testComponent1 struct {
 	Foo  string `inject:"true"`
 	Foo1 string `inject:"true"`
 }
-
+func (f *testComponent1) Prepare(ctx context.Context) (newCtx context.Context, err error) {
+	return ctx, nil
+}
 func (f *testComponent1) Initiate(ctx context.Context) (newCtx context.Context, err error) {
 	return ctx, nil
 }
@@ -38,7 +40,9 @@ type testComponent2 struct {
 	TestComponent1 *testComponent1 `inject:"true"`
 	TestComponent3 *testComponent3 `inject:"true"`
 }
-
+func (f *testComponent2) Prepare(ctx context.Context) (newCtx context.Context, err error) {
+	return ctx, nil
+}
 func (this *testComponent2) Initiate(ctx context.Context) (newCtx context.Context, err error) {
 	return ctx, nil
 }
@@ -62,7 +66,9 @@ func (f *testComponent2) OnShutdown(ctx context.Context) (context.Context, error
 type testComponent3 struct {
 	TestComponent1 *testComponent1 `inject:"true"`
 }
-
+func (f *testComponent3) Prepare(ctx context.Context) (newCtx context.Context, err error) {
+	return ctx, nil
+}
 func (this *testComponent3) Initiate(ctx context.Context) (newCtx context.Context, err error) {
 	return ctx, nil
 }
@@ -86,7 +92,9 @@ func (f *testComponent3) OnShutdown(ctx context.Context) (context.Context, error
 type testComponent4 struct {
 	TestComponent2 *testComponent2 `inject:"true"`
 }
-
+func (f *testComponent4) Prepare(ctx context.Context) (newCtx context.Context, err error) {
+	return ctx, nil
+}
 func (this *testComponent4) Initiate(ctx context.Context) (newCtx context.Context, err error) {
 	return ctx, nil
 }

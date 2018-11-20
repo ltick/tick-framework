@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/ltick/tick-framework/config"
 	"github.com/ltick/tick-routing"
-	"strings"
 )
 
 var (
+	errPrepare      = "kvstore: prepare '%s' error"
 	errInitiate      = "kvstore: initiate '%s' error"
 	errStartup       = "kvstore: startup '%s' error"
 	errNewConnection = "kvstore: new '%s' kvstore error"
@@ -24,12 +25,12 @@ func NewKvstore() *Kvstore {
 
 type Kvstore struct {
 	Config   *config.Config `inject:"true"`
-	configs map[string]interface{}
+	configs  map[string]interface{}
 	Provider string
 	handler  Handler
 }
 
-func (c *Kvstore) Initiate(ctx context.Context) (context.Context, error) {
+func (c *Kvstore) Prepare(ctx context.Context) (context.Context, error) {
 	var configs map[string]config.Option = map[string]config.Option{
 		"KVSTORE_PROVIDER":         config.Option{Type: config.String, EnvironmentKey: "KVSTORE_PROVIDER"},
 		"KVSTORE_REDIS_HOST":       config.Option{Type: config.String, EnvironmentKey: "KVSTORE_REDIS_HOST"},
@@ -42,9 +43,13 @@ func (c *Kvstore) Initiate(ctx context.Context) (context.Context, error) {
 	}
 	err := c.Config.SetOptions(configs)
 	if err != nil {
-		return ctx, fmt.Errorf(errInitiate+": %s", err.Error())
+		return ctx, fmt.Errorf(errPrepare+": %s", err.Error())
 	}
-	err = Register("redis", NewRedisHandler)
+	return ctx, nil
+}
+
+func (c *Kvstore) Initiate(ctx context.Context) (context.Context, error) {
+	err := Register("redis", NewRedisHandler)
 	if err != nil {
 		return ctx, errors.New(fmt.Sprintf(errInitiate + ": " + err.Error()))
 	}

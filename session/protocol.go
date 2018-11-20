@@ -26,6 +26,7 @@ import (
 )
 
 var (
+	errPrepare      = "session: prepare '%s' error"
 	errInitiate                       = "session: initiate error"
 	errStartup                        = "session: startup error"
 	errMissSessionProvider            = "session: miss session provider"
@@ -57,11 +58,11 @@ type Session struct {
 	Database *libDatabase.Database `inject:"true"`
 	Cache    *kvstore.Kvstore      `inject:"true"`
 
-	Config      *config.Config     `inject:"true"`
-	DebugLog    libUtility.LogFunc `inject:"true"`
-	SystemLog   libUtility.LogFunc `inject:"true"`
-	Provider string
-	handler     Handler
+	Config    *config.Config     `inject:"true"`
+	DebugLog  libUtility.LogFunc `inject:"true"`
+	SystemLog libUtility.LogFunc `inject:"true"`
+	Provider  string
+	handler   Handler
 
 	provider         string
 	sessionCookieId  string
@@ -86,15 +87,7 @@ func NewSession() *Session {
 	return &Session{}
 }
 
-func (s *Session) Initiate(ctx context.Context) (context.Context, error) {
-	gob.Register([]interface{}{})
-	gob.Register(map[int]interface{}{})
-	gob.Register(map[string]interface{}{})
-	gob.Register(map[interface{}]interface{}{})
-	gob.Register(map[string]string{})
-	gob.Register(map[int]string{})
-	gob.Register(map[int]int{})
-	gob.Register(map[int]int64{})
+func (s *Session) Prepare(ctx context.Context) (context.Context, error) {
 	var configs map[string]config.Option = map[string]config.Option{
 		"MEDIA_SESSION_PROVIDER":         config.Option{Type: config.String, EnvironmentKey: "MEDIA_SESSION_PROVIDER"},
 		"MEDIA_SESSION_REDIS_KEY_PREFIX": config.Option{Type: config.String, EnvironmentKey: "MEDIA_SESSION_REDIS_KEY_PREFIX"},
@@ -105,9 +98,21 @@ func (s *Session) Initiate(ctx context.Context) (context.Context, error) {
 	}
 	err := s.Config.SetOptions(configs)
 	if err != nil {
-		return ctx, fmt.Errorf(errInitiate+": %s", err.Error())
+		return ctx, fmt.Errorf(errPrepare+": %s", err.Error())
 	}
-	err = Register("mysql", NewMysqlHandler)
+	return ctx, nil
+}
+
+func (s *Session) Initiate(ctx context.Context) (context.Context, error) {
+	gob.Register([]interface{}{})
+	gob.Register(map[int]interface{}{})
+	gob.Register(map[string]interface{}{})
+	gob.Register(map[interface{}]interface{}{})
+	gob.Register(map[string]string{})
+	gob.Register(map[int]string{})
+	gob.Register(map[int]int{})
+	gob.Register(map[int]int64{})
+	err := Register("mysql", NewMysqlHandler)
 	if err != nil {
 		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), s.Provider))
 	}
@@ -203,12 +208,12 @@ func Use(name string) (sessionHandler, error) {
 
 // Store contains all data for one session process with specific id.
 type Store interface {
-	Set(key, value interface{}) error     //set session value
-	Get(key interface{}) interface{}      //get session value
-	Delete(key interface{}) error         //delete session value
-	ID() string                    //back current sessionID
-	Release(w http.ResponseWriter) // release the resource & save data to provider & return the data
-	Flush() error                         //delete all data
+	Set(key, value interface{}) error //set session value
+	Get(key interface{}) interface{}  //get session value
+	Delete(key interface{}) error     //delete session value
+	ID() string                       //back current sessionID
+	Release(w http.ResponseWriter)    // release the resource & save data to provider & return the data
+	Flush() error                     //delete all data
 }
 
 type Handler interface {

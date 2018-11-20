@@ -39,7 +39,9 @@ type testMiddleware1 struct {
 	Foo    string
 	Foo1   string
 }
-
+func (f *testMiddleware1) Prepare(ctx context.Context) (newCtx context.Context, err error) {
+	return ctx, nil
+}
 func (f *testMiddleware1) Initiate(ctx context.Context) (context.Context, error) {
 	var options map[string]config.Option = map[string]config.Option{}
 	err := f.Config.SetOptions(options)
@@ -76,7 +78,9 @@ type testMiddleware2 struct {
 	Config *config.Config
 	Test   *testMiddleware1 `inject:"true"`
 }
-
+func (f *testMiddleware2) Prepare(ctx context.Context) (newCtx context.Context, err error) {
+	return ctx, nil
+}
 func (f *testMiddleware2) Initiate(ctx context.Context) (newCtx context.Context, err error) {
 	var options map[string]config.Option = map[string]config.Option{}
 	err = f.Config.SetOptions(options)

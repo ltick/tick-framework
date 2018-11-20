@@ -9,6 +9,7 @@ import (
 )
 
 var (
+	errPrepare      = "queue: prepare '%s' error"
 	errInitiate = "queue: initiate '%s' error"
 	errStartup  = "queue: startup '%s' error"
 	errNewQueue = "queue: new '%s' queue error"
@@ -26,7 +27,7 @@ type Queue struct {
 	handler  Handler
 }
 
-func (q *Queue) Initiate(ctx context.Context) (context.Context, error) {
+func (q *Queue) Prepare(ctx context.Context) (context.Context, error) {
 	var configs map[string]config.Option = map[string]config.Option{
 		"QUEUE_PROVIDER":          config.Option{Type: config.String, Default: "kafka", EnvironmentKey: "QUEUE_PROVIDER"},
 		"QUEUE_KAFKA_BROKERS":     config.Option{Type: config.String, EnvironmentKey: "QUEUE_KAFKA_BROKERS"},
@@ -35,9 +36,13 @@ func (q *Queue) Initiate(ctx context.Context) (context.Context, error) {
 	}
 	err := q.Config.SetOptions(configs)
 	if err != nil {
-		return ctx, fmt.Errorf(errInitiate+": %s", err.Error())
+		return ctx, fmt.Errorf(errPrepare+": %s", err.Error())
 	}
-	err = Register("kafka", NewKafkaHandler)
+	return ctx, nil
+}
+
+func (q *Queue) Initiate(ctx context.Context) (context.Context, error) {
+	err := Register("kafka", NewKafkaHandler)
 	if err != nil {
 		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), q.Provider))
 	}

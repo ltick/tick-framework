@@ -32,6 +32,7 @@ var (
 )
 
 type ComponentInterface interface {
+	Prepare(ctx context.Context) (context.Context, error)
 	Initiate(ctx context.Context) (context.Context, error)
 	OnStartup(ctx context.Context) (context.Context, error)
 	OnShutdown(ctx context.Context) (context.Context, error)
