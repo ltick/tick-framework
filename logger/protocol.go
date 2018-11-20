@@ -209,9 +209,12 @@ func (l *Logger) Initiate(ctx context.Context) (context.Context, error) {
 					break
 				}
 			}
-			logConfigFileRotate, err := strconv.ParseBool(logConfig.FileRotate)
-			if err != nil {
-				return ctx, errors.Annotatef(err, errInitiate)
+			logConfigFileRotate := false
+			if logConfig.FileRotate == "true" || logConfig.FileRotate == "false" {
+				logConfigFileRotate, err = strconv.ParseBool(logConfig.FileRotate)
+				if err != nil {
+					return ctx, errors.Annotatef(err, errInitiate)
+				}
 			}
 			logConfigFileBackupCount, err := strconv.ParseInt(logConfig.FileBackupCount, 10, 64)
 			if err != nil {
