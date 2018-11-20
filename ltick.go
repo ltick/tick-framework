@@ -223,6 +223,13 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
+	// 注入模块
+	err = e.Registry.InjectComponent()
+	if err != nil {
+		err = errors.Annotatef(err, errNew)
+		e.Log(errors.ErrorStack(err))
+		os.Exit(1)
+	}
 	componentMap := e.Registry.GetComponentMap()
 	for _, name := range e.Registry.GetSortedComponentName() {
 		ci, ok := componentMap[name].Component.(ComponentInterface)
@@ -252,13 +259,6 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 		os.Exit(1)
 	}
 	e.loadConfig(setters...)
-	// 注入模块
-	err = e.Registry.InjectComponent()
-	if err != nil {
-		err = errors.Annotatef(err, errNew)
-		e.Log(errors.ErrorStack(err))
-		os.Exit(1)
-	}
 	for _, component := range e.Registry.GetComponentMap() {
 		e.ConfigureComponentFileConfig(component, e.configer.ConfigFileUsed(), make(map[string]interface{}))
 		// ignore error
