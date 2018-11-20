@@ -131,7 +131,7 @@ func (c *Kvstore) GetConnection(name string) (KvstoreHandler, error) {
 	kvstoreHandler, err := c.handler.GetConnection(name)
 	if err != nil {
 		if ConnectionNotExists(err) {
-			kvstoreHandler, err = c.handler.NewConnection(name, map[string]interface{}{})
+			kvstoreHandler, err = c.NewConnection(name, map[string]interface{}{})
 		}
 		return nil, errors.New(fmt.Sprintf(errGetConnection+": "+err.Error(), name))
 	}

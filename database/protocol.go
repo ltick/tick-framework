@@ -159,7 +159,7 @@ func (d *Database) GetConnection(name string) (DatabaseHandler, error) {
 	databaseHandler, err := d.handler.GetConnection(name)
 	if err != nil {
 		if ConnectionNotExists(err) {
-			databaseHandler, err = d.handler.NewConnection(name, map[string]interface{}{})
+			databaseHandler, err = d.NewConnection(name, map[string]interface{}{})
 		}
 		return nil, errors.New(fmt.Sprintf(errGetConnection+": "+err.Error(), name))
 	}
@@ -280,7 +280,7 @@ func (d *Database) NosqlUse(ctx context.Context, Provider string) error {
 	}
 	return nil
 }
-func (d *Database) NewNosqlConnection(ctx context.Context, name string, config map[string]interface{}) (NosqlDatabaseHandler, error) {
+func (d *Database) NewNosqlConnection(name string, config map[string]interface{}) (NosqlDatabaseHandler, error) {
 	database, err := d.GetNosqlConnection(name)
 	if err == nil {
 		return database, nil
@@ -319,7 +319,7 @@ func (d *Database) GetNosqlConnection(name string) (NosqlDatabaseHandler, error)
 	databaseHandler, err := d.nosqlHandler.GetConnection(name)
 	if err != nil {
 		if ConnectionNotExists(err) {
-			databaseHandler, err = d.nosqlHandler.NewConnection(name, map[string]interface{}{})
+			databaseHandler, err = d.NewNosqlConnection(name, map[string]interface{}{})
 		}
 		return nil, errors.New(fmt.Sprintf(errGetConnection+": "+err.Error(), name))
 	}
