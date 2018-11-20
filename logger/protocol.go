@@ -209,16 +209,19 @@ func (l *Logger) Initiate(ctx context.Context) (context.Context, error) {
 					break
 				}
 			}
-			logConfigFileRotate := false
+			var logConfigFileRotate bool = false
 			if logConfig.FileRotate == "true" || logConfig.FileRotate == "false" {
 				logConfigFileRotate, err = strconv.ParseBool(logConfig.FileRotate)
 				if err != nil {
 					return ctx, errors.Annotatef(err, errInitiate)
 				}
 			}
-			logConfigFileBackupCount, err := strconv.ParseInt(logConfig.FileBackupCount, 10, 64)
-			if err != nil {
-				return ctx, errors.Annotatef(err, errInitiate)
+			var logConfigFileBackupCount int64 = -1
+			if logConfig.FileBackupCount != "" {
+				logConfigFileBackupCount, err = strconv.ParseInt(logConfig.FileBackupCount, 10, 64)
+				if err != nil {
+					return ctx, errors.Annotatef(err, errInitiate)
+				}
 			}
 			switch StringToType(logConfig.Type) {
 			case TypeFile:
