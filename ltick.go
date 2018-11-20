@@ -95,11 +95,13 @@ var defaultConfigs map[string]config.Option = map[string]config.Option{
 	"TMP_PATH":    config.Option{Type: config.String, Default: "/tmp", EnvironmentKey: "TMP_PATH"},
 	"DEBUG":       config.Option{Type: config.String, Default: false},
 
-	"ACCESS_LOG_TYPE":      config.Option{Type: config.String, Default: "console", EnvironmentKey: "ACCESS_LOG_TYPE"},
-	"ACCESS_LOG_FILENAME":  config.Option{Type: config.String, Default: "/tmp/access.log", EnvironmentKey: "ACCESS_LOG_FILENAME"},
-	"ACCESS_LOG_WRITER":    config.Option{Type: config.String, Default: "discard", EnvironmentKey: "ACCESS_LOG_WRITER"},
-	"ACCESS_LOG_MAX_LEVEL": config.Option{Type: config.String, Default: log.LevelInfo, EnvironmentKey: "ACCESS_LOG_MAX_LEVEL"},
-	"ACCESS_LOG_FORMATTER": config.Option{Type: config.String, Default: "raw", EnvironmentKey: "ACCESS_LOG_FORMATTER"},
+	"ACCESS_LOG_TYPE":                    config.Option{Type: config.String, Default: "console", EnvironmentKey: "ACCESS_LOG_TYPE"},
+	"ACCESS_LOG_FILE_NAME":               config.Option{Type: config.String, Default: "/tmp/access.log", EnvironmentKey: "ACCESS_LOG_FILE_NAME"},
+	"LTICK_ACCESS_LOG_FILE_ROTATE":       config.Option{Type: config.Bool, Default: "true", EnvironmentKey: "LTICK_ACCESS_LOG_FILE_ROTATE"},
+	"LTICK_ACCESS_LOG_FILE_BACKUP_COUNT": config.Option{Type: config.Int, Default: "-1", EnvironmentKey: "LTICK_ACCESS_LOG_FILE_BACKUP_COUNT"},
+	"ACCESS_LOG_WRITER":                  config.Option{Type: config.String, Default: "discard", EnvironmentKey: "ACCESS_LOG_WRITER"},
+	"ACCESS_LOG_MAX_LEVEL":               config.Option{Type: config.String, Default: log.LevelInfo, EnvironmentKey: "ACCESS_LOG_MAX_LEVEL"},
+	"ACCESS_LOG_FORMATTER":               config.Option{Type: config.String, Default: "raw", EnvironmentKey: "ACCESS_LOG_FORMATTER"},
 
 	"DEBUG_LOG_TYPE":      config.Option{Type: config.String, Default: "console", EnvironmentKey: "DEBUG_LOG_TYPE"},
 	"DEBUG_LOG_FILENAME":  config.Option{Type: config.String, Default: "/tmp/debug.log", EnvironmentKey: "DEBUG_LOG_FILENAME"},

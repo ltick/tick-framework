@@ -279,7 +279,7 @@ func (l *Logger) Initiate(ctx context.Context) (context.Context, error) {
 "` + lg.Name + `":{
 	"type": "` + logConfigProviderName + `",
 	"FileName":"` + logFileName + `",
-	"Rotate": ` + logFileRotate + `,,
+	"Rotate": ` + logFileRotate + `,
 	"BackupCount": ` + strconv.FormatInt(lg.FileBackupCount, 10) + `,
 	"MaxBytes":` + strconv.Itoa(1<<22) + `
 }`
