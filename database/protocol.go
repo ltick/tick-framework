@@ -26,6 +26,7 @@ func NewDatabase() *Database {
 
 type Database struct {
 	Config        *config.Config `inject:"true"`
+	configs       map[string]interface{}
 	provider      string
 	handler       Handler
 	nosqlProvider string
@@ -68,6 +69,40 @@ func (d *Database) Initiate(ctx context.Context) (context.Context, error) {
 	err = d.NosqlUse(ctx, "hbase")
 	if err != nil {
 		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.nosqlProvider))
+	}
+	d.configs = make(map[string]interface{})
+	if _, ok := d.configs["DATABASE_MYSQL_HOST"]; !ok {
+		d.configs["DATABASE_MYSQL_HOST"] = d.Config.GetString("DATABASE_MYSQL_HOST")
+	}
+	if _, ok := d.configs["DATABASE_MYSQL_PORT"]; !ok {
+		d.configs["DATABASE_MYSQL_PORT"] = d.Config.GetString("DATABASE_MYSQL_PORT")
+	}
+	if _, ok := d.configs["DATABASE_MYSQL_USER"]; !ok {
+		d.configs["DATABASE_MYSQL_USER"] = d.Config.GetString("DATABASE_MYSQL_USER")
+	}
+	if _, ok := d.configs["DATABASE_MYSQL_PASSWORD"]; !ok {
+		d.configs["DATABASE_MYSQL_PASSWORD"] = d.Config.GetString("DATABASE_MYSQL_PASSWORD")
+	}
+	if _, ok := d.configs["DATABASE_MYSQL_DATABASE"]; !ok {
+		d.configs["DATABASE_MYSQL_DATABASE"] = d.Config.GetString("DATABASE_MYSQL_DATABASE")
+	}
+	if _, ok := d.configs["DATABASE_MYSQL_TIMEZONE"]; !ok {
+		d.configs["DATABASE_MYSQL_TIMEZONE"] = d.Config.GetString("DATABASE_MYSQL_TIMEZONE")
+	}
+	if _, ok := d.configs["DATABASE_MYSQL_TIMEOUT"]; !ok {
+		d.configs["DATABASE_MYSQL_TIMEOUT"] = d.Config.GetString("DATABASE_MYSQL_TIMEOUT")
+	}
+	if _, ok := d.configs["DATABASE_MYSQL_WRITE_TIMEOUT"]; !ok {
+		d.configs["DATABASE_MYSQL_WRITE_TIMEOUT"] = d.Config.GetString("DATABASE_MYSQL_WRITE_TIMEOUT")
+	}
+	if _, ok := d.configs["DATABASE_MYSQL_READ_TIMEOUT"]; !ok {
+		d.configs["DATABASE_MYSQL_READ_TIMEOUT"] = d.Config.GetString("DATABASE_MYSQL_READ_TIMEOUT")
+	}
+	if _, ok := d.configs["DATABASE_MYSQL_MAX_OPEN_CONNS"]; !ok {
+		d.configs["DATABASE_MYSQL_MAX_OPEN_CONNS"] = d.Config.GetInt("DATABASE_MYSQL_MAX_OPEN_CONNS")
+	}
+	if _, ok := d.configs["DATABASE_MYSQL_MAX_IDLE_CONNS"]; !ok {
+		d.configs["DATABASE_MYSQL_MAX_IDLE_CONNS"] = d.Config.GetInt("DATABASE_MYSQL_MAX_IDLE_CONNS")
 	}
 	return ctx, nil
 }
@@ -113,40 +148,7 @@ func (d *Database) NewConnection(name string, config map[string]interface{}) (Da
 	if err == nil {
 		return databaseHandler, nil
 	}
-	if _, ok := config["DATABASE_MYSQL_HOST"]; !ok {
-		config["DATABASE_MYSQL_HOST"] = d.Config.GetString("DATABASE_MYSQL_HOST")
-	}
-	if _, ok := config["DATABASE_MYSQL_PORT"]; !ok {
-		config["DATABASE_MYSQL_PORT"] = d.Config.GetString("DATABASE_MYSQL_PORT")
-	}
-	if _, ok := config["DATABASE_MYSQL_USER"]; !ok {
-		config["DATABASE_MYSQL_USER"] = d.Config.GetString("DATABASE_MYSQL_USER")
-	}
-	if _, ok := config["DATABASE_MYSQL_PASSWORD"]; !ok {
-		config["DATABASE_MYSQL_PASSWORD"] = d.Config.GetString("DATABASE_MYSQL_PASSWORD")
-	}
-	if _, ok := config["DATABASE_MYSQL_DATABASE"]; !ok {
-		config["DATABASE_MYSQL_DATABASE"] = d.Config.GetString("DATABASE_MYSQL_DATABASE")
-	}
-	if _, ok := config["DATABASE_MYSQL_TIMEZONE"]; !ok {
-		config["DATABASE_MYSQL_TIMEZONE"] = d.Config.GetString("DATABASE_MYSQL_TIMEZONE")
-	}
-	if _, ok := config["DATABASE_MYSQL_TIMEOUT"]; !ok {
-		config["DATABASE_MYSQL_TIMEOUT"] = d.Config.GetString("DATABASE_MYSQL_TIMEOUT")
-	}
-	if _, ok := config["DATABASE_MYSQL_WRITE_TIMEOUT"]; !ok {
-		config["DATABASE_MYSQL_WRITE_TIMEOUT"] = d.Config.GetString("DATABASE_MYSQL_WRITE_TIMEOUT")
-	}
-	if _, ok := config["DATABASE_MYSQL_READ_TIMEOUT"]; !ok {
-		config["DATABASE_MYSQL_READ_TIMEOUT"] = d.Config.GetString("DATABASE_MYSQL_READ_TIMEOUT")
-	}
-	if _, ok := config["DATABASE_MYSQL_MAX_OPEN_CONNS"]; !ok {
-		config["DATABASE_MYSQL_MAX_OPEN_CONNS"] = d.Config.GetInt("DATABASE_MYSQL_MAX_OPEN_CONNS")
-	}
-	if _, ok := config["DATABASE_MYSQL_MAX_IDLE_CONNS"]; !ok {
-		config["DATABASE_MYSQL_MAX_IDLE_CONNS"] = d.Config.GetInt("DATABASE_MYSQL_MAX_IDLE_CONNS")
-	}
-	databaseHandler, err = d.handler.NewConnection(name, config)
+	databaseHandler, err = d.handler.NewConnection(name, d.configs)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf(errNewConnection+": "+err.Error(), name))
 	}
@@ -159,7 +161,7 @@ func (d *Database) GetConnection(name string) (DatabaseHandler, error) {
 	databaseHandler, err := d.handler.GetConnection(name)
 	if err != nil {
 		if ConnectionNotExists(err) {
-			databaseHandler, err = d.NewConnection(name, map[string]interface{}{})
+			databaseHandler, err = d.handler.NewConnection(name, d.configs)
 		}
 		return nil, errors.New(fmt.Sprintf(errGetConnection+": "+err.Error(), name))
 	}
@@ -319,7 +321,7 @@ func (d *Database) GetNosqlConnection(name string) (NosqlDatabaseHandler, error)
 	databaseHandler, err := d.nosqlHandler.GetConnection(name)
 	if err != nil {
 		if ConnectionNotExists(err) {
-			databaseHandler, err = d.NewNosqlConnection(name, map[string]interface{}{})
+			databaseHandler, err = d.nosqlHandler.NewConnection(name, d.configs)
 		}
 		return nil, errors.New(fmt.Sprintf(errGetConnection+": "+err.Error(), name))
 	}
@@ -373,5 +375,5 @@ func NosqlUse(name string) (nosqlDatabaseHandler, error) {
 }
 
 func ConnectionNotExists(err error) bool {
-	return strings.Contains(err.Error(), errMysqlConnectionNotExists)
+	return strings.Contains(err.Error(), "connection not exists")
 }

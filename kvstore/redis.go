@@ -13,7 +13,7 @@ import (
 
 var (
 	errRedisNewConnection         = "kvstore(redis): new connection error"
-	errRedisConnectionNotExists   = "kvstore(redis): connection '%s' not exists"
+	errRedisConnectionNotExists   = "kvstore(redis): '%s' connection not exists"
 	errRedisZscanCursorTypeError  = "kvstore(redis): zscan cursor type error"
 	errRedisZscanValueTypeError   = "kvstore(redis): zscan value type error"
 	errRedisZscanValueLengthError = "kvstore(redis): zscan value length error"

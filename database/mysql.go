@@ -14,7 +14,7 @@ import (
 var (
 	errMysqlInitiate            = "database(mysql): initiate error"
 	errMysqlNewConnection       = "database(mysql): new connection error"
-	errMysqlConnectionNotExists = "database(mysql): connection '%s' not exists"
+	errMysqlConnectionNotExists = "database(mysql): '%s' connection not exists"
 )
 
 type MysqlHandler struct {

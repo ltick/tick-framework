@@ -24,6 +24,7 @@ func NewKvstore() *Kvstore {
 
 type Kvstore struct {
 	Config   *config.Config `inject:"true"`
+	configs map[string]interface{}
 	Provider string
 	handler  Handler
 }
@@ -50,6 +51,28 @@ func (c *Kvstore) Initiate(ctx context.Context) (context.Context, error) {
 	err = c.Use(ctx, "redis")
 	if err != nil {
 		return ctx, errors.New(fmt.Sprintf(errInitiate + ": " + err.Error()))
+	}
+	c.configs = make(map[string]interface{})
+	if _, ok := c.configs["KVSTORE_REDIS_HOST"]; !ok {
+		c.configs["KVSTORE_REDIS_HOST"] = c.Config.GetString("KVSTORE_REDIS_HOST")
+	}
+	if _, ok := c.configs["KVSTORE_REDIS_PORT"]; !ok {
+		c.configs["KVSTORE_REDIS_PORT"] = c.Config.GetString("KVSTORE_REDIS_PORT")
+	}
+	if _, ok := c.configs["KVSTORE_REDIS_PASSWORD"]; !ok {
+		c.configs["KVSTORE_REDIS_PASSWORD"] = c.Config.GetString("KVSTORE_REDIS_PASSWORD")
+	}
+	if _, ok := c.configs["KVSTORE_REDIS_DATABASE"]; !ok {
+		c.configs["KVSTORE_REDIS_DATABASE"] = c.Config.GetInt("KVSTORE_REDIS_DATABASE")
+	}
+	if _, ok := c.configs["KVSTORE_REDIS_KEY_PREFIX"]; !ok {
+		c.configs["KVSTORE_REDIS_KEY_PREFIX"] = c.Config.GetString("KVSTORE_REDIS_KEY_PREFIX")
+	}
+	if _, ok := c.configs["KVSTORE_REDIS_MAX_ACTIVE"]; !ok {
+		c.configs["KVSTORE_REDIS_MAX_ACTIVE"] = c.Config.GetInt("KVSTORE_REDIS_MAX_ACTIVE")
+	}
+	if _, ok := c.configs["KVSTORE_REDIS_MAX_IDLE"]; !ok {
+		c.configs["KVSTORE_REDIS_MAX_IDLE"] = c.Config.GetInt("KVSTORE_REDIS_MAX_IDLE")
 	}
 	return ctx, nil
 }
@@ -97,28 +120,7 @@ func (c *Kvstore) NewConnection(name string, config map[string]interface{}) (Kvs
 	if err == nil {
 		return kvstoreHandler, nil
 	}
-	if _, ok := config["KVSTORE_REDIS_HOST"]; !ok {
-		config["KVSTORE_REDIS_HOST"] = c.Config.GetString("KVSTORE_REDIS_HOST")
-	}
-	if _, ok := config["KVSTORE_REDIS_PORT"]; !ok {
-		config["KVSTORE_REDIS_PORT"] = c.Config.GetString("KVSTORE_REDIS_PORT")
-	}
-	if _, ok := config["KVSTORE_REDIS_PASSWORD"]; !ok {
-		config["KVSTORE_REDIS_PASSWORD"] = c.Config.GetString("KVSTORE_REDIS_PASSWORD")
-	}
-	if _, ok := config["KVSTORE_REDIS_DATABASE"]; !ok {
-		config["KVSTORE_REDIS_DATABASE"] = c.Config.GetInt("KVSTORE_REDIS_DATABASE")
-	}
-	if _, ok := config["KVSTORE_REDIS_KEY_PREFIX"]; !ok {
-		config["KVSTORE_REDIS_KEY_PREFIX"] = c.Config.GetString("KVSTORE_REDIS_KEY_PREFIX")
-	}
-	if _, ok := config["KVSTORE_REDIS_MAX_ACTIVE"]; !ok {
-		config["KVSTORE_REDIS_MAX_ACTIVE"] = c.Config.GetInt("KVSTORE_REDIS_MAX_ACTIVE")
-	}
-	if _, ok := config["KVSTORE_REDIS_MAX_IDLE"]; !ok {
-		config["KVSTORE_REDIS_MAX_IDLE"] = c.Config.GetInt("KVSTORE_REDIS_MAX_IDLE")
-	}
-	kvstoreHandler, err = c.handler.NewConnection(name, config)
+	kvstoreHandler, err = c.handler.NewConnection(name, c.configs)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf(errNewConnection+": "+err.Error(), name))
 	}
@@ -131,7 +133,7 @@ func (c *Kvstore) GetConnection(name string) (KvstoreHandler, error) {
 	kvstoreHandler, err := c.handler.GetConnection(name)
 	if err != nil {
 		if ConnectionNotExists(err) {
-			kvstoreHandler, err = c.NewConnection(name, map[string]interface{}{})
+			kvstoreHandler, err = c.handler.NewConnection(name, c.configs)
 		}
 		return nil, errors.New(fmt.Sprintf(errGetConnection+": "+err.Error(), name))
 	}
@@ -198,5 +200,5 @@ func ErrNil(err error) bool {
 }
 
 func ConnectionNotExists(err error) bool {
-	return strings.Contains(err.Error(), errRedisConnectionNotExists)
+	return strings.Contains(err.Error(), "connection not exists")
 }
