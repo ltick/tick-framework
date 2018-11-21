@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	errPrepare      = "kvstore: prepare '%s' error"
+	errPrepare       = "kvstore: prepare '%s' error"
 	errInitiate      = "kvstore: initiate '%s' error"
 	errStartup       = "kvstore: startup '%s' error"
 	errNewConnection = "kvstore: new '%s' kvstore error"
@@ -139,8 +139,12 @@ func (c *Kvstore) GetConnection(name string) (KvstoreHandler, error) {
 	if err != nil {
 		if ConnectionNotExists(err) {
 			kvstoreHandler, err = c.handler.NewConnection(name, c.configs)
+			if err != nil {
+				return nil, errors.New(fmt.Sprintf(errGetConnection+": "+err.Error(), name))
+			}
+		} else {
+			return nil, errors.New(fmt.Sprintf(errGetConnection+": "+err.Error(), name))
 		}
-		return nil, errors.New(fmt.Sprintf(errGetConnection+": "+err.Error(), name))
 	}
 	return kvstoreHandler, err
 }

@@ -39,6 +39,8 @@ const (
 	SizeInBytes
 )
 
+var initiated bool
+
 type Callback func(ctx context.Context, value interface{}) (interface{}, error)
 
 type Option struct {
@@ -65,6 +67,9 @@ func (c *Config) Prepare(ctx context.Context) (context.Context, error) {
 }
 
 func (c *Config) Initiate(ctx context.Context) (context.Context, error) {
+	if initiated {
+		return ctx, nil
+	}
 	if c.options == nil {
 		c.options = make(map[string]Option)
 	}

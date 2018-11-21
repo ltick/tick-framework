@@ -238,11 +238,14 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 			e.Log(errors.ErrorStack(err))
 			os.Exit(1)
 		}
-		e.Context, err = ci.Prepare(e.Context)
-		if err != nil {
-			err = errors.Annotate(err, errNew)
-			e.Log(errors.ErrorStack(err))
-			os.Exit(1)
+		if componentStates[name] == COMPONENT_STATE_INIT {
+			componentStates[name] = COMPONENT_STATE_PREPARED
+			e.Context, err = ci.Prepare(e.Context)
+			if err != nil {
+				err = errors.Annotate(err, errNew)
+				e.Log(errors.ErrorStack(err))
+				os.Exit(1)
+			}
 		}
 	}
 	// configer
@@ -268,18 +271,21 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 		}*/
 	}
 	// 模块初始化
-	for _, name := range e.Registry.GetSortedComponentName() {
-		ci, ok := componentMap[name].Component.(ComponentInterface)
+	for _, c := range e.Registry.GetSortedComponents() {
+		ci, ok := c.Component.(ComponentInterface)
 		if !ok {
 			err = errors.Annotate(errors.Errorf("invalid type"), errNew)
 			e.Log(errors.ErrorStack(err))
 			os.Exit(1)
 		}
-		e.Context, err = ci.Initiate(e.Context)
-		if err != nil {
-			err = errors.Annotate(err, errNew)
-			e.Log(errors.ErrorStack(err))
-			os.Exit(1)
+		if componentStates[c.Name] == COMPONENT_STATE_PREPARED {
+			componentStates[c.Name] = COMPONENT_STATE_INITIATED
+			e.Context, err = ci.Initiate(e.Context)
+			if err != nil {
+				err = errors.Annotate(err, errNew)
+				e.Log(errors.ErrorStack(err))
+				os.Exit(1)
+			}
 		}
 	}
 	return e
@@ -612,9 +618,12 @@ func (e *Engine) Startup() (err error) {
 		if !ok {
 			return errors.Annotatef(errors.Errorf("invalid type"), errStartupComponentInitiate, sortedComponenetName[index])
 		}
-		e.Context, err = ci.Initiate(e.Context)
-		if err != nil {
-			return errors.Annotatef(err, errStartupComponentInitiate, sortedComponenetName[index])
+		if componentStates[c.Name] == COMPONENT_STATE_PREPARED {
+			componentStates[c.Name] = COMPONENT_STATE_INITIATED
+			e.Context, err = ci.Initiate(e.Context)
+			if err != nil {
+				return errors.Annotatef(err, errStartupComponentInitiate, sortedComponenetName[index])
+			}
 		}
 	}
 	// 模块启动
@@ -623,9 +632,12 @@ func (e *Engine) Startup() (err error) {
 		if !ok {
 			return errors.Annotatef(errors.Errorf("invalid type"), errStartupComponentStartup, sortedComponenetName[index])
 		}
-		e.Context, err = ci.OnStartup(e.Context)
-		if err != nil {
-			return errors.Annotatef(err, errStartupComponentStartup, sortedComponenetName[index])
+		if componentStates[c.Name] == COMPONENT_STATE_INITIATED {
+			componentStates[c.Name] = COMPONENT_STATE_STARTUP
+			e.Context, err = ci.OnStartup(e.Context)
+			if err != nil {
+				return errors.Annotatef(err, errStartupComponentStartup, sortedComponenetName[index])
+			}
 		}
 	}
 	// 注入模块
@@ -648,9 +660,12 @@ func (e *Engine) Shutdown() (err error) {
 		if !ok {
 			return errors.Annotatef(errors.Errorf("invalid type"), errShutdownComponentShutdown, sortedComponenetName[index])
 		}
-		e.Context, err = component.OnShutdown(e.Context)
-		if err != nil {
-			return errors.Annotatef(err, errShutdownComponentShutdown, sortedComponenetName[index])
+		if componentStates[c.Name] == COMPONENT_STATE_STARTUP {
+			componentStates[c.Name] = COMPONENT_STATE_SHUTDOWN
+			e.Context, err = component.OnShutdown(e.Context)
+			if err != nil {
+				return errors.Annotatef(err, errShutdownComponentShutdown, sortedComponenetName[index])
+			}
 		}
 	}
 	if e.EngineOptions.callback != nil {

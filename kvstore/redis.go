@@ -33,7 +33,7 @@ func (this *RedisHandler) Initiate(ctx context.Context) error {
 }
 
 func (this *RedisHandler) NewConnection(name string, config map[string]interface{}) (KvstoreHandler, error) {
-	pool := &RedisPool{}
+	pool := &RedisPool{Pool: &redis.Pool{}}
 	configHost := config["KVSTORE_REDIS_HOST"]
 	if configHost != nil {
 		host, ok := configHost.(string)
