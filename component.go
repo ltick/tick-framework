@@ -7,7 +7,6 @@ import (
 
 	"github.com/fatih/structs"
 	"github.com/juju/errors"
-	"github.com/ltick/tick-framework/config"
 	"github.com/ltick/tick-framework/database"
 	"github.com/ltick/tick-framework/filesystem"
 	"github.com/ltick/tick-framework/kvstore"
@@ -295,32 +294,6 @@ func (r *Registry) InjectComponentTo(injectTargets []interface{}) error {
 					if err != nil {
 						return errors.Annotatef(err, errInjectComponentTo, injectTargetValue.String(), f.Name())
 					}
-				}
-			}
-		}
-	}
-	return nil
-}
-
-func (r *Registry) ConfigureComponentFileConfig(name string, configFile string, configProviders map[string]interface{}, configTag ...string) (err error) {
-	canonicalComponentName := canonicalName(name)
-	configComponent, err := r.GetComponentByName("Config")
-	if err != nil {
-		return errors.Annotatef(err, errConfigureComponentFileConfig, canonicalComponentName)
-	}
-	configer, ok := configComponent.Component.(*config.Config)
-	if !ok {
-		return errors.Annotatef(errors.Errorf("invalid 'Config' component type"), errConfigureComponentFileConfig, canonicalComponentName)
-	}
-	// configer
-	for componentName, component := range r.ComponentMap {
-		canonicalExistsComponentName := canonicalName(componentName)
-		if canonicalComponentName == canonicalExistsComponentName {
-			if len(configTag) > 0 {
-				// create a Config object
-				err = configer.ConfigureFileConfig(component.Component, configFile, configProviders, configTag...)
-				if err != nil {
-					return errors.Annotatef(err, errConfigureComponentFileConfig, canonicalComponentName)
 				}
 			}
 		}

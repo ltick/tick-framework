@@ -179,9 +179,6 @@ func (suite *TestSuite) TestUseComponent() {
 		err = r.RegisterComponent(c, true)
 		assert.Nil(suite.T(), err, errors.ErrorStack(err))
 	}
-	configComponent, err := r.GetComponentByName("Config")
-	assert.Nil(suite.T(), err, errors.ErrorStack(err))
-	assert.NotNil(suite.T(), configComponent)
 	err = r.UseComponent("log", "Database", "Kvstore", "queue")
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))
 	logComponent, err := r.GetComponentByName("log")
@@ -227,8 +224,6 @@ func (suite *TestSuite) TestComponentConfig() {
 	component, ok := testComponent.Component.(*testComponent1)
 	assert.Equal(suite.T(), true, ok)
 	assert.Equal(suite.T(), "Bar", component.Foo)
-	err = r.ConfigureComponentFileConfig("testComponent1", suite.configFile, nil, "components.TestComponent1")
-	assert.Nil(suite.T(), err, errors.ErrorStack(err))
 	err = r.UnregisterComponent("TestComponent2")
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))
 }
