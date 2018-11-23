@@ -111,7 +111,7 @@ func (r *Registry) UseComponent(componentNames ...string) error {
 
 // Register As Component
 func (r *Registry) RegisterComponent(component *Component, ignoreIfExistses ...bool) error {
-	if _, ok := r.ComponentStates[component.Name]; !ok  {
+	if _, ok := r.ComponentStates[component.Name]; !ok {
 		r.ComponentStates[component.Name] = COMPONENT_STATE_INIT
 	}
 	canonicalName := canonicalName(component.Name)
@@ -301,7 +301,6 @@ func (r *Registry) InjectComponentTo(injectTargets []interface{}) error {
 	}
 	return nil
 }
-
 
 func (r *Registry) ConfigureComponentFileConfig(name string, configFile string, configProviders map[string]interface{}, configTag ...string) (err error) {
 	canonicalComponentName := canonicalName(name)

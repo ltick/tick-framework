@@ -223,14 +223,7 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
-	// 注入模块
-	err = e.Registry.InjectComponent()
-	if err != nil {
-		err = errors.Annotatef(err, errNew)
-		e.Log(errors.ErrorStack(err))
-		os.Exit(1)
-	}
-	// 注册内置模块
+	// 注册内置 Config 模块
 	err = e.Registry.RegisterComponent(&Component{
 		Name:      "Config",
 		Component: &config.Config{},
@@ -240,13 +233,8 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
-	configComponent, err := registry.GetComponentByName("Config")
-	if err != nil {
-		err = errors.Annotate(err, errNew)
-		e.Log(errors.ErrorStack(err))
-		os.Exit(1)
-	}
-	// 模块初始化
+	configComponent, err := e.Registry.GetComponentByName("Config")
+	// Config 模块初始化
 	ci, ok := configComponent.Component.(ComponentInterface)
 	if !ok {
 		err = errors.Annotate(errors.Errorf("invalid type"), errNew)
@@ -271,7 +259,38 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 			os.Exit(1)
 		}
 	}
+	// 注入模块
+	err = e.Registry.InjectComponent()
+	if err != nil {
+		err = errors.Annotatef(err, errNew)
+		e.Log(errors.ErrorStack(err))
+		os.Exit(1)
+	}
+	componentMap := e.Registry.GetComponentMap()
+	for _, name := range e.Registry.GetSortedComponentName() {
+		ci, ok := componentMap[name].Component.(ComponentInterface)
+		if !ok {
+			err = errors.Annotate(errors.Errorf("invalid type"), errNew)
+			e.Log(errors.ErrorStack(err))
+			os.Exit(1)
+		}
+		if e.Registry.ComponentStates[name] == COMPONENT_STATE_INIT {
+			e.Registry.ComponentStates[name] = COMPONENT_STATE_PREPARED
+			e.Context, err = ci.Prepare(e.Context)
+			if err != nil {
+				err = errors.Annotate(err, errNew)
+				e.Log(errors.ErrorStack(err))
+				os.Exit(1)
+			}
+		}
+	}
 	// configer
+	configComponent, err = e.Registry.GetComponentByName("Config")
+	if err != nil {
+		err = errors.Annotate(err, errNew)
+		e.Log(errors.ErrorStack(err))
+		os.Exit(1)
+	}
 	e.configer, ok = configComponent.Component.(*config.Config)
 	if !ok {
 		err = errors.Annotate(errors.New("ltick: invalid 'Config' type"), errNew)
@@ -288,22 +307,12 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 		}*/
 	}
 	// 模块初始化
-	sortedComponents := e.Registry.GetSortedComponents()
-	for _, c := range sortedComponents {
+	for _, c := range e.Registry.GetSortedComponents() {
 		ci, ok := c.Component.(ComponentInterface)
 		if !ok {
 			err = errors.Annotate(errors.Errorf("invalid type"), errNew)
 			e.Log(errors.ErrorStack(err))
 			os.Exit(1)
-		}
-		if e.Registry.ComponentStates[c.Name] == COMPONENT_STATE_INIT {
-			e.Registry.ComponentStates[c.Name] = COMPONENT_STATE_PREPARED
-			e.Context, err = ci.Prepare(e.Context)
-			if err != nil {
-				err = errors.Annotate(err, errNew)
-				e.Log(errors.ErrorStack(err))
-				os.Exit(1)
-			}
 		}
 		if e.Registry.ComponentStates[c.Name] == COMPONENT_STATE_PREPARED {
 			e.Registry.ComponentStates[c.Name] = COMPONENT_STATE_INITIATED
@@ -682,8 +691,7 @@ func (e *Engine) Shutdown() (err error) {
 	}
 	e.Log("ltick: Shutdown")
 	sortedComponenetName := e.Registry.GetSortedComponentName()
-	sortedComponents := e.Registry.GetSortedComponents()
-	for index, c := range sortedComponents {
+	for index, c := range e.Registry.GetSortedComponents() {
 		component, ok := c.Component.(ComponentInterface)
 		if !ok {
 			return errors.Annotatef(errors.Errorf("invalid type"), errShutdownComponentShutdown, sortedComponenetName[index])
@@ -696,7 +704,6 @@ func (e *Engine) Shutdown() (err error) {
 			}
 		}
 	}
-
 	if e.EngineOptions.callback != nil {
 		err = e.EngineOptions.callback.OnShutdown(e)
 		if err != nil {
