@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/juju/errors"
-	"github.com/ltick/tick-framework/config"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -205,7 +204,6 @@ func (suite *TestSuite) TestComponentConfig() {
 		&Component{Name: "TestComponent2", Component: &testComponent2{}},
 		&Component{Name: "TestComponent3", Component: &testComponent3{}},
 	}
-	var options map[string]config.Option = make(map[string]config.Option, 0)
 	r, err := NewRegistry()
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))
 	err = r.RegisterValue("Foo", "Bar")
@@ -216,13 +214,6 @@ func (suite *TestSuite) TestComponentConfig() {
 		err = r.RegisterComponent(c, true)
 		assert.Nil(suite.T(), err, errors.ErrorStack(err))
 	}
-	configComponent, err := r.GetComponentByName("Config")
-	assert.Nil(suite.T(), err, errors.ErrorStack(err))
-	assert.NotNil(suite.T(), configComponent)
-	configer, ok := configComponent.Component.(*config.Config)
-	assert.True(suite.T(), ok)
-	err = configer.SetOptions(options)
-	assert.Nil(suite.T(), err, errors.ErrorStack(err))
 	err = r.RegisterComponent(&Component{
 		Name: "TestComponent1",
 		Component: &testComponent1{},

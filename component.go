@@ -41,8 +41,6 @@ const (
 	COMPONENT_STATE_SHUTDOWN
 )
 
-var componentStates map[string]ComponentState = make(map[string]ComponentState)
-
 type ComponentInterface interface {
 	Prepare(ctx context.Context) (context.Context, error)
 	Initiate(ctx context.Context) (context.Context, error)
@@ -113,8 +111,8 @@ func (r *Registry) UseComponent(componentNames ...string) error {
 
 // Register As Component
 func (r *Registry) RegisterComponent(component *Component, ignoreIfExistses ...bool) error {
-	if _, ok := componentStates[component.Name]; !ok  {
-		componentStates[component.Name] = COMPONENT_STATE_INIT
+	if _, ok := r.ComponentStates[component.Name]; !ok  {
+		r.ComponentStates[component.Name] = COMPONENT_STATE_INIT
 	}
 	canonicalName := canonicalName(component.Name)
 	ignoreIfExists := false

@@ -65,9 +65,6 @@ func (c *Config) Prepare(ctx context.Context) (context.Context, error) {
 }
 
 func (c *Config) Initiate(ctx context.Context) (context.Context, error) {
-	if c.options == nil {
-		c.options = make(map[string]Option)
-	}
 	err := Register("viper", NewViperHandler)
 	if err != nil {
 		return ctx, errors.Annotatef(err, errInitiate, c.Provider)
@@ -111,6 +108,9 @@ func (c *Config) SetEnvPrefix(in string) {
 }
 func (c *Config) SetOptions(options map[string]Option) error {
 	if options != nil {
+		if c.options == nil {
+			c.options = make(map[string]Option)
+		}
 		keys := make([]string, 0)
 		for key, option := range options {
 			if key != "" {

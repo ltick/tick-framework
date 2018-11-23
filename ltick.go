@@ -230,31 +230,48 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
-	componentMap := e.Registry.GetComponentMap()
-	for _, name := range e.Registry.GetSortedComponentName() {
-		ci, ok := componentMap[name].Component.(ComponentInterface)
-		if !ok {
-			err = errors.Annotate(errors.Errorf("invalid type"), errNew)
-			e.Log(errors.ErrorStack(err))
-			os.Exit(1)
-		}
-		if componentStates[name] == COMPONENT_STATE_INIT {
-			componentStates[name] = COMPONENT_STATE_PREPARED
-			e.Context, err = ci.Prepare(e.Context)
-			if err != nil {
-				err = errors.Annotate(err, errNew)
-				e.Log(errors.ErrorStack(err))
-				os.Exit(1)
-			}
-		}
+	// 注册内置模块
+	err = e.Registry.RegisterComponent(&Component{
+		Name:      "Config",
+		Component: &config.Config{},
+	}, true)
+	if err != nil {
+		err = errors.Annotate(err, errNew)
+		e.Log(errors.ErrorStack(err))
+		os.Exit(1)
 	}
-	// configer
 	configComponent, err := registry.GetComponentByName("Config")
 	if err != nil {
 		err = errors.Annotate(err, errNew)
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
+	// 模块初始化
+	ci, ok := configComponent.Component.(ComponentInterface)
+	if !ok {
+		err = errors.Annotate(errors.Errorf("invalid type"), errNew)
+		e.Log(errors.ErrorStack(err))
+		os.Exit(1)
+	}
+	if e.Registry.ComponentStates[configComponent.Name] == COMPONENT_STATE_INIT {
+		e.Registry.ComponentStates[configComponent.Name] = COMPONENT_STATE_PREPARED
+		e.Context, err = ci.Prepare(e.Context)
+		if err != nil {
+			err = errors.Annotate(err, errNew)
+			e.Log(errors.ErrorStack(err))
+			os.Exit(1)
+		}
+	}
+	if e.Registry.ComponentStates[configComponent.Name] == COMPONENT_STATE_PREPARED {
+		e.Registry.ComponentStates[configComponent.Name] = COMPONENT_STATE_INITIATED
+		e.Context, err = ci.Initiate(e.Context)
+		if err != nil {
+			err = errors.Annotate(err, errNew)
+			e.Log(errors.ErrorStack(err))
+			os.Exit(1)
+		}
+	}
+	// configer
 	e.configer, ok = configComponent.Component.(*config.Config)
 	if !ok {
 		err = errors.Annotate(errors.New("ltick: invalid 'Config' type"), errNew)
@@ -271,15 +288,25 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 		}*/
 	}
 	// 模块初始化
-	for _, c := range e.Registry.GetSortedComponents() {
+	sortedComponents := e.Registry.GetSortedComponents()
+	for _, c := range sortedComponents {
 		ci, ok := c.Component.(ComponentInterface)
 		if !ok {
 			err = errors.Annotate(errors.Errorf("invalid type"), errNew)
 			e.Log(errors.ErrorStack(err))
 			os.Exit(1)
 		}
-		if componentStates[c.Name] == COMPONENT_STATE_PREPARED {
-			componentStates[c.Name] = COMPONENT_STATE_INITIATED
+		if e.Registry.ComponentStates[c.Name] == COMPONENT_STATE_INIT {
+			e.Registry.ComponentStates[c.Name] = COMPONENT_STATE_PREPARED
+			e.Context, err = ci.Prepare(e.Context)
+			if err != nil {
+				err = errors.Annotate(err, errNew)
+				e.Log(errors.ErrorStack(err))
+				os.Exit(1)
+			}
+		}
+		if e.Registry.ComponentStates[c.Name] == COMPONENT_STATE_PREPARED {
+			e.Registry.ComponentStates[c.Name] = COMPONENT_STATE_INITIATED
 			e.Context, err = ci.Initiate(e.Context)
 			if err != nil {
 				err = errors.Annotate(err, errNew)
@@ -439,7 +466,6 @@ func (e *Engine) loadCachedFileConfig(configPath string, cachedConfigFileName st
 		e.Log(errors.ErrorStack(err))
 		return
 	}
-	// configer
 	matches := configPlaceholdRegExp.FindAll(cachedFileByte, -1)
 	for _, match := range matches {
 		replaceKey := string(match)
@@ -612,14 +638,15 @@ func (e *Engine) Startup() (err error) {
 		}
 	}
 	sortedComponenetName := e.Registry.GetSortedComponentName()
+	sortedComponents := e.Registry.GetSortedComponents()
 	// 模块初始化
-	for index, c := range e.Registry.GetSortedComponents() {
+	for index, c := range sortedComponents {
 		ci, ok := c.Component.(ComponentInterface)
 		if !ok {
 			return errors.Annotatef(errors.Errorf("invalid type"), errStartupComponentInitiate, sortedComponenetName[index])
 		}
-		if componentStates[c.Name] == COMPONENT_STATE_PREPARED {
-			componentStates[c.Name] = COMPONENT_STATE_INITIATED
+		if e.Registry.ComponentStates[c.Name] == COMPONENT_STATE_PREPARED {
+			e.Registry.ComponentStates[c.Name] = COMPONENT_STATE_INITIATED
 			e.Context, err = ci.Initiate(e.Context)
 			if err != nil {
 				return errors.Annotatef(err, errStartupComponentInitiate, sortedComponenetName[index])
@@ -627,13 +654,13 @@ func (e *Engine) Startup() (err error) {
 		}
 	}
 	// 模块启动
-	for index, c := range e.Registry.GetSortedComponents() {
+	for index, c := range sortedComponents {
 		ci, ok := c.Component.(ComponentInterface)
 		if !ok {
 			return errors.Annotatef(errors.Errorf("invalid type"), errStartupComponentStartup, sortedComponenetName[index])
 		}
-		if componentStates[c.Name] == COMPONENT_STATE_INITIATED {
-			componentStates[c.Name] = COMPONENT_STATE_STARTUP
+		if e.Registry.ComponentStates[c.Name] == COMPONENT_STATE_INITIATED {
+			e.Registry.ComponentStates[c.Name] = COMPONENT_STATE_STARTUP
 			e.Context, err = ci.OnStartup(e.Context)
 			if err != nil {
 				return errors.Annotatef(err, errStartupComponentStartup, sortedComponenetName[index])
@@ -655,19 +682,21 @@ func (e *Engine) Shutdown() (err error) {
 	}
 	e.Log("ltick: Shutdown")
 	sortedComponenetName := e.Registry.GetSortedComponentName()
-	for index, c := range e.Registry.GetSortedComponents() {
+	sortedComponents := e.Registry.GetSortedComponents()
+	for index, c := range sortedComponents {
 		component, ok := c.Component.(ComponentInterface)
 		if !ok {
 			return errors.Annotatef(errors.Errorf("invalid type"), errShutdownComponentShutdown, sortedComponenetName[index])
 		}
-		if componentStates[c.Name] == COMPONENT_STATE_STARTUP {
-			componentStates[c.Name] = COMPONENT_STATE_SHUTDOWN
+		if e.Registry.ComponentStates[c.Name] == COMPONENT_STATE_STARTUP {
+			e.Registry.ComponentStates[c.Name] = COMPONENT_STATE_SHUTDOWN
 			e.Context, err = component.OnShutdown(e.Context)
 			if err != nil {
 				return errors.Annotatef(err, errShutdownComponentShutdown, sortedComponenetName[index])
 			}
 		}
 	}
+
 	if e.EngineOptions.callback != nil {
 		err = e.EngineOptions.callback.OnShutdown(e)
 		if err != nil {

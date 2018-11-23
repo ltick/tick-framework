@@ -1,10 +1,6 @@
 package ltick
 
 import (
-	"context"
-
-	"github.com/juju/errors"
-	"github.com/ltick/tick-framework/config"
 )
 
 const INJECT_TAG = "inject"
@@ -18,6 +14,7 @@ type (
 		MiddlewareMap        map[string]*Middleware
 		SortedMiddlewareName []string
 		Values               map[string]interface{}
+		ComponentStates map[string]ComponentState
 	}
 )
 
@@ -30,21 +27,7 @@ func NewRegistry() (r *Registry, err error) {
 		MiddlewareMap:        make(map[string]*Middleware),
 		SortedMiddlewareName: make([]string, 0),
 		Values:               make(map[string]interface{}),
-	}
-	// 注册内置模块
-	configer := &config.Config{}
-	err = r.RegisterComponent(&Component{
-		Name:      "Config",
-		Component: configer,
-	}, true)
-	if err != nil {
-		e := errors.Annotate(err, errNew)
-		return nil, e
-	}
-	_, err = configer.Initiate(context.Background())
-	if err != nil {
-		e := errors.Annotate(err, errNew)
-		return nil, e
+		ComponentStates: make(map[string]ComponentState),
 	}
 	return r, nil
 }
