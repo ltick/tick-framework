@@ -44,7 +44,6 @@ type (
 // common errors
 var (
 	errNotStructPtr   = "api: handler must be a structure type or a structure pointer type"
-	errNoParamHandler = "api: handler does not define any parameter tags"
 )
 
 // The default body decoder is json format decoding
@@ -67,9 +66,6 @@ func ToAPIHandler(handler Handler, noDefaultParams bool) (*apiHandler, error) {
 	api, err := NewApi(structPointer, defaultParamNameMapper, bodydecoder, !noDefaultParams)
 	if err != nil {
 		return nil, err
-	}
-	if api.Number() == 0 {
-		return nil, errors.New(errNoParamHandler)
 	}
 
 	// Reduce the creation of unnecessary field paramValues.

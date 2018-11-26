@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	errRedisNewConnection         = "kvstore(redis): new pool error"
-	errRedisPoolNotExists         = "kvstore(redis): pool '%s' not exists"
+	errRedisNewConnection         = "kvstore(redis): new connection error"
+	errRedisConnectionNotExists   = "kvstore(redis): '%s' connection not exists"
 	errRedisZscanCursorTypeError  = "kvstore(redis): zscan cursor type error"
 	errRedisZscanValueTypeError   = "kvstore(redis): zscan value type error"
 	errRedisZscanValueLengthError = "kvstore(redis): zscan value length error"
@@ -32,8 +32,8 @@ func (this *RedisHandler) Initiate(ctx context.Context) error {
 	return nil
 }
 
-func (this *RedisHandler) NewConnection(ctx context.Context, name string, config map[string]interface{}) (KvstoreHandler, error) {
-	pool := &RedisPool{}
+func (this *RedisHandler) NewConnection(name string, config map[string]interface{}) (KvstoreHandler, error) {
+	pool := &RedisPool{Pool: &redis.Pool{}}
 	configHost := config["KVSTORE_REDIS_HOST"]
 	if configHost != nil {
 		host, ok := configHost.(string)
@@ -119,16 +119,16 @@ func (this *RedisHandler) NewConnection(ctx context.Context, name string, config
 		this.pools[name] = pool
 		return pool, nil
 	}
-	return nil,  errors.New(errRedisNewConnection + ": pool.Host is empty")
+	return nil, errors.New(errRedisNewConnection + ": pool.Host is empty")
 }
 
 func (this *RedisHandler) GetConnection(name string) (KvstoreHandler, error) {
 	if this.pools == nil {
-		return nil, errors.New(fmt.Sprintf(errRedisPoolNotExists, name))
+		return nil, errors.New(fmt.Sprintf(errRedisConnectionNotExists, name))
 	}
 	handlerPool, ok := this.pools[name]
 	if !ok {
-		return nil, errors.New(fmt.Sprintf(errRedisPoolNotExists, name))
+		return nil, errors.New(fmt.Sprintf(errRedisConnectionNotExists, name))
 	}
 	return handlerPool, nil
 }

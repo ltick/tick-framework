@@ -7,7 +7,6 @@ import (
 
 	"github.com/fatih/structs"
 	"github.com/juju/errors"
-	"github.com/ltick/tick-framework/config"
 	"github.com/ltick/tick-framework/database"
 	"github.com/ltick/tick-framework/filesystem"
 	"github.com/ltick/tick-framework/kvstore"
@@ -31,7 +30,18 @@ var (
 	errConfigureComponentFileConfig       = "ltick: configure component '%v' file config error"
 )
 
+type ComponentState int8
+
+const (
+	COMPONENT_STATE_INIT ComponentState = iota
+	COMPONENT_STATE_PREPARED
+	COMPONENT_STATE_INITIATED
+	COMPONENT_STATE_STARTUP
+	COMPONENT_STATE_SHUTDOWN
+)
+
 type ComponentInterface interface {
+	Prepare(ctx context.Context) (context.Context, error)
 	Initiate(ctx context.Context) (context.Context, error)
 	OnStartup(ctx context.Context) (context.Context, error)
 	OnShutdown(ctx context.Context) (context.Context, error)
@@ -100,6 +110,9 @@ func (r *Registry) UseComponent(componentNames ...string) error {
 
 // Register As Component
 func (r *Registry) RegisterComponent(component *Component, ignoreIfExistses ...bool) error {
+	if _, ok := r.ComponentStates[component.Name]; !ok {
+		r.ComponentStates[component.Name] = COMPONENT_STATE_INIT
+	}
 	canonicalName := canonicalName(component.Name)
 	ignoreIfExists := false
 	if len(ignoreIfExistses) > 0 {
@@ -281,33 +294,6 @@ func (r *Registry) InjectComponentTo(injectTargets []interface{}) error {
 					if err != nil {
 						return errors.Annotatef(err, errInjectComponentTo, injectTargetValue.String(), f.Name())
 					}
-				}
-			}
-		}
-	}
-	return nil
-}
-
-
-func (r *Registry) ConfigureComponentFileConfig(name string, configFile string, configProviders map[string]interface{}, configTag ...string) (err error) {
-	canonicalComponentName := canonicalName(name)
-	configComponent, err := r.GetComponentByName("Config")
-	if err != nil {
-		return errors.Annotatef(err, errConfigureComponentFileConfig, canonicalComponentName)
-	}
-	configer, ok := configComponent.Component.(*config.Config)
-	if !ok {
-		return errors.Annotatef(errors.Errorf("invalid 'Config' component type"), errConfigureComponentFileConfig, canonicalComponentName)
-	}
-	// configer
-	for componentName, component := range r.ComponentMap {
-		canonicalExistsComponentName := canonicalName(componentName)
-		if canonicalComponentName == canonicalExistsComponentName {
-			if len(configTag) > 0 {
-				// create a Config object
-				err = configer.ConfigureFileConfig(component.Component, configFile, configProviders, configTag...)
-				if err != nil {
-					return errors.Annotatef(err, errConfigureComponentFileConfig, canonicalComponentName)
 				}
 			}
 		}

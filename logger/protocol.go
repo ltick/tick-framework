@@ -189,7 +189,9 @@ type Logger struct {
 	Logs     []*LogConfig
 	handler  Handler
 }
-
+func (l *Logger) Prepare(ctx context.Context) (context.Context, error) {
+	return ctx, nil
+}
 func (l *Logger) Initiate(ctx context.Context) (context.Context, error) {
 	err := Register("tick", NewTickHandler)
 	if err != nil {
@@ -209,13 +211,19 @@ func (l *Logger) Initiate(ctx context.Context) (context.Context, error) {
 					break
 				}
 			}
-			logConfigFileRotate, err := strconv.ParseBool(logConfig.FileRotate)
-			if err != nil {
-				return ctx, errors.Annotatef(err, errInitiate)
+			var logConfigFileRotate bool = false
+			if logConfig.FileRotate == "true" || logConfig.FileRotate == "false" {
+				logConfigFileRotate, err = strconv.ParseBool(logConfig.FileRotate)
+				if err != nil {
+					return ctx, errors.Annotatef(err, errInitiate)
+				}
 			}
-			logConfigFileBackupCount, err := strconv.ParseInt(logConfig.FileBackupCount, 10, 64)
-			if err != nil {
-				return ctx, errors.Annotatef(err, errInitiate)
+			var logConfigFileBackupCount int64 = -1
+			if logConfig.FileBackupCount != "" {
+				logConfigFileBackupCount, err = strconv.ParseInt(logConfig.FileBackupCount, 10, 64)
+				if err != nil {
+					return ctx, errors.Annotatef(err, errInitiate)
+				}
 			}
 			switch StringToType(logConfig.Type) {
 			case TypeFile:
@@ -273,7 +281,7 @@ func (l *Logger) Initiate(ctx context.Context) (context.Context, error) {
 "` + lg.Name + `":{
 	"type": "` + logConfigProviderName + `",
 	"FileName":"` + logFileName + `",
-	"Rotate": ` + logFileRotate + `,,
+	"Rotate": ` + logFileRotate + `,
 	"BackupCount": ` + strconv.FormatInt(lg.FileBackupCount, 10) + `,
 	"MaxBytes":` + strconv.Itoa(1<<22) + `
 }`

@@ -9,11 +9,11 @@ import (
 )
 
 var (
-	errInitiate  string = "filesystem template: initiate '%s' error"
-	errOnStartup string = "filesystem template: onStartup '%s' error"
-
-	errRegister string = "filesystem template: Register template is nil"
-	errUse      string = "filesystem template: unknown template '%s' (forgotten register?)"
+	errPrepare      = "filesystem: prepare '%s' error"
+	errInitiate  string = "filesystem: initiate '%s' error"
+	errOnStartup string = "filesystem: onStartup '%s' error"
+	errRegister string = "filesystem: Register template is nil"
+	errUse      string = "filesystem: unknown template '%s' (forgotten register?)"
 )
 
 var (
@@ -32,18 +32,23 @@ type Filesystem struct {
 	handler  Handler
 }
 
-func (this *Filesystem) Initiate(ctx context.Context) (context.Context, error) {
-	ctx, err := this.Config.Initiate(ctx)
-	if err != nil {
-		return ctx, fmt.Errorf(errInitiate, err.Error())
-	}
+func (c *Filesystem) Prepare(ctx context.Context) (context.Context, error) {
 	var configs map[string]config.Option = map[string]config.Option{
 		"FILESYSTEM_PROVIDER":                config.Option{Type: config.String, Default: defaultProvider, EnvironmentKey: "FILESYSTEM_PROVIDER"},
 		"FILESYSTEM_DEFRAG_CONTENT_INTERVAL": config.Option{Type: config.Duration, Default: 30 * time.Minute, EnvironmentKey: "FILESYSTEM_DEFRAG_CONTENT_INTERVAL"},
 		"FILESYSTEM_DEFRAG_CONTENT_LIFETIME": config.Option{Type: config.Duration, Default: 24 * time.Hour, EnvironmentKey: "FILESYSTEM_DEFRAG_CONTENT_LIFETIME"},
 		"FILESYSTEM_LRU_CAPACITY":            config.Option{Type: config.Int64, Default: 32 * 1024 * 1024, EnvironmentKey: "FILESYSTEM_LRU_CAPACITY"},
 	}
-	if err = this.Config.SetOptions(configs); err != nil {
+	err := c.Config.SetOptions(configs)
+	if err != nil {
+		return ctx, fmt.Errorf(errPrepare+": %s", err.Error())
+	}
+	return ctx, nil
+}
+
+func (this *Filesystem) Initiate(ctx context.Context) (context.Context, error) {
+	ctx, err := this.Config.Initiate(ctx)
+	if err != nil {
 		return ctx, fmt.Errorf(errInitiate, err.Error())
 	}
 	if err = Register(defaultProvider, NewFileHandler); err != nil {

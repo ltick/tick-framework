@@ -84,6 +84,12 @@ func (suite *TestSuite) TestComponentCallback() {
 		err = r.RegisterComponent(c, true)
 		assert.Nil(suite.T(), err)
 	}
+	a := New(r,
+		EngineLogWriter(ioutil.Discard),
+		EngineCallback(&TestCallback{}),
+		EngineConfigFile(suite.configFile),
+		EngineConfigDotenvFile(suite.dotenvFile),
+		EngineConfigEnvPrefix("LTICK"))
 	configComponent, err := r.GetComponentByName("Config")
 	assert.Nil(suite.T(), err)
 	assert.NotNil(suite.T(), configComponent)
@@ -91,12 +97,6 @@ func (suite *TestSuite) TestComponentCallback() {
 	assert.True(suite.T(), ok)
 	err = configer.SetOptions(options)
 	assert.Nil(suite.T(), err)
-	a := New(r,
-		EngineLogWriter(ioutil.Discard),
-		EngineCallback(&TestCallback{}),
-		EngineConfigFile(suite.configFile),
-		EngineConfigDotenvFile(suite.dotenvFile),
-		EngineConfigEnvPrefix("LTICK"))
 	a.SetContextValue("output", "")
 	err = a.Startup()
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))

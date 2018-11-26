@@ -52,7 +52,7 @@ func (m *RedisHandler) Initiate(ctx context.Context, maxAge int64, config map[st
 	if err != nil {
 		return errors.New(errStartup + ": " + err.Error())
 	}
-	m.sessionCacheProvider, err = m.Cache.NewConnection(ctx, "redis", map[string]interface{}{
+	m.sessionCacheProvider, err = m.Cache.NewConnection("redis", map[string]interface{}{
 		"CACHE_REDIS_DATABASE":   config["CACHE_REDIS_DATABASE"],
 		"CACHE_REDIS_KEY_PREFIX": config["CACHE_REDIS_KEY_PREFIX"],
 	})

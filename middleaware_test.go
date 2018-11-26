@@ -39,7 +39,9 @@ type testMiddleware1 struct {
 	Foo    string
 	Foo1   string
 }
-
+func (f *testMiddleware1) Prepare(ctx context.Context) (newCtx context.Context, err error) {
+	return ctx, nil
+}
 func (f *testMiddleware1) Initiate(ctx context.Context) (context.Context, error) {
 	var options map[string]config.Option = map[string]config.Option{}
 	err := f.Config.SetOptions(options)
@@ -76,7 +78,9 @@ type testMiddleware2 struct {
 	Config *config.Config
 	Test   *testMiddleware1 `inject:"true"`
 }
-
+func (f *testMiddleware2) Prepare(ctx context.Context) (newCtx context.Context, err error) {
+	return ctx, nil
+}
 func (f *testMiddleware2) Initiate(ctx context.Context) (newCtx context.Context, err error) {
 	var options map[string]config.Option = map[string]config.Option{}
 	err = f.Config.SetOptions(options)
@@ -108,15 +112,7 @@ func (f *testMiddleware2) OnRequestShutdown(c *routing.Context) error {
 
 func (suite *TestSuite) TestMiddleware() {
 	var values map[string]interface{} = map[string]interface{}{}
-	var options map[string]config.Option = make(map[string]config.Option, 0)
 	r, err := NewRegistry()
-	assert.Nil(suite.T(), err)
-	configComponent, err := r.GetComponentByName("Config")
-	assert.Nil(suite.T(), err)
-	assert.NotNil(suite.T(), configComponent)
-	configer, ok := configComponent.Component.(*config.Config)
-	assert.True(suite.T(), ok)
-	err = configer.SetOptions(options)
 	assert.Nil(suite.T(), err)
 	err = r.RegisterMiddleware(&Middleware{
 		Name:       "testMiddleware1",
@@ -139,7 +135,6 @@ func (suite *TestSuite) TestMiddleware() {
 		EngineConfigDotenvFile(suite.dotenvFile),
 		EngineConfigEnvPrefix("LTICK"))
 	a.SetContextValue("output", "")
-
 	router := NewServerRouter(a.Context, ServerRouterTimeoutHandler(func(c *routing.Context) error {
 		a.Context = context.WithValue(a.Context, "output", "Timeout")
 		return routing.NewHTTPError(http.StatusRequestTimeout)

@@ -18,6 +18,7 @@ var (
 )
 
 type MiddlewareInterface interface {
+	Prepare(ctx context.Context) (context.Context, error)
 	Initiate(ctx context.Context) (context.Context, error)
 	OnRequestStartup(c *routing.Context) error
 	OnRequestShutdown(c *routing.Context) error

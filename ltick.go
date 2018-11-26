@@ -95,11 +95,13 @@ var defaultConfigs map[string]config.Option = map[string]config.Option{
 	"TMP_PATH":    config.Option{Type: config.String, Default: "/tmp", EnvironmentKey: "TMP_PATH"},
 	"DEBUG":       config.Option{Type: config.String, Default: false},
 
-	"ACCESS_LOG_TYPE":      config.Option{Type: config.String, Default: "console", EnvironmentKey: "ACCESS_LOG_TYPE"},
-	"ACCESS_LOG_FILENAME":  config.Option{Type: config.String, Default: "/tmp/access.log", EnvironmentKey: "ACCESS_LOG_FILENAME"},
-	"ACCESS_LOG_WRITER":    config.Option{Type: config.String, Default: "discard", EnvironmentKey: "ACCESS_LOG_WRITER"},
-	"ACCESS_LOG_MAX_LEVEL": config.Option{Type: config.String, Default: log.LevelInfo, EnvironmentKey: "ACCESS_LOG_MAX_LEVEL"},
-	"ACCESS_LOG_FORMATTER": config.Option{Type: config.String, Default: "raw", EnvironmentKey: "ACCESS_LOG_FORMATTER"},
+	"ACCESS_LOG_TYPE":                    config.Option{Type: config.String, Default: "console", EnvironmentKey: "ACCESS_LOG_TYPE"},
+	"ACCESS_LOG_FILE_NAME":               config.Option{Type: config.String, Default: "/tmp/access.log", EnvironmentKey: "ACCESS_LOG_FILE_NAME"},
+	"LTICK_ACCESS_LOG_FILE_ROTATE":       config.Option{Type: config.Bool, Default: "true", EnvironmentKey: "LTICK_ACCESS_LOG_FILE_ROTATE"},
+	"LTICK_ACCESS_LOG_FILE_BACKUP_COUNT": config.Option{Type: config.Int, Default: "-1", EnvironmentKey: "LTICK_ACCESS_LOG_FILE_BACKUP_COUNT"},
+	"ACCESS_LOG_WRITER":                  config.Option{Type: config.String, Default: "discard", EnvironmentKey: "ACCESS_LOG_WRITER"},
+	"ACCESS_LOG_MAX_LEVEL":               config.Option{Type: config.String, Default: log.LevelInfo, EnvironmentKey: "ACCESS_LOG_MAX_LEVEL"},
+	"ACCESS_LOG_FORMATTER":               config.Option{Type: config.String, Default: "raw", EnvironmentKey: "ACCESS_LOG_FORMATTER"},
 
 	"DEBUG_LOG_TYPE":      config.Option{Type: config.String, Default: "console", EnvironmentKey: "DEBUG_LOG_TYPE"},
 	"DEBUG_LOG_FILENAME":  config.Option{Type: config.String, Default: "/tmp/debug.log", EnvironmentKey: "DEBUG_LOG_FILENAME"},
@@ -221,8 +223,69 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
+	// 注册内置 Config 模块
+	err = e.Registry.RegisterComponent(&Component{
+		Name:      "Config",
+		Component: &config.Config{},
+	}, true)
+	if err != nil {
+		err = errors.Annotate(err, errNew)
+		e.Log(errors.ErrorStack(err))
+		os.Exit(1)
+	}
+	configComponent, err := e.Registry.GetComponentByName("Config")
+	// Config 模块初始化
+	ci, ok := configComponent.Component.(ComponentInterface)
+	if !ok {
+		err = errors.Annotate(errors.Errorf("invalid type"), errNew)
+		e.Log(errors.ErrorStack(err))
+		os.Exit(1)
+	}
+	if e.Registry.ComponentStates[configComponent.Name] == COMPONENT_STATE_INIT {
+		e.Registry.ComponentStates[configComponent.Name] = COMPONENT_STATE_PREPARED
+		e.Context, err = ci.Prepare(e.Context)
+		if err != nil {
+			err = errors.Annotate(err, errNew)
+			e.Log(errors.ErrorStack(err))
+			os.Exit(1)
+		}
+	}
+	if e.Registry.ComponentStates[configComponent.Name] == COMPONENT_STATE_PREPARED {
+		e.Registry.ComponentStates[configComponent.Name] = COMPONENT_STATE_INITIATED
+		e.Context, err = ci.Initiate(e.Context)
+		if err != nil {
+			err = errors.Annotate(err, errNew)
+			e.Log(errors.ErrorStack(err))
+			os.Exit(1)
+		}
+	}
+	// 注入模块
+	err = e.Registry.InjectComponent()
+	if err != nil {
+		err = errors.Annotatef(err, errNew)
+		e.Log(errors.ErrorStack(err))
+		os.Exit(1)
+	}
+	componentMap := e.Registry.GetComponentMap()
+	for _, name := range e.Registry.GetSortedComponentName() {
+		ci, ok := componentMap[name].Component.(ComponentInterface)
+		if !ok {
+			err = errors.Annotate(errors.Errorf("invalid type"), errNew)
+			e.Log(errors.ErrorStack(err))
+			os.Exit(1)
+		}
+		if e.Registry.ComponentStates[name] == COMPONENT_STATE_INIT {
+			e.Registry.ComponentStates[name] = COMPONENT_STATE_PREPARED
+			e.Context, err = ci.Prepare(e.Context)
+			if err != nil {
+				err = errors.Annotate(err, errNew)
+				e.Log(errors.ErrorStack(err))
+				os.Exit(1)
+			}
+		}
+	}
 	// configer
-	configComponent, err := registry.GetComponentByName("Config")
+	configComponent, err = e.Registry.GetComponentByName("Config")
 	if err != nil {
 		err = errors.Annotate(err, errNew)
 		e.Log(errors.ErrorStack(err))
@@ -235,13 +298,6 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 		os.Exit(1)
 	}
 	e.loadConfig(setters...)
-	// 注入模块
-	err = e.Registry.InjectComponent()
-	if err != nil {
-		err = errors.Annotatef(err, errNew)
-		e.Log(errors.ErrorStack(err))
-		os.Exit(1)
-	}
 	for _, component := range e.Registry.GetComponentMap() {
 		e.ConfigureComponentFileConfig(component, e.configer.ConfigFileUsed(), make(map[string]interface{}))
 		// ignore error
@@ -251,19 +307,21 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 		}*/
 	}
 	// 模块初始化
-	componentMap := e.Registry.GetComponentMap()
-	for _, name := range e.Registry.GetSortedComponentName() {
-		ci, ok := componentMap[name].Component.(ComponentInterface)
+	for _, c := range e.Registry.GetSortedComponents() {
+		ci, ok := c.Component.(ComponentInterface)
 		if !ok {
 			err = errors.Annotate(errors.Errorf("invalid type"), errNew)
 			e.Log(errors.ErrorStack(err))
 			os.Exit(1)
 		}
-		e.Context, err = ci.Initiate(e.Context)
-		if err != nil {
-			err = errors.Annotate(err, errNew)
-			e.Log(errors.ErrorStack(err))
-			os.Exit(1)
+		if e.Registry.ComponentStates[c.Name] == COMPONENT_STATE_PREPARED {
+			e.Registry.ComponentStates[c.Name] = COMPONENT_STATE_INITIATED
+			e.Context, err = ci.Initiate(e.Context)
+			if err != nil {
+				err = errors.Annotate(err, errNew)
+				e.Log(errors.ErrorStack(err))
+				os.Exit(1)
+			}
 		}
 	}
 	return e
@@ -306,7 +364,6 @@ func (e *Engine) NewDefaultServer(setters ...ServerOption) *Server {
 	setters = append(setters, ServerLogWriter(e.logWriter))
 	server := NewServer(router, setters...)
 	server.AddRouteGroup("/")
-	server.Pprof("*", "debug")
 	return server
 }
 
@@ -418,7 +475,6 @@ func (e *Engine) loadCachedFileConfig(configPath string, cachedConfigFileName st
 		e.Log(errors.ErrorStack(err))
 		return
 	}
-	// configer
 	matches := configPlaceholdRegExp.FindAll(cachedFileByte, -1)
 	for _, match := range matches {
 		replaceKey := string(match)
@@ -591,26 +647,33 @@ func (e *Engine) Startup() (err error) {
 		}
 	}
 	sortedComponenetName := e.Registry.GetSortedComponentName()
+	sortedComponents := e.Registry.GetSortedComponents()
 	// 模块初始化
-	for index, c := range e.Registry.GetSortedComponents() {
+	for index, c := range sortedComponents {
 		ci, ok := c.Component.(ComponentInterface)
 		if !ok {
 			return errors.Annotatef(errors.Errorf("invalid type"), errStartupComponentInitiate, sortedComponenetName[index])
 		}
-		e.Context, err = ci.Initiate(e.Context)
-		if err != nil {
-			return errors.Annotatef(err, errStartupComponentInitiate, sortedComponenetName[index])
+		if e.Registry.ComponentStates[c.Name] == COMPONENT_STATE_PREPARED {
+			e.Registry.ComponentStates[c.Name] = COMPONENT_STATE_INITIATED
+			e.Context, err = ci.Initiate(e.Context)
+			if err != nil {
+				return errors.Annotatef(err, errStartupComponentInitiate, sortedComponenetName[index])
+			}
 		}
 	}
 	// 模块启动
-	for index, c := range e.Registry.GetSortedComponents() {
+	for index, c := range sortedComponents {
 		ci, ok := c.Component.(ComponentInterface)
 		if !ok {
 			return errors.Annotatef(errors.Errorf("invalid type"), errStartupComponentStartup, sortedComponenetName[index])
 		}
-		e.Context, err = ci.OnStartup(e.Context)
-		if err != nil {
-			return errors.Annotatef(err, errStartupComponentStartup, sortedComponenetName[index])
+		if e.Registry.ComponentStates[c.Name] == COMPONENT_STATE_INITIATED {
+			e.Registry.ComponentStates[c.Name] = COMPONENT_STATE_STARTUP
+			e.Context, err = ci.OnStartup(e.Context)
+			if err != nil {
+				return errors.Annotatef(err, errStartupComponentStartup, sortedComponenetName[index])
+			}
 		}
 	}
 	// 注入模块
@@ -633,9 +696,12 @@ func (e *Engine) Shutdown() (err error) {
 		if !ok {
 			return errors.Annotatef(errors.Errorf("invalid type"), errShutdownComponentShutdown, sortedComponenetName[index])
 		}
-		e.Context, err = component.OnShutdown(e.Context)
-		if err != nil {
-			return errors.Annotatef(err, errShutdownComponentShutdown, sortedComponenetName[index])
+		if e.Registry.ComponentStates[c.Name] == COMPONENT_STATE_STARTUP {
+			e.Registry.ComponentStates[c.Name] = COMPONENT_STATE_SHUTDOWN
+			e.Context, err = component.OnShutdown(e.Context)
+			if err != nil {
+				return errors.Annotatef(err, errShutdownComponentShutdown, sortedComponenetName[index])
+			}
 		}
 	}
 	if e.EngineOptions.callback != nil {

@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/juju/errors"
-	"github.com/ltick/tick-framework/config"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -12,7 +11,9 @@ type testComponent1 struct {
 	Foo  string `inject:"true"`
 	Foo1 string `inject:"true"`
 }
-
+func (f *testComponent1) Prepare(ctx context.Context) (newCtx context.Context, err error) {
+	return ctx, nil
+}
 func (f *testComponent1) Initiate(ctx context.Context) (newCtx context.Context, err error) {
 	return ctx, nil
 }
@@ -38,7 +39,9 @@ type testComponent2 struct {
 	TestComponent1 *testComponent1 `inject:"true"`
 	TestComponent3 *testComponent3 `inject:"true"`
 }
-
+func (f *testComponent2) Prepare(ctx context.Context) (newCtx context.Context, err error) {
+	return ctx, nil
+}
 func (this *testComponent2) Initiate(ctx context.Context) (newCtx context.Context, err error) {
 	return ctx, nil
 }
@@ -62,7 +65,9 @@ func (f *testComponent2) OnShutdown(ctx context.Context) (context.Context, error
 type testComponent3 struct {
 	TestComponent1 *testComponent1 `inject:"true"`
 }
-
+func (f *testComponent3) Prepare(ctx context.Context) (newCtx context.Context, err error) {
+	return ctx, nil
+}
 func (this *testComponent3) Initiate(ctx context.Context) (newCtx context.Context, err error) {
 	return ctx, nil
 }
@@ -86,7 +91,9 @@ func (f *testComponent3) OnShutdown(ctx context.Context) (context.Context, error
 type testComponent4 struct {
 	TestComponent2 *testComponent2 `inject:"true"`
 }
-
+func (f *testComponent4) Prepare(ctx context.Context) (newCtx context.Context, err error) {
+	return ctx, nil
+}
 func (this *testComponent4) Initiate(ctx context.Context) (newCtx context.Context, err error) {
 	return ctx, nil
 }
@@ -172,9 +179,6 @@ func (suite *TestSuite) TestUseComponent() {
 		err = r.RegisterComponent(c, true)
 		assert.Nil(suite.T(), err, errors.ErrorStack(err))
 	}
-	configComponent, err := r.GetComponentByName("Config")
-	assert.Nil(suite.T(), err, errors.ErrorStack(err))
-	assert.NotNil(suite.T(), configComponent)
 	err = r.UseComponent("log", "Database", "Kvstore", "queue")
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))
 	logComponent, err := r.GetComponentByName("log")
@@ -197,7 +201,6 @@ func (suite *TestSuite) TestComponentConfig() {
 		&Component{Name: "TestComponent2", Component: &testComponent2{}},
 		&Component{Name: "TestComponent3", Component: &testComponent3{}},
 	}
-	var options map[string]config.Option = make(map[string]config.Option, 0)
 	r, err := NewRegistry()
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))
 	err = r.RegisterValue("Foo", "Bar")
@@ -208,13 +211,6 @@ func (suite *TestSuite) TestComponentConfig() {
 		err = r.RegisterComponent(c, true)
 		assert.Nil(suite.T(), err, errors.ErrorStack(err))
 	}
-	configComponent, err := r.GetComponentByName("Config")
-	assert.Nil(suite.T(), err, errors.ErrorStack(err))
-	assert.NotNil(suite.T(), configComponent)
-	configer, ok := configComponent.Component.(*config.Config)
-	assert.True(suite.T(), ok)
-	err = configer.SetOptions(options)
-	assert.Nil(suite.T(), err, errors.ErrorStack(err))
 	err = r.RegisterComponent(&Component{
 		Name: "TestComponent1",
 		Component: &testComponent1{},
@@ -228,8 +224,6 @@ func (suite *TestSuite) TestComponentConfig() {
 	component, ok := testComponent.Component.(*testComponent1)
 	assert.Equal(suite.T(), true, ok)
 	assert.Equal(suite.T(), "Bar", component.Foo)
-	err = r.ConfigureComponentFileConfig("testComponent1", suite.configFile, nil, "components.TestComponent1")
-	assert.Nil(suite.T(), err, errors.ErrorStack(err))
 	err = r.UnregisterComponent("TestComponent2")
 	assert.Nil(suite.T(), err, errors.ErrorStack(err))
 }
