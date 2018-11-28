@@ -89,12 +89,12 @@ func NewSession() *Session {
 
 func (s *Session) Prepare(ctx context.Context) (context.Context, error) {
 	var configs map[string]config.Option = map[string]config.Option{
-		"MEDIA_SESSION_PROVIDER":         config.Option{Type: config.String, EnvironmentKey: "MEDIA_SESSION_PROVIDER"},
-		"MEDIA_SESSION_REDIS_KEY_PREFIX": config.Option{Type: config.String, EnvironmentKey: "MEDIA_SESSION_REDIS_KEY_PREFIX"},
-		"MEDIA_SESSION_REDIS_DATABASE":   config.Option{Type: config.Int, EnvironmentKey: "MEDIA_SESSION_REDIS_DATABASE"},
-		"MEDIA_SESSION_COOKIE_ID":        config.Option{Type: config.String, EnvironmentKey: "MEDIA_SESSION_COOKIE_ID"},
-		"MEDIA_SESSION_MAX_AGE":          config.Option{Type: config.Int64, EnvironmentKey: "MEDIA_SESSION_MAX_AGE"},
-		"MEDIA_SESSION_MYSQL_DATABASE":   config.Option{Type: config.Int64, EnvironmentKey: "MEDIA_SESSION_MYSQL_DATABASE"},
+		"SESSION_PROVIDER":         config.Option{Type: config.String, EnvironmentKey: "SESSION_PROVIDER"},
+		"SESSION_REDIS_KEY_PREFIX": config.Option{Type: config.String, EnvironmentKey: "SESSION_REDIS_KEY_PREFIX"},
+		"SESSION_REDIS_DATABASE":   config.Option{Type: config.Int, EnvironmentKey: "SESSION_REDIS_DATABASE"},
+		"SESSION_COOKIE_ID":        config.Option{Type: config.String, EnvironmentKey: "SESSION_COOKIE_ID"},
+		"SESSION_MAX_AGE":          config.Option{Type: config.Int64, EnvironmentKey: "SESSION_MAX_AGE"},
+		"SESSION_MYSQL_DATABASE":   config.Option{Type: config.Int64, EnvironmentKey: "SESSION_MYSQL_DATABASE"},
 	}
 	err := s.Config.SetOptions(configs)
 	if err != nil {
@@ -130,10 +130,10 @@ func (s *Session) OnStartup(ctx context.Context) (context.Context, error) {
 	if s.Database == nil {
 		return ctx, errors.New(errMissDatabase)
 	}
-	s.provider = s.Config.GetString("MEDIA_SESSION_PROVIDER")
-	s.sessionKeyPrefix = s.Config.GetString("MEDIA_SESSION_REDIS_KEY_PREFIX")
-	s.sessionCookieId = s.Config.GetString("MEDIA_SESSION_COOKIE_ID")
-	s.sessionMaxAge = s.Config.GetInt64("MEDIA_SESSION_MAX_AGE")
+	s.provider = s.Config.GetString("SESSION_PROVIDER")
+	s.sessionKeyPrefix = s.Config.GetString("SESSION_REDIS_KEY_PREFIX")
+	s.sessionCookieId = s.Config.GetString("SESSION_COOKIE_ID")
+	s.sessionMaxAge = s.Config.GetInt64("SESSION_MAX_AGE")
 	var err error
 	if s.provider != "" {
 		err = s.Use(ctx, s.provider)
