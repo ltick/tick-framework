@@ -40,21 +40,21 @@ var (
 )
 
 func (m *RedisHandler) Initiate(ctx context.Context, maxAge int64, config map[string]interface{}) (err error) {
-	cacheInstance, ok := config["CACHE_INSTANCE"]
+	kvstoreInstance, ok := config["KVSTORE_INSTANCE"]
 	if !ok {
-		return errors.New(errMysqlInitiate + ": empty cache instance")
+		return errors.New(errRedisInitiate + ": empty kvstore instance")
 	}
-	m.Cache, ok = cacheInstance.(*kvstore.Kvstore)
+	m.Cache, ok = kvstoreInstance.(*kvstore.Kvstore)
 	if !ok {
-		return errors.New(errMysqlInitiate + ": invaild cache instance")
+		return errors.New(errRedisInitiate + ": invaild kvstore instance")
 	}
 	err = m.Cache.Use(ctx, "redis")
 	if err != nil {
 		return errors.New(errStartup + ": " + err.Error())
 	}
 	m.sessionCacheProvider, err = m.Cache.NewConnection("redis", map[string]interface{}{
-		"CACHE_REDIS_DATABASE":   config["CACHE_REDIS_DATABASE"],
-		"CACHE_REDIS_KEY_PREFIX": config["CACHE_REDIS_KEY_PREFIX"],
+		"KVSTORE_REDIS_DATABASE":   config["KVSTORE_REDIS_DATABASE"],
+		"KVSTORE_REDIS_KEY_PREFIX": config["KVSTORE_REDIS_KEY_PREFIX"],
 	})
 	if err != nil {
 		return errors.New(errRedisInitiate + ": " + err.Error())
@@ -204,8 +204,8 @@ func (m *RedisStore) ID() string {
 	return m.sessionId
 }
 
-// SessionRelease save redis session sessionData to cache.
-// must call this method to save sessionData to cache.
+// SessionRelease save redis session sessionData to kvstore.
+// must call this method to save sessionData to kvstore.
 func (m *RedisStore) Release(w http.ResponseWriter) {
 	b, err := EncodeGob(m.sessionData)
 	if err != nil {

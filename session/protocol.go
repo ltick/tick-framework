@@ -26,7 +26,7 @@ import (
 )
 
 var (
-	errPrepare      = "session: prepare '%s' error"
+	errPrepare                        = "session: prepare '%s' error"
 	errInitiate                       = "session: initiate error"
 	errStartup                        = "session: startup error"
 	errMissSessionProvider            = "session: miss session provider"
@@ -64,12 +64,9 @@ type Session struct {
 	Provider  string
 	handler   Handler
 
-	provider         string
-	sessionCookieId  string
-	sessionMaxAge    int64
-	sessionKeyPrefix string
-
+	provider                string
 	CookieName              string
+	MaxAge                  int64
 	EnableSetCookie         bool
 	Gclifetime              int64
 	Maxlifetime             int64
@@ -92,7 +89,7 @@ func (s *Session) Prepare(ctx context.Context) (context.Context, error) {
 		"SESSION_PROVIDER":         config.Option{Type: config.String, EnvironmentKey: "SESSION_PROVIDER"},
 		"SESSION_REDIS_KEY_PREFIX": config.Option{Type: config.String, EnvironmentKey: "SESSION_REDIS_KEY_PREFIX"},
 		"SESSION_REDIS_DATABASE":   config.Option{Type: config.Int, EnvironmentKey: "SESSION_REDIS_DATABASE"},
-		"SESSION_COOKIE_ID":        config.Option{Type: config.String, EnvironmentKey: "SESSION_COOKIE_ID"},
+		"SESSION_COOKIE_NAME":      config.Option{Type: config.String, EnvironmentKey: "SESSION_COOKIE_NAME"},
 		"SESSION_MAX_AGE":          config.Option{Type: config.Int64, EnvironmentKey: "SESSION_MAX_AGE"},
 		"SESSION_MYSQL_DATABASE":   config.Option{Type: config.Int64, EnvironmentKey: "SESSION_MYSQL_DATABASE"},
 	}
@@ -131,9 +128,8 @@ func (s *Session) OnStartup(ctx context.Context) (context.Context, error) {
 		return ctx, errors.New(errMissDatabase)
 	}
 	s.provider = s.Config.GetString("SESSION_PROVIDER")
-	s.sessionKeyPrefix = s.Config.GetString("SESSION_REDIS_KEY_PREFIX")
-	s.sessionCookieId = s.Config.GetString("SESSION_COOKIE_ID")
-	s.sessionMaxAge = s.Config.GetInt64("SESSION_MAX_AGE")
+	s.CookieName = s.Config.GetString("SESSION_COOKIE_NAME")
+	s.MaxAge = s.Config.GetInt64("SESSION_MAX_AGE")
 	var err error
 	if s.provider != "" {
 		err = s.Use(ctx, s.provider)
@@ -158,16 +154,16 @@ func (s *Session) Use(ctx context.Context, Provider string) error {
 	s.handler = handler()
 	switch s.provider {
 	case "redis":
-		err = s.handler.Initiate(ctx, s.sessionMaxAge, map[string]interface{}{
-			"CACHE_INSTANCE":         s.Cache,
-			"CACHE_REDIS_DATABASE":   s.Config.GetString("SESSION_REDIS_DATABASE"),
-			"CACHE_REDIS_KEY_PREFIX": s.sessionKeyPrefix,
+		err = s.handler.Initiate(ctx, s.MaxAge, map[string]interface{}{
+			"KVSTORE_INSTANCE":         s.Cache,
+			"KVSTORE_REDIS_DATABASE":   s.Config.GetString("SESSION_REDIS_DATABASE"),
+			"KVSTORE_REDIS_KEY_PREFIX": s.Config.GetString("SESSION_REDIS_KEY_PREFIX"),
 		})
 		if err != nil {
 			return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), s.Provider))
 		}
 	case "mysql":
-		err = s.handler.Initiate(ctx, s.sessionMaxAge, map[string]interface{}{
+		err = s.handler.Initiate(ctx, s.MaxAge, map[string]interface{}{
 			"DATABASE_INSTANCE":             s.Database,
 			"DATABASE_MYSQL_HOST":           s.Config.GetString("DATABASE_MYSQL_HOST"),
 			"DATABASE_MYSQL_PORT":           s.Config.GetString("DATABASE_MYSQL_PORT"),
@@ -326,11 +322,13 @@ func (s *Session) Destroy(ctx context.Context, w http.ResponseWriter, r *http.Re
 	s.handler.Destroy(ctx, sid)
 	if s.EnableSetCookie {
 		expiration := time.Now()
-		cookie = &http.Cookie{Name: s.CookieName,
+		cookie = &http.Cookie{
+			Name:     s.CookieName,
 			Path:     "/",
 			HttpOnly: true,
 			Expires:  expiration,
-			MaxAge:   -1}
+			MaxAge:   -1,
+		}
 
 		http.SetCookie(w, cookie)
 	}
@@ -438,16 +436,6 @@ func (s *Session) isSecure(req *http.Request) bool {
 		return false
 	}
 	return true
-}
-
-func (s *Session) SetCookieSessionId(ctx context.Context, sessionId string, rw http.ResponseWriter) {
-	cookie := &http.Cookie{
-		Name:     s.sessionCookieId,
-		Value:    sessionId,
-		HttpOnly: false,
-		MaxAge:   int(s.sessionMaxAge),
-	}
-	http.SetCookie(rw, cookie)
 }
 
 func SessionNotExists(err error) bool {
