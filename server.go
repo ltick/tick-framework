@@ -163,10 +163,9 @@ func NewServer(router *ServerRouter, setters ...ServerOption) (server *Server) {
 	for _, setter := range setters {
 		setter(serverOptions)
 	}
-	serverRouter := NewServerRouter(router.Context)
 	server = &Server{
 		ServerOptions: serverOptions,
-		Router:        serverRouter,
+		Router:        router,
 		RouteGroups:   map[string]*ServerRouteGroup{},
 		mutex:         sync.RWMutex{},
 	}
