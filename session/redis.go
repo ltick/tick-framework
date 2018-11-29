@@ -204,17 +204,18 @@ func (m *RedisStore) ID() string {
 
 // Session Store Release save mysql session sessionData to database.
 // must call this method to save sessionData to cache.
-func (m *RedisStore) Release() {
+func (m *RedisStore) Release() (error) {
 	b, err := EncodeGob(m.sessionData)
 	if err != nil {
-		return
+		return err
 	}
 	err = m.sessionKvstoreProvider.Set(m.sessionId, string(b))
 	if err != nil {
-		return
+		return err
 	}
 	err = m.sessionKvstoreProvider.Expire(m.sessionId, m.sessionMaxAge)
 	if err != nil {
-		return
+		return err
 	}
+	return nil
 }

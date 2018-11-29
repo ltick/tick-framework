@@ -217,17 +217,21 @@ func (m *MysqlStore) ID() string {
 
 // Session Store Release save mysql session sessionData to database.
 // must call this method to save sessionData to database.
-func (m *MysqlStore) Release() {
+func (m *MysqlStore) Release() error {
 	b, err := EncodeGob(m.sessionData)
 	if err != nil {
-		return
+		return err
 	}
-	now := time.Now().Local().Add(time.Second*time.Duration(m.sessionMaxAge))
+	now := time.Now().Local().Add(time.Second * time.Duration(m.sessionMaxAge))
 	m.sessionDatabaseProvider.New().Model(&MysqlStoreData{}).Update(&MysqlStoreData{
 		SessionData: string(b),
 		SessionId:   m.sessionId,
 		ExpiredAt:   &now,
 	})
+	if m.sessionDatabaseProvider.Error() != nil {
+		return m.sessionDatabaseProvider.Error()
+	}
+	return nil
 }
 
 func (m *MysqlHandler) AutoMigrate() {
