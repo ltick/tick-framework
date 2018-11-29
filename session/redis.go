@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"github.com/ltick/tick-framework/kvstore"
-	"time"
 )
 
 type RedisStore struct {

@@ -18,15 +18,17 @@ var (
 	errGetConnection = "kvstore: get '%s' kvstore error"
 )
 
-func NewKvstore() *Kvstore {
-	instance := &Kvstore{}
+func NewKvstore(configs map[string]interface{}) *Kvstore {
+	instance := &Kvstore{
+		configs: configs,
+	}
 	return instance
 }
 
 type Kvstore struct {
 	Config   *config.Config `inject:"true"`
 	configs  map[string]interface{}
-	Provider string
+	provider string
 	handler  Handler
 }
 
@@ -85,12 +87,12 @@ func (c *Kvstore) OnStartup(ctx context.Context) (context.Context, error) {
 	var err error
 	err = Register("redis", NewRedisHandler)
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), c.Provider))
+		return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), c.provider))
 	}
 	if kvstoreProvider := c.Config.GetString("KVSTORE_PROVIDER"); kvstoreProvider != "" {
 		err = c.Use(ctx, kvstoreProvider)
 		if err != nil {
-			return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), c.Provider))
+			return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), c.provider))
 		}
 	}
 	return ctx, nil
@@ -105,27 +107,31 @@ func (c *Kvstore) OnRequestShutdown(ctx *routing.Context) error {
 	return nil
 }
 func (c *Kvstore) GetProvider() string {
-	return c.Provider
+	return c.provider
 }
-func (c *Kvstore) Use(ctx context.Context, Provider string) error {
-	handler, err := Use(Provider)
+func (c *Kvstore) Use(ctx context.Context, provider string) error {
+	handler, err := Use(provider)
 	if err != nil {
 		return err
 	}
-	c.Provider = Provider
+	c.provider = provider
 	c.handler = handler()
 	err = c.handler.Initiate(ctx)
 	if err != nil {
-		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), c.Provider))
+		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), c.provider))
 	}
 	return nil
 }
-func (c *Kvstore) NewConnection(name string, config map[string]interface{}) (KvstoreHandler, error) {
+func (c *Kvstore) NewConnection(name string, configs... map[string]interface{}) (KvstoreHandler, error) {
 	kvstoreHandler, err := c.GetConnection(name)
 	if err == nil {
 		return kvstoreHandler, nil
 	}
-	kvstoreHandler, err = c.handler.NewConnection(name, c.configs)
+	if len(configs) >0 {
+		kvstoreHandler, err = c.handler.NewConnection(name, configs[0])
+	} else {
+		kvstoreHandler, err = c.handler.NewConnection(name, c.configs)
+	}
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf(errNewConnection+": "+err.Error(), name))
 	}
