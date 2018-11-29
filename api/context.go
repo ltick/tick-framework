@@ -153,7 +153,7 @@ func (ctx *Context) getSessionStore() (session.Store, error) {
 		return nil, errNotEnableSession
 	}
 	var err error
-	ctx.sessionStore, err = ctx.Session.GetSessionStore(ctx.ResponseWriter, ctx.Request)
+	ctx.sessionStore, err = ctx.Session.GetStore(ctx.ResponseWriter, ctx.Request)
 	return ctx.sessionStore, err
 }
 
