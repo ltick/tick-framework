@@ -22,6 +22,7 @@ import (
 	"github.com/ltick/tick-routing/fault"
 	"github.com/ltick/tick-routing/file"
 	"github.com/ltick/tick-routing/slash"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var (
@@ -35,6 +36,11 @@ type (
 	ServerOptions struct {
 		logWriter io.Writer
 		Port      uint
+	}
+
+	ServerBasicAuth struct {
+		username string
+		password string
 	}
 
 	ServerOption func(*ServerOptions)
@@ -347,12 +353,42 @@ func (s *Server) Proxy(host string, group string, path string, upstream string) 
 	return s
 }
 
+type prometheusHandler struct {
+	httpHandler http.Handler
+	basicAuth *ServerBasicAuth
+}
+
+func (h prometheusHandler) Serve(ctx *api.Context) error {
+	if h.basicAuth != nil {
+		ctx.Request.SetBasicAuth(h.basicAuth.username, h.basicAuth.password)
+	}
+	h.httpHandler.ServeHTTP(ctx.ResponseWriter, ctx.Request)
+	return nil
+}
+
+func (s *Server) Prometheus(host string, basicAuth *ServerBasicAuth) *Server {
+	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
+		Method: "ANY",
+		Host:   host,
+		Group:  "/",
+		Path:   "metrics",
+		Handlers: []api.Handler{
+			prometheusHandler{
+				httpHandler: promhttp.Handler(),
+				basicAuth:basicAuth,
+			},
+		},
+	})
+	return s
+}
+
+
 type pprofHandler struct {
-	httpHandler http.HandlerFunc
+	httpHandlerFunc http.HandlerFunc
 }
 
 func (h pprofHandler) Serve(ctx *api.Context) error {
-	h.httpHandler(ctx.ResponseWriter, ctx.Request)
+	h.httpHandlerFunc(ctx.ResponseWriter, ctx.Request)
 	return nil
 }
 
@@ -364,7 +400,7 @@ func (s *Server) Pprof(host string, group string) *Server {
 		Path:   "pprof",
 		Handlers: []api.Handler{
 			pprofHandler{
-				httpHandler: pprof.Index,
+				httpHandlerFunc: pprof.Index,
 			},
 		},
 	})
@@ -375,7 +411,7 @@ func (s *Server) Pprof(host string, group string) *Server {
 		Path:   "pprof/cmdline",
 		Handlers: []api.Handler{
 			pprofHandler{
-				httpHandler: pprof.Cmdline,
+				httpHandlerFunc: pprof.Cmdline,
 			},
 		},
 	})
@@ -386,7 +422,7 @@ func (s *Server) Pprof(host string, group string) *Server {
 		Path:   "pprof/profile",
 		Handlers: []api.Handler{
 			pprofHandler{
-				httpHandler: pprof.Profile,
+				httpHandlerFunc: pprof.Profile,
 			},
 		},
 	})
@@ -397,7 +433,7 @@ func (s *Server) Pprof(host string, group string) *Server {
 		Path:   "pprof/symbol",
 		Handlers: []api.Handler{
 			pprofHandler{
-				httpHandler: pprof.Symbol,
+				httpHandlerFunc: pprof.Symbol,
 			},
 		},
 	})
@@ -408,7 +444,7 @@ func (s *Server) Pprof(host string, group string) *Server {
 		Path:   "pprof/trace",
 		Handlers: []api.Handler{
 			pprofHandler{
-				httpHandler: pprof.Trace,
+				httpHandlerFunc: pprof.Trace,
 			},
 		},
 	})
