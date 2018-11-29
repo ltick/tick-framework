@@ -4,25 +4,23 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"sync"
 
 	"github.com/ltick/tick-framework/kvstore"
 )
 
 type RedisStore struct {
-	sessionMaxAge        int64
-	sessionCacheProvider kvstore.KvstoreHandler
-	sessionId            string
-	lock                 sync.RWMutex
-	sessionData          map[interface{}]interface{}
+	sessionMaxAge          int64
+	sessionKvstoreProvider kvstore.KvstoreHandler
+	sessionId              string
+	lock                   sync.RWMutex
+	sessionData            map[interface{}]interface{}
 }
 type RedisHandler struct {
-	Cache *kvstore.Kvstore
+	Kvstore *kvstore.Kvstore
 
-	sessionCacheProvider kvstore.KvstoreHandler
-	sessionMaxAge        int64
-	sessionId            string
+	sessionKvstoreProvider kvstore.KvstoreHandler
+	sessionMaxAge          int64
 }
 
 func NewRedisHandler() Handler {
@@ -44,15 +42,15 @@ func (m *RedisHandler) Initiate(ctx context.Context, maxAge int64, config map[st
 	if !ok {
 		return errors.New(errRedisInitiate + ": empty kvstore instance")
 	}
-	m.Cache, ok = kvstoreInstance.(*kvstore.Kvstore)
+	m.Kvstore, ok = kvstoreInstance.(*kvstore.Kvstore)
 	if !ok {
 		return errors.New(errRedisInitiate + ": invaild kvstore instance")
 	}
-	err = m.Cache.Use(ctx, "redis")
+	err = m.Kvstore.Use(ctx, "redis")
 	if err != nil {
 		return errors.New(errStartup + ": " + err.Error())
 	}
-	m.sessionCacheProvider, err = m.Cache.NewConnection("redis", map[string]interface{}{
+	m.sessionKvstoreProvider, err = m.Kvstore.NewConnection("redis", map[string]interface{}{
 		"KVSTORE_REDIS_DATABASE":   config["KVSTORE_REDIS_DATABASE"],
 		"KVSTORE_REDIS_KEY_PREFIX": config["KVSTORE_REDIS_KEY_PREFIX"],
 	})
@@ -63,8 +61,8 @@ func (m *RedisHandler) Initiate(ctx context.Context, maxAge int64, config map[st
 	return nil
 }
 
-func (m *RedisHandler) Read(ctx context.Context, sessionId string) (Store, error) {
-	sessionStoreData, err := m.sessionCacheProvider.Get(sessionId)
+func (m *RedisHandler) Read(sessionId string) (Store, error) {
+	sessionStoreData, err := m.sessionKvstoreProvider.Get(sessionId)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf(errRedisSessionRead+": [sessionId:'%s', error:'%s']", sessionId, err.Error()))
 	}
@@ -82,16 +80,16 @@ func (m *RedisHandler) Read(ctx context.Context, sessionId string) (Store, error
 		}
 	}
 	sessionStore := &RedisStore{
-		sessionMaxAge:        m.sessionMaxAge,
-		sessionCacheProvider: m.sessionCacheProvider,
-		sessionId:            sessionId,
-		sessionData:          sessionData,
+		sessionMaxAge:          m.sessionMaxAge,
+		sessionKvstoreProvider: m.sessionKvstoreProvider,
+		sessionId:              sessionId,
+		sessionData:            sessionData,
 	}
 	return sessionStore, nil
 }
-func (m *RedisHandler) Exist(ctx context.Context, sessionId string) (bool, error) {
+func (m *RedisHandler) Exist(sessionId string) (bool, error) {
 	//获取cookie验证是否登录
-	_, err := m.sessionCacheProvider.Get(sessionId)
+	_, err := m.sessionKvstoreProvider.Get(sessionId)
 	if err != nil {
 		if kvstore.ErrNil(err) {
 			return false, nil
@@ -100,17 +98,15 @@ func (m *RedisHandler) Exist(ctx context.Context, sessionId string) (bool, error
 	}
 	return true, nil
 }
-func (m *RedisHandler) Regenerate(ctx context.Context, oldSessionId, sessionId string) (Store, error) {
-	sessionStoreData, err := m.sessionCacheProvider.Get(oldSessionId)
+func (m *RedisHandler) Regenerate(oldSessionId, sessionId string) (Store, error) {
+	sessionStoreData, err := m.sessionKvstoreProvider.Get(oldSessionId)
 	if err != nil {
 		if kvstore.ErrNil(err) {
-			err := m.sessionCacheProvider.Set(sessionId, "")
-			debugLog(ctx, "receive: set session [sessionId:'%s', error:'%v']", sessionId, err)
+			err := m.sessionKvstoreProvider.Set(sessionId, "")
 			if err != nil {
 				return nil, errors.New(fmt.Sprintf(errRedisSessionRegenerate+": %s", err.Error()))
 			}
-			err = m.sessionCacheProvider.Expire(sessionId, m.sessionMaxAge)
-			debugLog(ctx, "receive: set session expire [sessionId:'%s', error:'%v']", sessionId, err)
+			err = m.sessionKvstoreProvider.Expire(sessionId, m.sessionMaxAge)
 			if err != nil {
 				return nil, errors.New(fmt.Sprintf(errRedisSessionRegenerate+": %s", err.Error()))
 			}
@@ -132,35 +128,36 @@ func (m *RedisHandler) Regenerate(ctx context.Context, oldSessionId, sessionId s
 		}
 	}
 	sessionStore := &RedisStore{
-		sessionMaxAge:        m.sessionMaxAge,
-		sessionCacheProvider: m.sessionCacheProvider,
-		sessionId:            sessionId,
-		sessionData:          sessionData,
+		sessionMaxAge:          m.sessionMaxAge,
+		sessionKvstoreProvider: m.sessionKvstoreProvider,
+		sessionId:              sessionId,
+		sessionData:            sessionData,
 	}
 	return sessionStore, nil
 }
-func (m *RedisHandler) Destroy(ctx context.Context, sessionId string) error {
-	_, err := m.sessionCacheProvider.Del(sessionId)
+func (m *RedisHandler) Destroy(sessionId string) error {
+	_, err := m.sessionKvstoreProvider.Del(sessionId)
 	if err != nil {
 		return errors.New(fmt.Sprintf(errRedisSessionDestory+": [sessionId:'%s', error:'%s']", sessionId, err.Error()))
 	}
 	return nil
 }
-func (m *RedisHandler) All(ctx context.Context) (count int, err error) {
-	nextCursor, keys, err := m.sessionCacheProvider.Scan("", "", 0)
+func (m *RedisHandler) All() (count int, err error) {
+	nextCursor, keys, err := m.sessionKvstoreProvider.Scan("", "", 0)
 	if err != nil {
 		return 0, errors.New(fmt.Sprintf(errRedisSessionAll+": [error:'%s']", err.Error()))
 	}
 	for len(keys) > 0 {
 		count = count + len(keys)
-		nextCursor, keys, err = m.sessionCacheProvider.Scan(nextCursor, "", 0)
+		nextCursor, keys, err = m.sessionKvstoreProvider.Scan(nextCursor, "", 0)
 		if err != nil {
 			return 0, errors.New(fmt.Sprintf(errRedisSessionAll+": [error:'%s']", err.Error()))
 		}
 	}
 	return count, nil
 }
-func (m *RedisHandler) GC(ctx context.Context) {
+
+func (m *RedisHandler) GC() {
 	return
 }
 
@@ -202,21 +199,4 @@ func (m *RedisStore) Flush() error {
 // SessionID get session id of this redis session store
 func (m *RedisStore) ID() string {
 	return m.sessionId
-}
-
-// SessionRelease save redis session sessionData to kvstore.
-// must call this method to save sessionData to kvstore.
-func (m *RedisStore) Release(w http.ResponseWriter) {
-	b, err := EncodeGob(m.sessionData)
-	if err != nil {
-		return
-	}
-	err = m.sessionCacheProvider.Set(m.sessionId, string(b))
-	if err != nil {
-		return
-	}
-	err = m.sessionCacheProvider.Expire(m.sessionId, m.sessionMaxAge)
-	if err != nil {
-		return
-	}
 }

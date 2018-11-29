@@ -26,29 +26,22 @@ import (
 )
 
 var (
-	errPrepare                        = "session: prepare '%s' error"
-	errInitiate                       = "session: initiate error"
-	errStartup                        = "session: startup error"
-	errMissSessionProvider            = "session: miss session provider"
-	errInvalidSessionProvider         = "session: invalid session provider"
-	errMissSessionRedisDatabase       = "session: miss session redis database"
-	errInvalidSessionRedisDatabase    = "session: invalid session redis database"
-	errMissSessionKeyPrefix           = "session: miss session Key prefix"
-	errInvalidSessionKeyPrefix        = "session: invalid session key prefix"
-	errMissSessionCookieId            = "session: miss session Cookie id"
-	errInvalidSessionCookieId         = "session: invalid session cookie id"
-	errMissSessionMaxAge              = "session: miss session max age"
-	errInvalidSessionMaxAge           = "session: invalid session max age"
-	errMissRedirectAccessKey          = "session: miss redirect access key"
-	errInvalidRedirectAccessKey       = "session: invalid redirect access key"
-	errMissRedirectSecretKey          = "session: miss redirect secret key"
-	errInvalidRedirectSecretKey       = "session: invalid redirect secret key"
-	errMissPermissionProvider         = "session: miss permission provider"
-	errInvalidPermissionProvider      = "session: invalid permission provider"
-	errMissPermissionMysqlDatabase    = "session: miss permission mysql database"
-	errInvalidPermissionMysqlDatabase = "session: invalid permission mysql database"
-	errMissCache                      = "session: miss cache"
-	errMissDatabase                   = "session: miss database"
+	errPrepare              = "session: prepare '%s' error"
+	errInitiate             = "session: initiate error"
+	errStartup              = "session: startup error"
+	errMissProvider         = "session: miss provider"
+	errMissCookieName       = "session: miss Cookie Name"
+	errInvalidProvider      = "session: invalid provider"
+	errMissRedisDatabase    = "session: miss redis database"
+	errInvalidRedisDatabase = "session: invalid redis database"
+	errMissRedisKeyPrefix   = "session: miss redis key prefix"
+	errMissMysqlDatabase   = "session: miss mysql database"
+	errInvalidKeyPrefix     = "session: invalid session key prefix"
+	errMissMaxAge           = "session: miss session max age"
+	errInvalidMaxAge        = "session: invalid session max age"
+	errMissCache            = "session: miss cache"
+	errMissDatabase         = "session: miss database"
+	errNotExist             = errors.New("session: session does not exist")
 )
 
 var debugLog libUtility.LogFunc
@@ -61,7 +54,6 @@ type Session struct {
 	Config    *config.Config     `inject:"true"`
 	DebugLog  libUtility.LogFunc `inject:"true"`
 	SystemLog libUtility.LogFunc `inject:"true"`
-	Provider  string
 	handler   Handler
 
 	provider                string
@@ -72,7 +64,7 @@ type Session struct {
 	Maxlifetime             int64
 	Secure                  bool
 	CookieLifeTime          int
-	ProviderConfig          string
+	providerConfig          string
 	Domain                  string
 	SessionIDLength         int64
 	EnableSidInHttpHeader   bool
@@ -111,11 +103,11 @@ func (s *Session) Initiate(ctx context.Context) (context.Context, error) {
 	gob.Register(map[int]int64{})
 	err := Register("mysql", NewMysqlHandler)
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), s.Provider))
+		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), s.provider))
 	}
 	err = Register("redis", NewRedisHandler)
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), s.Provider))
+		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), s.provider))
 	}
 	return ctx, nil
 }
@@ -128,8 +120,17 @@ func (s *Session) OnStartup(ctx context.Context) (context.Context, error) {
 		return ctx, errors.New(errMissDatabase)
 	}
 	s.provider = s.Config.GetString("SESSION_PROVIDER")
+	if s.provider == "" {
+		return ctx, errors.New(errMissProvider)
+	}
 	s.CookieName = s.Config.GetString("SESSION_COOKIE_NAME")
+	if s.CookieName == "" {
+		return ctx, errors.New(errMissCookieName)
+	}
 	s.MaxAge = s.Config.GetInt64("SESSION_MAX_AGE")
+	if s.MaxAge == 0 {
+		return ctx, errors.New(errMissMaxAge)
+	}
 	var err error
 	if s.provider != "" {
 		err = s.Use(ctx, s.provider)
@@ -142,40 +143,52 @@ func (s *Session) OnShutdown(ctx context.Context) (context.Context, error) {
 	return ctx, nil
 }
 
-func (s *Session) GetProvider() string {
-	return s.Provider
+func (s *Session) Getprovider() string {
+	return s.provider
 }
-func (s *Session) Use(ctx context.Context, Provider string) error {
-	handler, err := Use(Provider)
+func (s *Session) Use(ctx context.Context, provider string) error {
+	handler, err := Use(provider)
 	if err != nil {
 		return err
 	}
-	s.Provider = Provider
+	s.provider = provider
 	s.handler = handler()
 	switch s.provider {
 	case "redis":
+		redisDatabase := s.Config.GetString("SESSION_REDIS_DATABASE")
+		if redisDatabase == "" {
+			return errors.New(errMissRedisDatabase)
+		}
+		redisKeyPrefix := s.Config.GetString("SESSION_REDIS_KEY_PREFIX")
+		if redisKeyPrefix == "" {
+			return errors.New(errMissRedisKeyPrefix)
+		}
 		err = s.handler.Initiate(ctx, s.MaxAge, map[string]interface{}{
 			"KVSTORE_INSTANCE":         s.Cache,
-			"KVSTORE_REDIS_DATABASE":   s.Config.GetString("SESSION_REDIS_DATABASE"),
-			"KVSTORE_REDIS_KEY_PREFIX": s.Config.GetString("SESSION_REDIS_KEY_PREFIX"),
+			"KVSTORE_REDIS_DATABASE":   redisDatabase,
+			"KVSTORE_REDIS_KEY_PREFIX": redisKeyPrefix,
 		})
 		if err != nil {
-			return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), s.Provider))
+			return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), s.provider))
 		}
 	case "mysql":
+		mysqlDatabase := s.Config.GetString("SESSION_MYSQL_DATABASE")
+		if mysqlDatabase == "" {
+			return errors.New(errMissMysqlDatabase)
+		}
 		err = s.handler.Initiate(ctx, s.MaxAge, map[string]interface{}{
 			"DATABASE_INSTANCE":             s.Database,
 			"DATABASE_MYSQL_HOST":           s.Config.GetString("DATABASE_MYSQL_HOST"),
 			"DATABASE_MYSQL_PORT":           s.Config.GetString("DATABASE_MYSQL_PORT"),
 			"DATABASE_MYSQL_USER":           s.Config.GetString("DATABASE_MYSQL_USER"),
 			"DATABASE_MYSQL_PASSWORD":       s.Config.GetString("DATABASE_MYSQL_PASSWORD"),
-			"DATABASE_MYSQL_DATABASE":       s.Config.GetString("SESSION_MYSQL_DATABASE"),
+			"DATABASE_MYSQL_DATABASE":       mysqlDatabase,
 			"DATABASE_MYSQL_TIMEOUT":        s.Config.GetInt64("DATABASE_MYSQL_TIMEOUT"),
 			"DATABASE_MYSQL_MAX_OPEN_CONNS": s.Config.GetString("DATABASE_MYSQL_MAX_OPEN_CONNS"),
 			"DATABASE_MYSQL_MAX_IDLE_CONNS": s.Config.GetString("DATABASE_MYSQL_MAX_IDLE_CONNS"),
 		})
 		if err != nil {
-			return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), s.Provider))
+			return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), s.provider))
 		}
 	}
 
@@ -208,18 +221,17 @@ type Store interface {
 	Get(key interface{}) interface{}  //get session value
 	Delete(key interface{}) error     //delete session value
 	ID() string                       //back current sessionID
-	Release(w http.ResponseWriter)    // release the resource & save data to provider & return the data
 	Flush() error                     //delete all data
 }
 
 type Handler interface {
 	Initiate(ctx context.Context, maxAge int64, config map[string]interface{}) error
-	Read(ctx context.Context, sessionId string) (Store, error)
-	Exist(ctx context.Context, sessionId string) (bool, error)
-	Regenerate(ctx context.Context, oldId, sessionId string) (Store, error)
-	Destroy(ctx context.Context, sessionId string) error
-	All(ctx context.Context) (count int, err error)
-	GC(ctx context.Context)
+	Read(sessionId string) (Store, error)
+	Exist(sessionId string) (bool, error)
+	Regenerate(oldId, sessionId string) (Store, error)
+	Destroy(sessionId string) error
+	All() (count int, err error)
+	GC()
 }
 
 // getSid retrieves session identifier from HTTP Request.
@@ -258,17 +270,17 @@ func (s *Session) getSid(r *http.Request) (string, error) {
 
 // SessionStart generate or read the session id from http request.
 // if session id exists, return SessionStore with this id.
-func (s *Session) SessionStart(ctx context.Context, w http.ResponseWriter, r *http.Request) (session Store, err error) {
+func (s *Session) Start(w http.ResponseWriter, r *http.Request) (session Store, err error) {
 	sid, err := s.getSid(r)
 	if err != nil {
 		return nil, err
 	}
-	exist, err := s.handler.Exist(ctx, sid)
+	exist, err := s.handler.Exist(sid)
 	if err != nil {
 		return nil, err
 	}
 	if sid != "" && exist {
-		return s.handler.Read(ctx, sid)
+		return s.handler.Read(sid)
 	}
 
 	// Generate a new session
@@ -277,7 +289,7 @@ func (s *Session) SessionStart(ctx context.Context, w http.ResponseWriter, r *ht
 		return nil, err
 	}
 
-	session, err = s.handler.Read(ctx, sid)
+	session, err = s.handler.Read(sid)
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +319,7 @@ func (s *Session) SessionStart(ctx context.Context, w http.ResponseWriter, r *ht
 }
 
 // Destroy Destroy session by its id in http request cookie.
-func (s *Session) Destroy(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+func (s *Session) Destroy(w http.ResponseWriter, r *http.Request) {
 	if s.EnableSidInHttpHeader {
 		r.Header.Del(s.SessionNameInHttpHeader)
 		w.Header().Del(s.SessionNameInHttpHeader)
@@ -319,7 +331,7 @@ func (s *Session) Destroy(ctx context.Context, w http.ResponseWriter, r *http.Re
 	}
 
 	sid, _ := url.QueryUnescape(cookie.Value)
-	s.handler.Destroy(ctx, sid)
+	s.handler.Destroy(sid)
 	if s.EnableSetCookie {
 		expiration := time.Now()
 		cookie = &http.Cookie{
@@ -334,34 +346,32 @@ func (s *Session) Destroy(ctx context.Context, w http.ResponseWriter, r *http.Re
 	}
 }
 
-var errNotExist = errors.New("The session ID does not exist")
-
 // GetSessionStore if session id exists, return SessionStore.
-func (s *Session) GetSessionStore(ctx context.Context, w http.ResponseWriter, r *http.Request) (Store, error) {
+func (s *Session) GetSessionStore(w http.ResponseWriter, r *http.Request) (Store, error) {
 	sid, err := s.getSid(r)
 	if err != nil {
 		return nil, err
 	}
-	exist, err := s.handler.Exist(ctx, sid)
+	exist, err := s.handler.Exist(sid)
 	if err != nil {
 		return nil, err
 	}
 	if sid != "" && exist {
-		return s.handler.Read(ctx, sid)
+		return s.handler.Read(sid)
 	}
 	return nil, errNotExist
 }
 
 // GetSessionStore Get SessionStore by its id.
-func (s *Session) GetSessionStoreById(ctx context.Context, sid string) (Store, error) {
-	return s.handler.Read(ctx, sid)
+func (s *Session) GetSessionStoreById(sid string) (Store, error) {
+	return s.handler.Read(sid)
 }
 
 // GC Start session gc process.
 // it can do gc in times after gc lifetime.
-func (s *Session) GC(ctx context.Context) {
-	s.handler.All(ctx)
-	time.AfterFunc(time.Duration(s.Gclifetime)*time.Second, func() { s.GC(ctx) })
+func (s *Session) GC() {
+	s.handler.All()
+	time.AfterFunc(time.Duration(s.Gclifetime)*time.Second, func() { s.GC() })
 }
 
 // RegenerateID Regenerate a session id for this SessionStore who's id is saving in http request.
@@ -373,7 +383,7 @@ func (s *Session) RegenerateID(ctx context.Context, w http.ResponseWriter, r *ht
 	cookie, err := r.Cookie(s.CookieName)
 	if err != nil || cookie.Value == "" {
 		//delete old cookie
-		session, _ = s.handler.Read(ctx, sid)
+		session, _ = s.handler.Read(sid)
 		cookie = &http.Cookie{Name: s.CookieName,
 			Value:    url.QueryEscape(sid),
 			Path:     "/",
@@ -383,7 +393,7 @@ func (s *Session) RegenerateID(ctx context.Context, w http.ResponseWriter, r *ht
 		}
 	} else {
 		oldsid, _ := url.QueryUnescape(cookie.Value)
-		session, _ = s.handler.Regenerate(ctx, oldsid, sid)
+		session, _ = s.handler.Regenerate(oldsid, sid)
 		cookie.Value = url.QueryEscape(sid)
 		cookie.HttpOnly = true
 		cookie.Path = "/"
@@ -406,8 +416,8 @@ func (s *Session) RegenerateID(ctx context.Context, w http.ResponseWriter, r *ht
 }
 
 // GetActiveSession Get all active sessions count number.
-func (s *Session) GetActiveSession(ctx context.Context) (int, error) {
-	return s.handler.All(ctx)
+func (s *Session) GetActiveSession() (int, error) {
+	return s.handler.All()
 }
 
 // SetSecure Set cookie with https.
