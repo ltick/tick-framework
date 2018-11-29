@@ -184,7 +184,7 @@ func (m *MysqlStore) Set(key interface{}, value interface{}) error {
 	return nil
 }
 
-// Get value from mysql session
+// Session Store Get value from mysql session
 func (m *MysqlStore) Get(key interface{}) interface{} {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
@@ -194,7 +194,7 @@ func (m *MysqlStore) Get(key interface{}) interface{} {
 	return nil
 }
 
-// Delete value in mysql session
+// Session Store Delete value in mysql session
 func (m *MysqlStore) Delete(key interface{}) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
@@ -202,7 +202,7 @@ func (m *MysqlStore) Delete(key interface{}) error {
 	return nil
 }
 
-// Flush clear all sessionData in mysql session
+// Session Store Flush clear all sessionData in mysql session
 func (m *MysqlStore) Flush() error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
@@ -210,14 +210,14 @@ func (m *MysqlStore) Flush() error {
 	return nil
 }
 
-// SessionID get session id of this mysql session store
+// Session Store ID get session id of this mysql session store
 func (m *MysqlStore) ID() string {
 	return m.sessionId
 }
 
-// SessionRelease save mysql session sessionData to database.
+// Session Store Release save mysql session sessionData to database.
 // must call this method to save sessionData to database.
-func (m *MysqlStore) Release(w http.ResponseWriter) {
+func (m *MysqlStore) Release() {
 	b, err := EncodeGob(m.sessionData)
 	if err != nil {
 		return

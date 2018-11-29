@@ -222,6 +222,7 @@ type Store interface {
 	Delete(key interface{}) error     //delete session value
 	ID() string                       //back current sessionID
 	Flush() error                     //delete all data
+	Release()  						  //release all data
 }
 
 type Handler interface {

@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/ltick/tick-framework/kvstore"
+	"time"
 )
 
 type RedisStore struct {
@@ -161,7 +162,7 @@ func (m *RedisHandler) GC() {
 	return
 }
 
-// Set value in redis session.
+// Session Store Set value in redis session.
 // it is temp value in map.
 func (m *RedisStore) Set(key interface{}, value interface{}) error {
 	m.lock.Lock()
@@ -170,7 +171,7 @@ func (m *RedisStore) Set(key interface{}, value interface{}) error {
 	return nil
 }
 
-// Get value from redis session
+// Session Store Get value from redis session
 func (m *RedisStore) Get(key interface{}) interface{} {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
@@ -180,7 +181,7 @@ func (m *RedisStore) Get(key interface{}) interface{} {
 	return nil
 }
 
-// Delete value in redis session
+// Session Store Delete value in redis session
 func (m *RedisStore) Delete(key interface{}) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
@@ -188,7 +189,7 @@ func (m *RedisStore) Delete(key interface{}) error {
 	return nil
 }
 
-// Flush clear all sessionData in redis session
+// Session Store Flush clear all sessionData in redis session
 func (m *RedisStore) Flush() error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
@@ -196,7 +197,24 @@ func (m *RedisStore) Flush() error {
 	return nil
 }
 
-// SessionID get session id of this redis session store
+// Session Store ID get session id of this redis session store
 func (m *RedisStore) ID() string {
 	return m.sessionId
+}
+
+// Session Store Release save mysql session sessionData to database.
+// must call this method to save sessionData to cache.
+func (m *RedisStore) Release() {
+	b, err := EncodeGob(m.sessionData)
+	if err != nil {
+		return
+	}
+	err = m.sessionKvstoreProvider.Set(m.sessionId, string(b))
+	if err != nil {
+		return
+	}
+	err = m.sessionKvstoreProvider.Expire(m.sessionId, m.sessionMaxAge)
+	if err != nil {
+		return
+	}
 }
