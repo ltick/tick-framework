@@ -20,7 +20,7 @@ var (
 	errInvalidLogType = "logger: invalid log type '%s'"
 )
 
-type LogConfig struct {
+type Config struct {
 	Name            string
 	Formatter       string
 	Type            string
@@ -186,7 +186,7 @@ func NewLogger() *Logger {
 type Logger struct {
 	Config   *config.Config `inject:"true"`
 	Provider string
-	Logs     []*LogConfig
+	Logs     []*Config
 	handler  Handler
 }
 func (l *Logger) Prepare(ctx context.Context) (context.Context, error) {

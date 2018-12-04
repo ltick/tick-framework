@@ -6,6 +6,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ltick/tick-routing"
+	"github.com/ltick/tick-framework/middleware"
 )
 
 var (
@@ -15,6 +16,7 @@ var (
 	errRegisterMiddleware   = "ltick: register middleware '%s' error"
 	errUnRegisterMiddleware = "ltick: unregister middleware '%s' error"
 	errInjectMiddlewareTo   = "ltick: inject middleware '%s' field '%s' error"
+	errUseMiddleware   = "ltick: use middleware '%s' error"
 )
 
 type MiddlewareInterface interface {
@@ -24,9 +26,54 @@ type MiddlewareInterface interface {
 	OnRequestShutdown(c *routing.Context) error
 }
 
+type Middlewares []*Middleware
+
+func (cs Middlewares) Get(name string) *Middleware {
+	for _, c := range cs {
+		canonicalName := canonicalName(name)
+		if canonicalName == c.Name {
+			return c
+		}
+	}
+	return nil
+}
+
 type Middleware struct {
 	Name       string
 	Middleware MiddlewareInterface
+}
+
+var (
+	OptionalMiddlewares = Middlewares{
+		&Middleware{Name: "IPFilter", Middleware: &middleware.IPFilter{}},
+		&Middleware{Name: "Prometheus", Middleware: &middleware.Prometheus{}},
+	}
+)
+
+/**************** Middleware ****************/
+func (r *Registry) UseMiddleware(middlewareNames ...string) error {
+	var err error
+	middlewares := make([]*Middleware, 0)
+	for _, middlewareName := range middlewareNames {
+		canonicalMiddlewareName := canonicalName(middlewareName)
+		middleware := OptionalMiddlewares.Get(canonicalMiddlewareName)
+		if middleware != nil {
+			middlewares = append(middlewares, middleware)
+			err = r.RegisterMiddleware(middleware, true)
+			if err != nil {
+				return errors.Annotatef(err, errUseMiddleware, middleware.Name)
+			}
+		} else {
+			return errors.Annotatef(err, errMiddlewareNotExists, canonicalMiddlewareName)
+		}
+	}
+	for _, middleware := range middlewares {
+		err = r.InjectComponentTo([]interface{}{middleware})
+		if err != nil {
+			return errors.Annotatef(err, errUseMiddleware, middleware.Name)
+		}
+	}
+	return nil
 }
 
 /**************** Middleware ****************/

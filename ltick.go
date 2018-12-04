@@ -260,6 +260,12 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 		}
 	}
 	// 注入模块
+	err = e.Registry.InjectMiddleware()
+	if err != nil {
+		err = errors.Annotatef(err, errNew)
+		e.Log(errors.ErrorStack(err))
+		os.Exit(1)
+	}
 	err = e.Registry.InjectComponent()
 	if err != nil {
 		err = errors.Annotatef(err, errNew)

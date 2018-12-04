@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -19,7 +20,12 @@ func NewIPFilter(whitelist []string, realIP bool) *IPFilter {
 		realIP:    realIP,
 	}
 }
-
+func (i *IPFilter) Prepare(ctx context.Context) (context.Context, error) {
+	return ctx, nil
+}
+func (i *IPFilter) Initiate(ctx context.Context) (context.Context, error) {
+	return ctx, nil
+}
 func (i *IPFilter) OnRequestStartup(c *routing.Context) error {
 	var forbidden bool
 	var match []string
@@ -58,7 +64,6 @@ func (i *IPFilter) OnRequestStartup(c *routing.Context) error {
 	}
 	return routing.NewHTTPError(http.StatusForbidden, "access not allow for ip: "+ip)
 }
-
 func (i *IPFilter) OnRequestShutdown(c *routing.Context) error {
 	return nil
 }
