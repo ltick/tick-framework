@@ -340,6 +340,10 @@ func (c *Config) GetSizeInBytes(key string) uint {
 	return c.handler.GetSizeInBytes(key)
 }
 
+func (c *Config) GetAll() map[string]interface{} {
+	return c.handler.AllSettings()
+}
+
 type configHandler func() Handler
 
 var configHandlers = make(map[string]configHandler)
