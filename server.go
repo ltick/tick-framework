@@ -173,7 +173,7 @@ func NewServer(router *ServerRouter, setters ...ServerOption) (server *Server) {
 	server = &Server{
 		ServerOptions: serverOptions,
 		Router:        router,
-		RouteGroups:   make(map[string]*ServerRouteGroup{}),
+		RouteGroups:   make(map[string]*ServerRouteGroup),
 		mutex:         sync.RWMutex{},
 	}
 	server.Log(fmt.Sprintf("ltick: new server [serverOptions:'%v', serverRouterOptions:'%v', handlerTimeout:'%.fs']", server.ServerOptions, server.Router.ServerRouterOptions, router.TimeoutDuration.Seconds()))

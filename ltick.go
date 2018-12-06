@@ -28,6 +28,7 @@ import (
 
 var (
 	errNew                       = "ltick: new error"
+	errStartup                       = "ltick: startup error"
 	errEngineOption              = "ltick: set engine option error"
 	errEngineConfigOption        = "ltick: set engine config option error"
 	errNewDefault                = "ltick: new classic error"
@@ -590,13 +591,13 @@ func (e *Engine) Startup() (err error) {
 	for _, m := range e.Registry.GetMiddlewareMap() {
 		mi, ok := m.Middleware.(MiddlewareInterface)
 		if !ok {
-			err = errors.Annotate(errors.Errorf("invalid type"), errNew)
+			err = errors.Annotate(errors.Errorf("invalid type"), errStartup)
 			e.Log(errors.ErrorStack(err))
 			os.Exit(1)
 		}
 		e.Context, err = mi.Initiate(e.Context)
 		if err != nil {
-			err = errors.Annotate(err, errNew)
+			err = errors.Annotate(err, errStartup)
 			e.Log(errors.ErrorStack(err))
 			os.Exit(1)
 		}
@@ -618,7 +619,12 @@ func (e *Engine) Startup() (err error) {
 			}
 			if server.Router.Routes != nil && len(server.Router.Routes) > 0 {
 				for _, route := range server.Router.Routes {
-					if _, ok := server.RouteGroups[route.Group]; !ok {
+					if route == nil {
+						return errors.Annotatef(errors.New("ltick: route does not exists"), errStartup)
+					}
+					if server.RouteGroups[route.Group] == nil {
+						server.RouteGroups[route.Group] = server.AddRouteGroup(route.Group)
+					} else if _, ok := server.RouteGroups[route.Group]; !ok {
 						server.RouteGroups[route.Group] = server.AddRouteGroup(route.Group)
 					}
 					for _, method := range route.Method {
@@ -631,7 +637,12 @@ func (e *Engine) Startup() (err error) {
 			// proxy
 			if server.Router.Proxys != nil && len(server.Router.Proxys) > 0 {
 				for _, proxy := range server.Router.Proxys {
-					if _, ok := server.RouteGroups[proxy.Group]; !ok {
+					if proxy == nil {
+						return errors.Annotatef(errors.New("ltick: route does not exists"), errStartup)
+					}
+					if server.RouteGroups[proxy.Group] == nil {
+						server.RouteGroups[proxy.Group] = server.AddRouteGroup(proxy.Group)
+					} else if _, ok := server.RouteGroups[proxy.Group]; !ok {
 						server.RouteGroups[proxy.Group] = server.AddRouteGroup(proxy.Group)
 					}
 					server.RouteGroups[proxy.Group].AddRoute("ANY", proxy.Path, func(c *routing.Context) error {
