@@ -1,6 +1,7 @@
 package ltick
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,10 +12,10 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"context"
 
 	"github.com/juju/errors"
 	"github.com/ltick/tick-framework/api"
+	"github.com/ltick/tick-framework/utility"
 	"github.com/ltick/tick-routing"
 	"github.com/ltick/tick-routing/access"
 	"github.com/ltick/tick-routing/content"
@@ -52,15 +53,15 @@ type (
 		mutex       sync.RWMutex
 	}
 	ServerRouterProxy struct {
-		Host     string
+		Host     []string
 		Group    string
 		Path     string
 		Upstream string
 	}
 	ServerRouterRoute struct {
-		Host     string
+		Host     []string
 		Group    string
-		Method   string
+		Method   []string
 		Path     string
 		Handlers []api.Handler
 	}
@@ -263,9 +264,9 @@ func (e *Engine) GetServerMap() map[string]*Server {
 func (s *Server) GetGracefulStopTimeout() time.Duration {
 	return s.Router.gracefulStopTimeoutDuration
 }
-func (s *Server) Get(host string, group string, path string, handlers ...api.Handler) *Server {
+func (s *Server) Get(host []string, group string, path string, handlers ...api.Handler) *Server {
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method:   "GET",
+		Method:   []string{"GET"},
 		Host:     host,
 		Group:    group,
 		Path:     path,
@@ -273,9 +274,9 @@ func (s *Server) Get(host string, group string, path string, handlers ...api.Han
 	})
 	return s
 }
-func (s *Server) Post(host string, group string, path string, handlers ...api.Handler) *Server {
+func (s *Server) Post(host []string, group string, path string, handlers ...api.Handler) *Server {
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method:   "POST",
+		Method:   []string{"POST"},
 		Host:     host,
 		Group:    group,
 		Path:     path,
@@ -283,9 +284,9 @@ func (s *Server) Post(host string, group string, path string, handlers ...api.Ha
 	})
 	return s
 }
-func (s *Server) Put(host string, group string, path string, handlers ...api.Handler) *Server {
+func (s *Server) Put(host []string, group string, path string, handlers ...api.Handler) *Server {
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method:   "PUT",
+		Method:   []string{"PUT"},
 		Host:     host,
 		Group:    group,
 		Path:     path,
@@ -293,9 +294,9 @@ func (s *Server) Put(host string, group string, path string, handlers ...api.Han
 	})
 	return s
 }
-func (s *Server) Patch(host string, group string, path string, handlers ...api.Handler) *Server {
+func (s *Server) Patch(host []string, group string, path string, handlers ...api.Handler) *Server {
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method:   "PATCH",
+		Method:   []string{"PATCH"},
 		Host:     host,
 		Group:    group,
 		Path:     path,
@@ -303,9 +304,9 @@ func (s *Server) Patch(host string, group string, path string, handlers ...api.H
 	})
 	return s
 }
-func (s *Server) Delete(host string, group string, path string, handlers ...api.Handler) *Server {
+func (s *Server) Delete(host []string, group string, path string, handlers ...api.Handler) *Server {
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method:   "DELETE",
+		Method:   []string{"DELETE"},
 		Host:     host,
 		Group:    group,
 		Path:     path,
@@ -313,9 +314,9 @@ func (s *Server) Delete(host string, group string, path string, handlers ...api.
 	})
 	return s
 }
-func (s *Server) Connect(host string, group string, path string, handlers ...api.Handler) *Server {
+func (s *Server) Connect(host []string, group string, path string, handlers ...api.Handler) *Server {
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method:   "CONNECT",
+		Method:   []string{"CONNECT"},
 		Host:     host,
 		Group:    group,
 		Path:     path,
@@ -323,9 +324,9 @@ func (s *Server) Connect(host string, group string, path string, handlers ...api
 	})
 	return s
 }
-func (s *Server) Options(host string, group string, path string, handlers ...api.Handler) *Server {
+func (s *Server) Options(host []string, group string, path string, handlers ...api.Handler) *Server {
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method:   "OPTIONS",
+		Method:   []string{"OPTIONS"},
 		Host:     host,
 		Group:    group,
 		Path:     path,
@@ -333,9 +334,9 @@ func (s *Server) Options(host string, group string, path string, handlers ...api
 	})
 	return s
 }
-func (s *Server) Trace(host string, group string, path string, handlers ...api.Handler) *Server {
+func (s *Server) Trace(host []string, group string, path string, handlers ...api.Handler) *Server {
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method:   "TRACE",
+		Method:   []string{"TRACE"},
 		Host:     host,
 		Group:    group,
 		Path:     path,
@@ -343,7 +344,7 @@ func (s *Server) Trace(host string, group string, path string, handlers ...api.H
 	})
 	return s
 }
-func (s *Server) Proxy(host string, group string, path string, upstream string) *Server {
+func (s *Server) Proxy(host []string, group string, path string, upstream string) *Server {
 	s.Router.Proxys = append(s.Router.Proxys, &ServerRouterProxy{
 		Host:     host,
 		Group:    group,
@@ -355,7 +356,7 @@ func (s *Server) Proxy(host string, group string, path string, upstream string) 
 
 type prometheusHandler struct {
 	httpHandler http.Handler
-	basicAuth *ServerBasicAuth
+	basicAuth   *ServerBasicAuth
 }
 
 func (h prometheusHandler) Serve(ctx *api.Context) error {
@@ -366,22 +367,21 @@ func (h prometheusHandler) Serve(ctx *api.Context) error {
 	return nil
 }
 
-func (s *Server) Prometheus(host string, basicAuth *ServerBasicAuth) *Server {
+func (s *Server) Prometheus(host []string, basicAuth *ServerBasicAuth) *Server {
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method: "ANY",
+		Method: []string{"ANY"},
 		Host:   host,
 		Group:  "/",
 		Path:   "metrics",
 		Handlers: []api.Handler{
 			prometheusHandler{
 				httpHandler: promhttp.Handler(),
-				basicAuth:basicAuth,
+				basicAuth:   basicAuth,
 			},
 		},
 	})
 	return s
 }
-
 
 type pprofHandler struct {
 	httpHandlerFunc http.HandlerFunc
@@ -392,9 +392,9 @@ func (h pprofHandler) Serve(ctx *api.Context) error {
 	return nil
 }
 
-func (s *Server) Pprof(host string, group string) *Server {
+func (s *Server) Pprof(host []string, group string) *Server {
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method: "ANY",
+		Method: []string{"ANY"},
 		Host:   host,
 		Group:  group,
 		Path:   "pprof",
@@ -405,7 +405,7 @@ func (s *Server) Pprof(host string, group string) *Server {
 		},
 	})
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method: "ANY",
+		Method: []string{"ANY"},
 		Host:   host,
 		Group:  group,
 		Path:   "pprof/cmdline",
@@ -416,7 +416,7 @@ func (s *Server) Pprof(host string, group string) *Server {
 		},
 	})
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method: "ANY",
+		Method: []string{"ANY"},
 		Host:   host,
 		Group:  group,
 		Path:   "pprof/profile",
@@ -427,7 +427,7 @@ func (s *Server) Pprof(host string, group string) *Server {
 		},
 	})
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method: "ANY",
+		Method: []string{"ANY"},
 		Host:   host,
 		Group:  group,
 		Path:   "pprof/symbol",
@@ -438,7 +438,7 @@ func (s *Server) Pprof(host string, group string) *Server {
 		},
 	})
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method: "ANY",
+		Method: []string{"ANY"},
 		Host:   host,
 		Group:  group,
 		Path:   "pprof/trace",
@@ -671,21 +671,28 @@ func (g *ServerRouteGroup) AddCallback(callback RouterCallback) *ServerRouteGrou
 
 // 添加API路由
 // 可进行参数校验
-func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlers ...api.Handler) {
+func (g *ServerRouteGroup) AddApiRoute(host string, method string, path string, handlers ...api.Handler) {
 	routeHandlers := make([]routing.Handler, len(handlers))
 	for index, handler := range handlers {
 		routeHandlers[index] = func(ctx *routing.Context) error {
-			apiCtx := &api.Context{
-				Context:  ctx,
-				Response: api.NewResponse(ctx.ResponseWriter),
+			requestHost := ctx.Request.Host
+			if requestHost == "" {
+				requestHost = ctx.Request.URL.Host
 			}
-			err := handler.Serve(apiCtx)
-			if err != nil {
-				ctx.Abort()
-				if httpError, ok := err.(routing.HTTPError); ok {
-					return routing.NewHTTPError(httpError.StatusCode(), httpError.Error())
+			fmt.Println(requestHost)
+			if utility.WildcardMatch(host, requestHost) {
+				apiCtx := &api.Context{
+					Context:  ctx,
+					Response: api.NewResponse(ctx.ResponseWriter),
 				}
-				return err
+				err := handler.Serve(apiCtx)
+				if err != nil {
+					ctx.Abort()
+					if httpError, ok := err.(routing.HTTPError); ok {
+						return routing.NewHTTPError(httpError.StatusCode(), httpError.Error())
+					}
+					return err
+				}
 			}
 			return nil
 		}

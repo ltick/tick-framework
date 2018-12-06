@@ -617,7 +617,11 @@ func (e *Engine) Startup() (err error) {
 					if _, ok := server.RouteGroups[route.Group]; !ok {
 						server.RouteGroups[route.Group] = server.AddRouteGroup(route.Group)
 					}
-					server.RouteGroups[route.Group].AddApiRoute(route.Method, route.Path, route.Handlers...)
+					for _, method := range route.Method {
+						for _, host := range route.Host {
+							server.RouteGroups[route.Group].AddApiRoute(host, method, route.Path, route.Handlers...)
+						}
+					}
 				}
 			}
 			// proxy
