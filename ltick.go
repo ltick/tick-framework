@@ -305,7 +305,8 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 	}
 	e.loadConfig(setters...)
 	for _, component := range e.Registry.GetComponentMap() {
-		e.ConfigureComponentFileConfig(component, e.configer.ConfigFileUsed(), make(map[string]interface{}))
+		err = e.ConfigureComponentFileConfig(component, e.configer.ConfigFileUsed(), make(map[string]interface{}))
+		fmt.Println(err)
 		// ignore error
 		/*if err != nil {
 			err = errors.Annotate(err, errNew)
@@ -612,6 +613,9 @@ func (e *Engine) Startup() (err error) {
 	}
 	if e.ServerMap != nil {
 		for _, server := range e.ServerMap {
+			if server.Router == nil {
+				continue
+			}
 			if server.Router.Routes != nil && len(server.Router.Routes) > 0 {
 				for _, route := range server.Router.Routes {
 					if _, ok := server.RouteGroups[route.Group]; !ok {

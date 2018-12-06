@@ -3,19 +3,22 @@ package database
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/jinzhu/gorm"
 	"github.com/ltick/tick-framework/config"
 	"github.com/tsuna/gohbase/hrpc"
+	"github.com/juju/errors"
 )
 
 var (
 	errPrepare       = "database: prepare '%s' error"
 	errInitiate      = "database: initiate '%s' error"
 	errStartup       = "database: startup '%s' error"
+	errRegister       = "database: register error"
+	errNosqlRegister       = "database: register error"
+	errNosqlUse       = "database: register error"
 	errNewConnection = "database: new '%s' connection error"
 	errGetConnection = "database: get '%s' connection error"
 )
@@ -61,19 +64,19 @@ func (d *Database) Prepare(ctx context.Context) (context.Context, error) {
 func (d *Database) Initiate(ctx context.Context) (context.Context, error) {
 	err := Register("mysql", NewMysqlHandler)
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.provider))
+		return ctx, errors.Annotate(err, fmt.Sprintf(errInitiate, d.provider))
 	}
 	err = d.Use(ctx, "mysql")
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.provider))
+		return ctx, errors.Annotate(err, fmt.Sprintf(errInitiate, d.provider))
 	}
 	err = NosqlRegister("hbase", NewHbaseHandler)
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.nosqlProvider))
+		return ctx, errors.Annotate(err, fmt.Sprintf(errInitiate, d.nosqlProvider))
 	}
 	err = d.NosqlUse(ctx, "hbase")
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.nosqlProvider))
+		return ctx, errors.Annotate(err, fmt.Sprintf(errInitiate, d.nosqlProvider))
 	}
 	d.configs = make(map[string]interface{})
 	if _, ok := d.configs["DATABASE_MYSQL_HOST"]; !ok {
@@ -117,14 +120,14 @@ func (d *Database) OnStartup(ctx context.Context) (context.Context, error) {
 	if databaseProvider != "" {
 		err = d.Use(ctx, databaseProvider)
 		if err != nil {
-			return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), d.provider))
+			return ctx, errors.Annotate(err, fmt.Sprintf(errStartup+": "+err.Error(), d.provider))
 		}
 	}
 	databaseNosqlProvider := d.Config.GetString("DATABASE_NOSQL_PROVIDER")
 	if databaseNosqlProvider != "" {
 		err = d.NosqlUse(ctx, databaseNosqlProvider)
 		if err != nil {
-			return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), d.nosqlProvider))
+			return ctx, errors.Annotate(err, fmt.Sprintf(errStartup+": "+err.Error(), d.nosqlProvider))
 		}
 	}
 	return ctx, nil
@@ -144,7 +147,7 @@ func (d *Database) Use(ctx context.Context, Provider string) error {
 	d.handler = handler()
 	err = d.handler.Initiate(ctx)
 	if err != nil {
-		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.provider))
+		return errors.Annotate(err, fmt.Sprintf(errInitiate, d.provider))
 	}
 	return nil
 }
@@ -155,10 +158,10 @@ func (d *Database) NewConnection(name string, config map[string]interface{}) (Da
 	}
 	databaseHandler, err = d.handler.NewConnection(name, d.configs)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf(errNewConnection+": "+err.Error(), name))
+		return nil, errors.Annotate(err, fmt.Sprintf(errNewConnection, name))
 	}
 	if databaseHandler == nil {
-		return nil, errors.New(fmt.Sprintf(errNewConnection+": empty database", name))
+		return nil, errors.Annotate(errors.New("database: empty database"), fmt.Sprintf(errNewConnection, name))
 	}
 	return databaseHandler, nil
 }
@@ -168,7 +171,7 @@ func (d *Database) GetConnection(name string) (DatabaseHandler, error) {
 		if ConnectionNotExists(err) {
 			databaseHandler, err = d.handler.NewConnection(name, d.configs)
 		}
-		return nil, errors.New(fmt.Sprintf(errGetConnection+": "+err.Error(), name))
+		return nil, errors.Annotate(err, fmt.Sprintf(errGetConnection, name))
 	}
 	return databaseHandler, err
 }
@@ -259,7 +262,7 @@ var databaseHandlers = make(map[string]databaseHandler)
 
 func Register(name string, databaseHandler databaseHandler) error {
 	if databaseHandler == nil {
-		return errors.New("database: Register database is nil")
+		return errors.Annotate(errors.New("database: Register database is nil"), errRegister)
 	}
 	if _, ok := databaseHandlers[name]; !ok {
 		databaseHandlers[name] = databaseHandler
@@ -268,7 +271,7 @@ func Register(name string, databaseHandler databaseHandler) error {
 }
 func Use(name string) (databaseHandler, error) {
 	if _, exist := databaseHandlers[name]; !exist {
-		return nil, errors.New(fmt.Sprintf("database: unknown database '%s' (forgotten register?)", name))
+		return nil, errors.Annotate(errors.Errorf("database: unknown database '%s' (forgotten register?)", name), errRegister)
 	}
 	return databaseHandlers[name], nil
 }
@@ -283,7 +286,7 @@ func (d *Database) NosqlUse(ctx context.Context, Provider string) error {
 	d.nosqlHandler = nosqlHandler()
 	err = d.nosqlHandler.Initiate(ctx)
 	if err != nil {
-		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), d.provider))
+		return errors.Annotate(err, fmt.Sprintf(errInitiate, d.provider))
 	}
 	return nil
 }
@@ -315,10 +318,10 @@ func (d *Database) NewNosqlConnection(name string, config map[string]interface{}
 	}
 	database, err = d.nosqlHandler.NewConnection(name, config)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf(errNewConnection+": "+err.Error(), name))
+		return nil, errors.Annotate(err, fmt.Sprintf(errNewConnection, name))
 	}
 	if database == nil {
-		return nil, errors.New(fmt.Sprintf(errNewConnection+": empty database", name))
+		return nil, errors.Annotate(err, fmt.Sprintf(errNewConnection+": empty database", name))
 	}
 	return database, nil
 }
@@ -328,7 +331,7 @@ func (d *Database) GetNosqlConnection(name string) (NosqlDatabaseHandler, error)
 		if ConnectionNotExists(err) {
 			databaseHandler, err = d.nosqlHandler.NewConnection(name, d.configs)
 		}
-		return nil, errors.New(fmt.Sprintf(errGetConnection+": "+err.Error(), name))
+		return nil, errors.Annotate(err, fmt.Sprintf(errGetConnection, name))
 	}
 	return databaseHandler, err
 }
@@ -364,7 +367,7 @@ var nosqlDatabaseHandlers = make(map[string]nosqlDatabaseHandler)
 
 func NosqlRegister(name string, nosqlDatabaseHandler nosqlDatabaseHandler) error {
 	if nosqlDatabaseHandler == nil {
-		return errors.New("database: Register nosql database is nil")
+		return errors.Annotate(errors.New("database: Register nosql database is nil"), errNosqlRegister)
 	}
 	if _, ok := nosqlDatabaseHandlers[name]; !ok {
 		nosqlDatabaseHandlers[name] = nosqlDatabaseHandler
@@ -374,7 +377,7 @@ func NosqlRegister(name string, nosqlDatabaseHandler nosqlDatabaseHandler) error
 
 func NosqlUse(name string) (nosqlDatabaseHandler, error) {
 	if _, dup := nosqlDatabaseHandlers[name]; !dup {
-		return nil, errors.New(fmt.Sprintf("database: unknown nosql database '%s' (forgotten register?)", name))
+		return nil, errors.Annotate(errors.Errorf("database: unknown nosql database '%s' (forgotten register?)", name), errNosqlUse)
 	}
 	return nosqlDatabaseHandlers[name], nil
 }

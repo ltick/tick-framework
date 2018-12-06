@@ -204,6 +204,9 @@ func (l *Logger) Initiate(ctx context.Context) (context.Context, error) {
 	if l.Logs != nil {
 		logs := make([]*Log, 0)
 		for _, logConfig := range l.Logs {
+			if logConfig == nil {
+				continue
+			}
 			logConfigMaxLevel := LevelDebug
 			for level, levelName := range LevelNames {
 				if levelName == logConfig.MaxLevel {
@@ -245,7 +248,7 @@ func (l *Logger) Initiate(ctx context.Context) (context.Context, error) {
 					MaxLevel:  logConfigMaxLevel,
 				})
 			default:
-				return ctx, errors.Errorf(errInvalidLogType, StringToType(logConfig.Type))
+				return ctx, errors.Annotatef(errors.Errorf(errInvalidLogType, StringToType(logConfig.Type)), errInitiate)
 			}
 		}
 		var logProviders map[string]interface{} = make(map[string]interface{})
