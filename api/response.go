@@ -67,27 +67,6 @@ var responseOptions = map[string]map[string]interface{}{
 	},
 }
 
-type DefaultResponse struct {
-	Code    string      `json:"code" xml:"code"`
-	Status  int         `json:"status" xml:"status"`
-	Message string      `json:"message,omitempty" xml:"message,omitempty"`
-	Data    interface{} `json:"data,omitempty" xml:"data,omitempty"`
-}
-
-type DefaultErrorResponse struct {
-	*DefaultResponse
-}
-
-func (this *DefaultErrorResponse) Error() string {
-	return this.Message
-}
-func (this *DefaultErrorResponse) StatusCode() int {
-	return this.Status
-}
-func (this *DefaultErrorResponse) ErrorCode() string {
-	return this.Code
-}
-
 func NewResponseCustomWriter(rw http.ResponseWriter, w routing.DataWriter) (r *Response) {
 	r = &Response{
 		httpResponseWriter: rw,
@@ -121,17 +100,17 @@ func (rw *DefaultResponseWriter) Write(w http.ResponseWriter, data interface{}) 
 	case string:
 		byte := []byte(data.(string))
 		size, err = w.Write(byte)
-	case *DefaultErrorResponse:
-		errorResponse, ok := data.(*DefaultErrorResponse)
+	case *JSONMsg:
+		errorResponse, ok := data.(*JSONMsg)
 		if !ok {
 			return 0, routing.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("get audio: data type error"))
 		}
 		errorResponseBody, err := json.Marshal(errorResponse)
 		if err != nil {
-			return 0, routing.NewHTTPError(errorResponse.StatusCode(), errorResponse.ErrorCode()+":"+errorResponse.Error())
+			return 0, routing.NewHTTPError(errorResponse.GetStatus(), errorResponse.GetCode()+":"+errorResponse.GetMessage())
 		}
 		rw.SetHeader(w)
-		return 0, routing.NewHTTPError(errorResponse.StatusCode(), string(errorResponseBody))
+		return 0, routing.NewHTTPError(errorResponse.GetStatus(), string(errorResponseBody))
 	default:
 		if data != nil {
 			size, err = fmt.Fprint(w, data)

@@ -24,8 +24,8 @@ var (
 	errBindFields = "api: bind fields error"
 	errBindAt     = "api: bind at error"
 	errBindNew    = "api: bind new error"
-	errNewApi    = "api: new api error"
-	errAddFields    = "api: add fields error"
+	errNewApi     = "api: new api error"
+	errAddFields  = "api: add fields error"
 )
 
 type (
@@ -100,14 +100,29 @@ type (
 	}
 	// JSONMsg is commonly used to return JSON format response.
 	JSONMsg struct {
-		Code int         `json:"code" xml:"code"`                     // the status code of the business process (required)
-		Info interface{} `json:"info,omitempty" xml:"info,omitempty"` // response's apiMap and example value (optional)
+		Code    string      `json:"code" xml:"code"` // the status code of the business process (required)
+		Status  int         `json:"status,omitempty" xml:"status,omitempty"`
+		Message string      `json:"message,omitempty" xml:"message,omitempty"`
+		Data    interface{} `json:"data,omitempty" xml:"data,omitempty"`
 	}
 	// apiHandler is an intelligent Handler of binding parameters.
 	apiHandler struct {
 		api *Api
 	}
 )
+
+func (this *JSONMsg) GetMessage() string {
+	return this.Message
+}
+func (this *JSONMsg) GetStatus() int {
+	return this.Status
+}
+func (this *JSONMsg) GetCode() string {
+	return this.Code
+}
+func (this *JSONMsg) GetData() interface{} {
+	return this.Data
+}
 
 var _ APIDoc = new(apiHandler)
 

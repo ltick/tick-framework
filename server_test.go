@@ -373,8 +373,8 @@ func (p Param) Doc() api.Doc {
 	return api.Doc{
 		Note: "param desc",
 		Return: api.JSONMsg{
-			Code: 1,
-			Info: "success",
+			Code: "1",
+			Message: "success",
 		},
 		MoreParams: []api.APIParam{
 			{

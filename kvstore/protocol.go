@@ -46,6 +46,7 @@ func (c *Kvstore) Prepare(ctx context.Context) (context.Context, error) {
 	if err != nil {
 		return ctx, fmt.Errorf(errPrepare+": %s", err.Error())
 	}
+	c.configs = make(map[string]interface{})
 	return ctx, nil
 }
 
@@ -58,7 +59,6 @@ func (c *Kvstore) Initiate(ctx context.Context) (context.Context, error) {
 	if err != nil {
 		return ctx, errors.New(fmt.Sprintf(errInitiate + ": " + err.Error()))
 	}
-	c.configs = make(map[string]interface{})
 	if _, ok := c.configs["KVSTORE_REDIS_HOST"]; !ok {
 		c.configs["KVSTORE_REDIS_HOST"] = c.Config.GetString("KVSTORE_REDIS_HOST")
 	}

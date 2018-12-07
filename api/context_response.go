@@ -274,19 +274,21 @@ func (ctx *Context) ResponseJSONP(status int, callback string, data interface{},
 }
 
 // JSONMsg sends a JSON with JSONMsg format.
-func (ctx *Context) ResponseJSONMsg(status int, msgcode int, info interface{}, isIndent ...bool) error {
+func (ctx *Context) ResponseJSONMsg(status int, code string, message string, data interface{}, isIndent ...bool) error {
 	var (
-		b    []byte
-		err  error
-		data = JSONMsg{
-			Code: msgcode,
-			Info: info,
+		b   []byte
+		err error
+		d   = JSONMsg{
+			Status:  status,
+			Code:    code,
+			Message: message,
+			Data:    data,
 		}
 	)
 	if len(isIndent) > 0 && isIndent[0] {
-		b, err = json.MarshalIndent(data, "", "  ")
+		b, err = json.MarshalIndent(d, "", "  ")
 	} else {
-		b, err = json.Marshal(data)
+		b, err = json.Marshal(d)
 	}
 	if err != nil {
 		return err
@@ -327,22 +329,6 @@ func (ctx *Context) ResponseJSONOrXML(status int, data interface{}, isIndent ...
 }
 
 func (ctx *Context) ResponseDefault(code string, data interface{}, messages ...string) error {
-	responseData := ctx.newResponseDefault(code, data, messages...)
-	_, err := ctx.Response.Write(responseData)
-	return err
-}
-func (ctx *Context) ResponseDefaultError(code string, messages ...string) error {
-	responseData := ctx.newResponseDefaultError(code, messages...)
-	_, err := ctx.Response.Write(responseData)
-	if err != nil {
-		if ConnectionResetByPeer(err) || Timeout(err) || NetworkUnreachable(err) {
-			return routing.NewHTTPError(499, "Response write error: "+err.Error())
-		}
-		return routing.NewHTTPError(http.StatusInternalServerError, "Response write error: "+err.Error())
-	}
-	return nil
-}
-func (ctx *Context) newResponseDefault(code string, data interface{}, messages ...string) *DefaultResponse {
 	config := make(map[string]interface{})
 	responseConfig, ok := responseOptions[code]
 	if ok {
@@ -355,17 +341,19 @@ func (ctx *Context) newResponseDefault(code string, data interface{}, messages .
 	if len(messages) > 0 {
 		message = messages[0]
 	}
-	return &DefaultResponse{
-		Code:    code,
-		Status:  config["status"].(int),
-		Message: message,
-		Data:    data,
+	status, ok := config["status"].(int)
+	if !ok {
+		status = http.StatusOK
 	}
-}
-func (ctx *Context) newResponseDefaultError(code string, messages ...string) *DefaultErrorResponse {
-	return &DefaultErrorResponse{
-		DefaultResponse: ctx.newResponseDefault(code, nil, messages...),
+	responseData := ctx.ResponseJSONMsg(status, code, message, data)
+	_, err := ctx.Response.Write(responseData)
+	if err != nil {
+		if ConnectionResetByPeer(err) || Timeout(err) || NetworkUnreachable(err) {
+			return routing.NewHTTPError(499, "Response write error: "+err.Error())
+		}
+		return routing.NewHTTPError(http.StatusInternalServerError, "Response write error: "+err.Error())
 	}
+	return err
 }
 
 // File forces response for download file.

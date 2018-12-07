@@ -679,7 +679,6 @@ func (g *ServerRouteGroup) AddApiRoute(host string, method string, path string, 
 			if requestHost == "" {
 				requestHost = ctx.Request.URL.Host
 			}
-			fmt.Println(requestHost)
 			if utility.WildcardMatch(host, requestHost) {
 				apiCtx := &api.Context{
 					Context:  ctx,
