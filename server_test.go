@@ -372,7 +372,7 @@ func (p Param) Serve(ctx *api.Context) error {
 func (p Param) Doc() api.Doc {
 	return api.Doc{
 		Note: "param desc",
-		Return: api.JSONMsg{
+		Return: api.ResponseData{
 			Code: "1",
 			Message: "success",
 		},

@@ -98,8 +98,8 @@ type (
 		Note   string      `json:"note" xml:"note"`
 		Return interface{} `json:"return,omitempty" xml:"return,omitempty"`
 	}
-	// JSONMsg is commonly used to return JSON format response.
-	JSONMsg struct {
+	// ResponseData is commonly used to return JSON format response.
+	ResponseData struct {
 		Code    string      `json:"code" xml:"code"` // the status code of the business process (required)
 		Status  int         `json:"status,omitempty" xml:"status,omitempty"`
 		Message string      `json:"message,omitempty" xml:"message,omitempty"`
@@ -111,16 +111,16 @@ type (
 	}
 )
 
-func (this *JSONMsg) GetMessage() string {
+func (this *ResponseData) GetMessage() string {
 	return this.Message
 }
-func (this *JSONMsg) GetStatus() int {
+func (this *ResponseData) GetStatus() int {
 	return this.Status
 }
-func (this *JSONMsg) GetCode() string {
+func (this *ResponseData) GetCode() string {
 	return this.Code
 }
-func (this *JSONMsg) GetData() interface{} {
+func (this *ResponseData) GetData() interface{} {
 	return this.Data
 }
 

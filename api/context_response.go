@@ -273,12 +273,12 @@ func (ctx *Context) ResponseJSONP(status int, callback string, data interface{},
 	return ctx.ResponseBytes(status, MIMEApplicationJavaScriptCharsetUTF8, callbackContent.Bytes())
 }
 
-// JSONMsg sends a JSON with JSONMsg format.
-func (ctx *Context) ResponseJSONMsg(status int, code string, message string, data interface{}, isIndent ...bool) error {
+// ResponseData sends a JSON with ResponseData format.
+func (ctx *Context) ResponseResponseData(status int, code string, message string, data interface{}, isIndent ...bool) error {
 	var (
 		b   []byte
 		err error
-		d   = JSONMsg{
+		d   = ResponseData{
 			Status:  status,
 			Code:    code,
 			Message: message,
@@ -345,7 +345,7 @@ func (ctx *Context) ResponseDefault(code string, data interface{}, messages ...s
 	if !ok {
 		status = http.StatusOK
 	}
-	responseData := ctx.ResponseJSONMsg(status, code, message, data)
+	responseData := ctx.ResponseResponseData(status, code, message, data)
 	_, err := ctx.Response.Write(responseData)
 	if err != nil {
 		if ConnectionResetByPeer(err) || Timeout(err) || NetworkUnreachable(err) {

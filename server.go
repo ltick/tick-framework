@@ -688,7 +688,11 @@ func (g *ServerRouteGroup) AddApiRoute(host string, method string, path string, 
 				if err != nil {
 					ctx.Abort()
 					if httpError, ok := err.(routing.HTTPError); ok {
-						return routing.NewHTTPError(httpError.StatusCode(), httpError.Error())
+						_, err := api.NewResponse(ctx.ResponseWriter).Write(api.ResponseData{
+							Status: httpError.StatusCode(),
+							Message: httpError.Error(),
+						})
+						return err
 					}
 					return err
 				}

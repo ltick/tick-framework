@@ -100,8 +100,8 @@ func (rw *DefaultResponseWriter) Write(w http.ResponseWriter, data interface{}) 
 	case string:
 		byte := []byte(data.(string))
 		size, err = w.Write(byte)
-	case *JSONMsg:
-		errorResponse, ok := data.(*JSONMsg)
+	case *ResponseData:
+		errorResponse, ok := data.(*ResponseData)
 		if !ok {
 			return 0, routing.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("get audio: data type error"))
 		}
