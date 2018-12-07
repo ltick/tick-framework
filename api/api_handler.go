@@ -98,31 +98,11 @@ type (
 		Note   string      `json:"note" xml:"note"`
 		Return interface{} `json:"return,omitempty" xml:"return,omitempty"`
 	}
-	// ResponseData is commonly used to return JSON format response.
-	ResponseData struct {
-		Code    string      `json:"code" xml:"code"` // the status code of the business process (required)
-		Status  int         `json:"status,omitempty" xml:"status,omitempty"`
-		Message string      `json:"message,omitempty" xml:"message,omitempty"`
-		Data    interface{} `json:"data,omitempty" xml:"data,omitempty"`
-	}
 	// apiHandler is an intelligent Handler of binding parameters.
 	apiHandler struct {
 		api *Api
 	}
 )
-
-func (this *ResponseData) GetMessage() string {
-	return this.Message
-}
-func (this *ResponseData) GetStatus() int {
-	return this.Status
-}
-func (this *ResponseData) GetCode() string {
-	return this.Code
-}
-func (this *ResponseData) GetData() interface{} {
-	return this.Data
-}
 
 var _ APIDoc = new(apiHandler)
 

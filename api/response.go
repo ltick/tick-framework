@@ -67,6 +67,60 @@ var responseOptions = map[string]map[string]interface{}{
 	},
 }
 
+// ResponseData is commonly used to return JSON format response.
+type ResponseData struct {
+	Code    string      `json:"code" xml:"code"` // the status code of the business process (required)
+	Status  int         `json:"status,omitempty" xml:"status,omitempty"`
+	Message string      `json:"message,omitempty" xml:"message,omitempty"`
+	Data    interface{} `json:"data,omitempty" xml:"data,omitempty"`
+}
+
+func (this *ResponseData) GetMessage() string {
+	return this.Message
+}
+func (this *ResponseData) GetStatus() int {
+	return this.Status
+}
+func (this *ResponseData) GetCode() string {
+	return this.Code
+}
+func (this *ResponseData) GetData() interface{} {
+	return this.Data
+}
+
+func NewResponseData(code string, data interface{}, messages ...string) *ResponseData {
+	config := make(map[string]interface{})
+	responseConfig, ok := responseOptions[code]
+	if ok {
+		config = responseConfig
+	} else {
+		config["message"] = "error code not exists"
+		config["status"] = http.StatusInternalServerError
+	}
+	message := config["message"].(string)
+	if len(messages) > 0 {
+		message = messages[0]
+	}
+	status, ok := config["status"].(int)
+	if !ok {
+		status = http.StatusOK
+	}
+	return &ResponseData{
+		Status:  status,
+		Code:    code,
+		Message: message,
+		Data:    data,
+	}
+}
+
+
+func AddResponseOption(code string, status int, message string) {
+	responseOptions[code] = map[string]interface{}{
+		"status":  status,
+		"message": message,
+	}
+}
+
 func NewResponseCustomWriter(rw http.ResponseWriter, w routing.DataWriter) (r *Response) {
 	r = &Response{
 		httpResponseWriter: rw,

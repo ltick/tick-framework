@@ -306,28 +306,7 @@ func (ctx *Context) ResponseJSONOrXML(status int, data interface{}, isIndent ...
 }
 
 func (ctx *Context) ResponseDefault(code string, data interface{}, messages ...string) error {
-	config := make(map[string]interface{})
-	responseConfig, ok := responseOptions[code]
-	if ok {
-		config = responseConfig
-	} else {
-		config["message"] = "error code not exists"
-		config["status"] = http.StatusInternalServerError
-	}
-	message := config["message"].(string)
-	if len(messages) > 0 {
-		message = messages[0]
-	}
-	status, ok := config["status"].(int)
-	if !ok {
-		status = http.StatusOK
-	}
-	responseData := &ResponseData{
-		Status:  status,
-		Code:    code,
-		Message: message,
-		Data:    data,
-	}
+	responseData := NewResponseData(code, data, messages...)
 	_, err := ctx.Response.Write(responseData)
 	if err != nil {
 		if ConnectionResetByPeer(err) || Timeout(err) || NetworkUnreachable(err) {
