@@ -273,29 +273,6 @@ func (ctx *Context) ResponseJSONP(status int, callback string, data interface{},
 	return ctx.ResponseBytes(status, MIMEApplicationJavaScriptCharsetUTF8, callbackContent.Bytes())
 }
 
-// ResponseData sends a JSON with ResponseData format.
-func (ctx *Context) ResponseResponseData(status int, code string, message string, data interface{}, isIndent ...bool) error {
-	var (
-		b   []byte
-		err error
-		d   = ResponseData{
-			Status:  status,
-			Code:    code,
-			Message: message,
-			Data:    data,
-		}
-	)
-	if len(isIndent) > 0 && isIndent[0] {
-		b, err = json.MarshalIndent(d, "", "  ")
-	} else {
-		b, err = json.Marshal(d)
-	}
-	if err != nil {
-		return err
-	}
-	return ctx.ResponseJSONBlob(status, b)
-}
-
 // XML sends an XML response with status code.
 func (ctx *Context) ResponseXML(status int, data interface{}, isIndent ...bool) error {
 	var (
@@ -345,7 +322,12 @@ func (ctx *Context) ResponseDefault(code string, data interface{}, messages ...s
 	if !ok {
 		status = http.StatusOK
 	}
-	responseData := ctx.ResponseResponseData(status, code, message, data)
+	responseData := &ResponseData{
+		Status:  status,
+		Code:    code,
+		Message: message,
+		Data:    data,
+	}
 	_, err := ctx.Response.Write(responseData)
 	if err != nil {
 		if ConnectionResetByPeer(err) || Timeout(err) || NetworkUnreachable(err) {
