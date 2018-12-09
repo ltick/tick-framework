@@ -77,7 +77,7 @@ type (
 		ErrorHandler                fault.ConvertErrorFunc
 		RecoveryLogFunc             fault.LogFunc
 		RecoveryHandler             fault.ConvertErrorFunc
-		PanicLogFunc                fault.LogFunc
+		PanicHandler                fault.LogFunc
 		TypeNegotiator              []string
 		SlashRemover                *int
 		LanguageNegotiator          []string
@@ -137,9 +137,9 @@ func ServerRouterErrorHandler(errorHandler fault.ConvertErrorFunc) ServerRouterO
 		options.ErrorHandler = errorHandler
 	}
 }
-func ServerRouterPanicLogFunc(panicLogFunc fault.LogFunc) ServerRouterOption {
+func ServerRouterPanicHandler(panicLogFunc fault.LogFunc) ServerRouterOption {
 	return func(options *ServerRouterOptions) {
-		options.PanicLogFunc = panicLogFunc
+		options.PanicHandler = panicLogFunc
 	}
 }
 func ServerRouterRecoveryLogFunc(faultLogFunc fault.LogFunc) ServerRouterOption {
@@ -237,10 +237,10 @@ func (r *ServerRouter) Resolve() {
 	} else {
 		r.WithErrorHandler(DefaultErrorLogFunc(), DefaultErrorHandler)
 	}
-	if r.ServerRouterOptions.PanicLogFunc != nil {
-		r.WithPanicLogFunc(r.ServerRouterOptions.ErrorLogFunc)
+	if r.ServerRouterOptions.PanicHandler != nil {
+		r.WithPanicHandler(r.ServerRouterOptions.ErrorLogFunc)
 	} else {
-		r.WithPanicLogFunc(DefaultErrorLogFunc())
+		r.WithPanicHandler(DefaultErrorLogFunc())
 	}
 	if r.ServerRouterOptions.RecoveryLogFunc != nil && r.ServerRouterOptions.RecoveryHandler != nil {
 		r.WithRecoveryHandler(r.ServerRouterOptions.RecoveryLogFunc, r.ServerRouterOptions.RecoveryHandler)
@@ -673,8 +673,8 @@ func (r *ServerRouter) WithTypeNegotiator(formats ...string) *ServerRouter {
 	return r
 }
 
-func (r *ServerRouter) WithPanicLogFunc(logf fault.LogFunc) *ServerRouter {
-	r.AppendStartupHandler(fault.PanicLogFunc(logf))
+func (r *ServerRouter) WithPanicHandler(logf fault.LogFunc) *ServerRouter {
+	r.AppendStartupHandler(fault.PanicHandler(logf))
 	return r
 }
 
