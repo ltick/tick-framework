@@ -39,6 +39,7 @@ type testMiddleware1 struct {
 	Foo    string
 	Foo1   string
 }
+
 func (f *testMiddleware1) Prepare(ctx context.Context) (newCtx context.Context, err error) {
 	return ctx, nil
 }
@@ -78,6 +79,7 @@ type testMiddleware2 struct {
 	Config *config.Config
 	Test   *testMiddleware1 `inject:"true"`
 }
+
 func (f *testMiddleware2) Prepare(ctx context.Context) (newCtx context.Context, err error) {
 	return ctx, nil
 }
@@ -135,12 +137,12 @@ func (suite *TestSuite) TestMiddleware() {
 		EngineConfigDotenvFile(suite.dotenvFile),
 		EngineConfigEnvPrefix("LTICK"))
 	a.SetContextValue("output", "")
-	router := NewServerRouter(a.Context, ServerRouterTimeoutHandler(func(c *routing.Context) error {
+	router := a.NewServerRouter(ServerRouterTimeoutHandler(func(c *routing.Context) error {
 		a.Context = context.WithValue(a.Context, "output", "Timeout")
 		return routing.NewHTTPError(http.StatusRequestTimeout)
 	}), ServerRouterHandlerTimeout(3*time.Second), ServerRouterGracefulStopTimeout(30*time.Second))
 	assert.NotNil(suite.T(), router)
-	srv := NewServer(router, ServerLogWriter(ioutil.Discard), ServerPort(8080))
+	srv := a.NewServer(router, ServerLogWriter(ioutil.Discard), ServerPort(8080))
 	a.SetServer("test", srv)
 	rg := srv.AddRouteGroup("/").AddCallback(&TestRequestCallback{})
 	assert.NotNil(suite.T(), rg)

@@ -173,10 +173,9 @@ type TestServerSuite struct {
 	dotenvFile string
 	testAppLog string
 
-	engine          *Engine
-	server          *Server
-	defaultServer   *Server
-	configureServer *Server
+	engine        *Engine
+	server        *Server
+	defaultServer *Server
 }
 
 func (suite *TestServerSuite) SetupTest() {
@@ -231,23 +230,25 @@ func (suite *TestServerSuite) SetupTest() {
 			return routing.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
 	}
-	router := NewServerRouter(suite.engine.Context, ServerRouterHandlerTimeout(3*time.Second), ServerRouterGracefulStopTimeout(30*time.Second))
+	router := suite.engine.NewServerRouter(
+		ServerRouterHandlerTimeout(3*time.Second),
+		ServerRouterGracefulStopTimeout(30*time.Second),
+		ServerRouterAccessLogFunc(accessLogFunc),
+		ServerRouterErrorLogFunc(systemLogger.Error),
+		ServerRouterErrorHandler(errorLogHandler),
+		ServerRouterErrorLogFunc(systemLogger.Emergency),
+		ServerRouterRecoveryHandler(recoveryHandler),
+		ServerRouterPanicLogFunc(systemLogger.Emergency),
+		ServerRouterTypeNegotiator(JSON, XML, XML2, HTML),
+		ServerRouterSlashRemover(Int(http.StatusMovedPermanently)),
+		ServerRouterLanguageNegotiator("zh-CN", "en-US"),
+		ServerRouterCors(&CorsAllowAll))
 	assert.NotNil(suite.T(), router)
-	router.WithAccessLogger(accessLogFunc).
-		WithErrorHandler(systemLogger.Error, errorLogHandler).
-		WithRecoveryHandler(systemLogger.Emergency, recoveryHandler).
-		WithPanicLogger(systemLogger.Emergency).
-		WithTypeNegotiator(JSON, XML, XML2, HTML).
-		WithSlashRemover(http.StatusMovedPermanently).
-		WithLanguageNegotiator("zh-CN", "en-US").
-		WithCors(CorsAllowAll)
-	suite.server = NewServer(router, ServerLogWriter(ioutil.Discard), ServerPort(8080))
+	suite.server = suite.engine.NewServer(router, ServerLogWriter(ioutil.Discard), ServerPort(8080))
 	suite.engine.SetServer("test", suite.server)
 
-	suite.defaultServer = suite.engine.NewDefaultServer()
+	suite.defaultServer = suite.engine.NewServer(suite.engine.NewServerRouter())
 	suite.engine.SetServer("default", suite.defaultServer)
-	suite.configureServer = suite.engine.NewDefaultServer()
-	suite.engine.SetServer("configure", suite.configureServer)
 }
 
 func (suite *TestServerSuite) TestDefaultServer() {
@@ -373,7 +374,7 @@ func (p Param) Doc() api.Doc {
 	return api.Doc{
 		Note: "param desc",
 		Return: api.ResponseData{
-			Code: "1",
+			Code:    "1",
 			Message: "success",
 		},
 		MoreParams: []api.APIParam{

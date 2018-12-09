@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"sync"
 
 	"github.com/juju/errors"
 	"github.com/ltick/tick-framework/config"
@@ -28,7 +29,7 @@ import (
 
 var (
 	errNew                       = "ltick: new error"
-	errStartup                       = "ltick: startup error"
+	errStartup                   = "ltick: startup error"
 	errEngineOption              = "ltick: set engine option error"
 	errEngineConfigOption        = "ltick: set engine config option error"
 	errNewDefault                = "ltick: new classic error"
@@ -351,7 +352,7 @@ func (e *Engine) ConfigureServerFromJson(s *Server, configJson []byte, providers
 	return nil
 }
 
-func (e *Engine) NewDefaultServer(setters ...ServerOption) *Server {
+func (e *Engine) NewServer(router *ServerRouter, setters ...ServerOption) *Server {
 	middlewares := make([]MiddlewareInterface, 0)
 	for _, sortedMiddleware := range e.Registry.GetSortedMiddlewares() {
 		middleware, ok := sortedMiddleware.Middleware.(MiddlewareInterface)
@@ -360,17 +361,22 @@ func (e *Engine) NewDefaultServer(setters ...ServerOption) *Server {
 		}
 		middlewares = append(middlewares, middleware)
 	}
-	var router *ServerRouter = NewServerRouter(e.Context)
-	router.WithAccessLogger(DefaultAccessLogFunc).
-		WithErrorHandler(DefaultErrorLogFunc(), DefaultErrorHandler).
-		WithPanicLogger(DefaultErrorLogFunc()).
-		WithTypeNegotiator(JSON, XML, XML2, HTML).
-		WithSlashRemover(http.StatusMovedPermanently).
-		WithLanguageNegotiator("zh-CN", "en-US").
-		WithCors(CorsAllowAll).
-		WithMiddlewares(middlewares)
 	setters = append(setters, ServerLogWriter(e.logWriter))
-	server := NewServer(router, setters...)
+	serverOptions := &ServerOptions{
+		logWriter: defaultServerLogWriter,
+		Port:      defaultServerPort,
+	}
+	for _, setter := range setters {
+		setter(serverOptions)
+	}
+	router.WithMiddlewares(middlewares)
+	server := &Server{
+		ServerOptions: serverOptions,
+		Router:        router,
+		RouteGroups:   make(map[string]*ServerRouteGroup),
+		mutex:         sync.RWMutex{},
+	}
+	server.Log(fmt.Sprintf("ltick: new server [serverOptions:'%v', serverRouterOptions:'%v', handlerTimeout:'%.fs']", server.ServerOptions, server.Router.ServerRouterOptions, router.TimeoutDuration.Seconds()))
 	server.AddRouteGroup("/")
 	return server
 }
