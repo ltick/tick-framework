@@ -752,35 +752,38 @@ func (g *ServerRouteGroup) AddCallback(callback RouterCallback) *ServerRouteGrou
 func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes []*ServerRouterHandlerRoute) {
 	routeHandlers := make([]routing.Handler, len(handlerRoutes))
 	for index, handlerRoute := range handlerRoutes {
-		routeHandlers[index] = func(ctx *routing.Context) error {
-			requestHost := ctx.Request.Host
-			if requestHost == "" {
-				requestHost = ctx.Request.URL.Host
-			}
-			for _, handler := range handlerRoute.Handlers {
-				for _, host := range handlerRoute.Host {
-					if utility.WildcardMatch(host, requestHost) {
-						apiCtx := &api.Context{
-							Context:  ctx,
-							Response: api.NewResponse(ctx.ResponseWriter),
-						}
-						err := handler.Serve(apiCtx)
-						if err != nil {
-							ctx.Abort()
-							if httpError, ok := err.(routing.HTTPError); ok {
-								_, err := api.NewResponse(ctx.ResponseWriter).Write(api.ResponseData{
-									Status:  httpError.StatusCode(),
-									Message: httpError.Error(),
-								})
+		// TODO graceful copy
+		func(handlerRoute *ServerRouterHandlerRoute) {
+			routeHandlers[index] = func(ctx *routing.Context) error {
+				requestHost := ctx.Request.Host
+				if requestHost == "" {
+					requestHost = ctx.Request.URL.Host
+				}
+				for _, handler := range handlerRoute.Handlers {
+					for _, host := range handlerRoute.Host {
+						if utility.WildcardMatch(host, requestHost) {
+							apiCtx := &api.Context{
+								Context:  ctx,
+								Response: api.NewResponse(ctx.ResponseWriter),
+							}
+							err := handler.Serve(apiCtx)
+							if err != nil {
+								ctx.Abort()
+								if httpError, ok := err.(routing.HTTPError); ok {
+									_, err := api.NewResponse(ctx.ResponseWriter).Write(api.ResponseData{
+										Status:  httpError.StatusCode(),
+										Message: httpError.Error(),
+									})
+									return err
+								}
 								return err
 							}
-							return err
 						}
 					}
 				}
+				return nil
 			}
-			return nil
-		}
+		}(handlerRoute)
 	}
 
 	g.AddRoute(method, path, routeHandlers...)
