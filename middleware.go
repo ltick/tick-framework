@@ -94,9 +94,9 @@ func (r *Registry) RegisterMiddleware(middleware *Middleware, ignoreIfExistses .
 			return fmt.Errorf(errRegisterMiddleware+": %s", canonicalMiddlewareName, err.Error())
 		}
 	}
-	r.Middlewares = append([]*Middleware{middleware}, r.Middlewares...)
+	r.Middlewares = append(r.Middlewares, middleware)
 	r.MiddlewareMap[canonicalMiddlewareName] = middleware
-	r.SortedMiddlewareName = append([]string{canonicalMiddlewareName}, r.SortedMiddlewareName...)
+	r.SortedMiddlewareName = append(r.SortedMiddlewareName, canonicalMiddlewareName)
 	return nil
 }
 
