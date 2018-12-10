@@ -749,31 +749,33 @@ func (g *ServerRouteGroup) AddCallback(callback RouterCallback) *ServerRouteGrou
 
 // 添加API路由
 // 可进行参数校验
-func (g *ServerRouteGroup) AddApiRoute(method string, path string, hosts []string, handlers ...api.Handler) {
-	routeHandlers := make([]routing.Handler, len(handlers))
-	for index, handler := range handlers {
+func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes []*ServerRouterHandlerRoute) {
+	routeHandlers := make([]routing.Handler, len(handlerRoutes))
+	for index, handlerRoute := range handlerRoutes {
 		routeHandlers[index] = func(ctx *routing.Context) error {
 			requestHost := ctx.Request.Host
 			if requestHost == "" {
 				requestHost = ctx.Request.URL.Host
 			}
-			for _, host := range hosts {
-				if utility.WildcardMatch(host, requestHost) {
-					apiCtx := &api.Context{
-						Context:  ctx,
-						Response: api.NewResponse(ctx.ResponseWriter),
-					}
-					err := handler.Serve(apiCtx)
-					if err != nil {
-						ctx.Abort()
-						if httpError, ok := err.(routing.HTTPError); ok {
-							_, err := api.NewResponse(ctx.ResponseWriter).Write(api.ResponseData{
-								Status:  httpError.StatusCode(),
-								Message: httpError.Error(),
-							})
+			for _, handler := range handlerRoute.Handlers {
+				for _, host := range handlerRoute.Host {
+					if utility.WildcardMatch(host, requestHost) {
+						apiCtx := &api.Context{
+							Context:  ctx,
+							Response: api.NewResponse(ctx.ResponseWriter),
+						}
+						err := handler.Serve(apiCtx)
+						if err != nil {
+							ctx.Abort()
+							if httpError, ok := err.(routing.HTTPError); ok {
+								_, err := api.NewResponse(ctx.ResponseWriter).Write(api.ResponseData{
+									Status:  httpError.StatusCode(),
+									Message: httpError.Error(),
+								})
+								return err
+							}
 							return err
 						}
-						return err
 					}
 				}
 			}
