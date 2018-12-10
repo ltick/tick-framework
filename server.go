@@ -313,14 +313,6 @@ func (e *Engine) SetServer(name string, server *Server) {
 	e.ServerMap[name] = server
 }
 
-func (e *Engine) SetServerLogFunc(name string, accessLogFunc access.LogWriterFunc, faultLogFunc fault.LogFunc, recoveryHandler ...fault.ConvertErrorFunc) *Engine {
-	server := e.GetServer(name)
-	if server != nil {
-		server.SetLogFunc(accessLogFunc, faultLogFunc, recoveryHandler...)
-	}
-	return e
-}
-
 func (e *Engine) SetServerReuqestSlashRemover(name string, status int) *Engine {
 	server := e.GetServer(name)
 	if server != nil {
@@ -328,14 +320,10 @@ func (e *Engine) SetServerReuqestSlashRemover(name string, status int) *Engine {
 	}
 	return e
 }
-func (e *Engine) SetServerReuqestCors(name string, corsOptions cors.Options) *Engine {
+func (e *Engine) SetServerReuqestCors(name string, corsOptions *cors.Options) *Engine {
 	server := e.GetServer(name)
 	if server != nil {
-		if &corsOptions != nil {
-			server.Router.WithCors(corsOptions)
-		} else {
-			server.Router.WithCors(CorsAllowAll)
-		}
+		server.SetServerReuqestCors(corsOptions)
 	}
 	return e
 }
@@ -541,11 +529,6 @@ func (s *Server) Pprof(host []string, group string) *Server {
 	})
 	return s
 }
-func (s *Server) SetLogFunc(accessLogFunc access.LogWriterFunc, faultLogFunc fault.LogFunc, recoveryHandler ...fault.ConvertErrorFunc) *Server {
-	s.Router.WithAccessLogger(accessLogFunc).
-		WithRecoveryHandler(faultLogFunc, recoveryHandler...)
-	return s
-}
 func (s *Server) SetReuqestSlashRemover(status int) *Server {
 	switch status {
 	case http.StatusMovedPermanently, http.StatusFound:
@@ -553,9 +536,9 @@ func (s *Server) SetReuqestSlashRemover(status int) *Server {
 	}
 	return s
 }
-func (s *Server) SetServerReuqestCors(corsOptions cors.Options) *Server {
-	if &corsOptions != nil {
-		s.Router.WithCors(corsOptions)
+func (s *Server) SetServerReuqestCors(corsOptions *cors.Options) *Server {
+	if corsOptions != nil {
+		s.Router.WithCors(*corsOptions)
 	} else {
 		s.Router.WithCors(CorsAllowAll)
 	}
