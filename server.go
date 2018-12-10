@@ -64,6 +64,10 @@ type (
 		Path     string
 		Handlers []api.Handler
 	}
+	ServerRouterHandlerRoute struct {
+		Host     []string
+		Handlers []api.Handler
+	}
 
 	ServerRouterOptions struct {
 		HandlerTimeout              string
@@ -745,33 +749,35 @@ func (g *ServerRouteGroup) AddCallback(callback RouterCallback) *ServerRouteGrou
 
 // 添加API路由
 // 可进行参数校验
-func (g *ServerRouteGroup) AddApiRoute(host string, method string, path string, handlers ...api.Handler) {
+func (g *ServerRouteGroup) AddApiRoute(method string, path string, hosts []string, handlers ...api.Handler) {
 	routeHandlers := make([]routing.Handler, len(handlers))
 	for index, handler := range handlers {
-		routeHandlers[index] = func(ctx *routing.Context) error {
-			requestHost := ctx.Request.Host
-			if requestHost == "" {
-				requestHost = ctx.Request.URL.Host
-			}
-			if utility.WildcardMatch(host, requestHost) {
-				apiCtx := &api.Context{
-					Context:  ctx,
-					Response: api.NewResponse(ctx.ResponseWriter),
+		for _, host := range hosts {
+			routeHandlers[index] = func(ctx *routing.Context) error {
+				requestHost := ctx.Request.Host
+				if requestHost == "" {
+					requestHost = ctx.Request.URL.Host
 				}
-				err := handler.Serve(apiCtx)
-				if err != nil {
-					ctx.Abort()
-					if httpError, ok := err.(routing.HTTPError); ok {
-						_, err := api.NewResponse(ctx.ResponseWriter).Write(api.ResponseData{
-							Status:  httpError.StatusCode(),
-							Message: httpError.Error(),
-						})
+				if utility.WildcardMatch(host, requestHost) {
+					apiCtx := &api.Context{
+						Context:  ctx,
+						Response: api.NewResponse(ctx.ResponseWriter),
+					}
+					err := handler.Serve(apiCtx)
+					if err != nil {
+						ctx.Abort()
+						if httpError, ok := err.(routing.HTTPError); ok {
+							_, err := api.NewResponse(ctx.ResponseWriter).Write(api.ResponseData{
+								Status:  httpError.StatusCode(),
+								Message: httpError.Error(),
+							})
+							return err
+						}
 						return err
 					}
-					return err
 				}
+				return nil
 			}
-			return nil
 		}
 	}
 

@@ -15,8 +15,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 	"sync"
+	"time"
 
 	"github.com/juju/errors"
 	"github.com/ltick/tick-framework/config"
@@ -624,6 +624,7 @@ func (e *Engine) Startup() (err error) {
 				continue
 			}
 			if server.Router.Routes != nil && len(server.Router.Routes) > 0 {
+				handlerRoutes := make(map[string]*ServerRouterHandlerRoute)
 				for _, route := range server.Router.Routes {
 					if route == nil {
 						return errors.Annotatef(errors.New("ltick: route does not exists"), errStartup)
@@ -635,9 +636,25 @@ func (e *Engine) Startup() (err error) {
 					}
 					for _, method := range route.Method {
 						for _, host := range route.Host {
-							server.RouteGroups[route.Group].AddApiRoute(host, method, route.Path, route.Handlers...)
+							routeId := route.Group + "|" + method + "|" + route.Path
+							if _, ok := handlerRoutes[routeId]; !ok {
+								handlerRoutes[routeId] = &ServerRouterHandlerRoute{
+									Handlers:route.Handlers,
+									Host:[]string{host},
+								}
+							} else {
+								handlerRoutes[routeId].Handlers = append(handlerRoutes[routeId].Handlers, route.Handlers...)
+								handlerRoutes[routeId].Host = append(handlerRoutes[routeId].Host, host)
+							}
 						}
 					}
+				}
+				for routeId, handlerRoute := range handlerRoutes {
+					routeIds := strings.SplitN(routeId, "|", 4)
+					routeGroup := routeIds[0]
+					routeMethod := routeIds[2]
+					routePath := routeIds[3]
+					server.RouteGroups[routeGroup].AddApiRoute(routeMethod, routePath, handlerRoute.Host, handlerRoute.Handlers...)
 				}
 			}
 			// proxy
