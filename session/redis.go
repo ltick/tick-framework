@@ -48,9 +48,9 @@ func (m *RedisHandler) Initiate(ctx context.Context, maxAge int64, config map[st
 	}
 	err = m.Kvstore.Use(ctx, "redis")
 	if err != nil {
-		return errors.New(errStartup + ": " + err.Error())
+		return errors.New(errRedisInitiate + ": " + err.Error())
 	}
-	m.sessionKvstoreProvider, err = m.Kvstore.NewConnection("redis", map[string]interface{}{
+	m.sessionKvstoreProvider, err = m.Kvstore.NewConnection("session", map[string]interface{}{
 		"KVSTORE_REDIS_DATABASE":   config["KVSTORE_REDIS_DATABASE"],
 		"KVSTORE_REDIS_KEY_PREFIX": config["KVSTORE_REDIS_KEY_PREFIX"],
 	})
@@ -64,7 +64,9 @@ func (m *RedisHandler) Initiate(ctx context.Context, maxAge int64, config map[st
 func (m *RedisHandler) Read(sessionId string) (Store, error) {
 	sessionStoreData, err := m.sessionKvstoreProvider.Get(sessionId)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf(errRedisSessionRead+": [sessionId:'%s', error:'%s']", sessionId, err.Error()))
+		if !kvstore.ErrNil(err) {
+			return nil, errors.New(fmt.Sprintf(errRedisSessionRead+": [sessionId:'%s', error:'%s']", sessionId, err.Error()))
+		}
 	}
 	var sessionData map[interface{}]interface{}
 	if sessionStoreData == nil {
