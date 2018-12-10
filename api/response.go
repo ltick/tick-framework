@@ -162,8 +162,8 @@ func (rw *DefaultResponseWriter) Write(w http.ResponseWriter, data interface{}) 
 		if err != nil {
 			return 0, routing.NewHTTPError(errorResponse.GetStatus(), errorResponse.GetCode()+":"+errorResponse.GetMessage())
 		}
-		rw.SetHeader(w)
-		return 0, routing.NewHTTPError(errorResponse.GetStatus(), string(errorResponseBody))
+		w.WriteHeader(errorResponse.GetStatus())
+		size, err = w.Write(errorResponseBody)
 	default:
 		if data != nil {
 			size, err = fmt.Fprint(w, data)
