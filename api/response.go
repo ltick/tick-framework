@@ -113,7 +113,6 @@ func NewResponseData(code string, data interface{}, messages ...string) *Respons
 	}
 }
 
-
 func AddResponseOption(code string, status int, message string) {
 	responseOptions[code] = map[string]interface{}{
 		"status":  status,
@@ -207,34 +206,12 @@ func (r *Response) Header() http.Header {
 	return r.httpResponseWriter.Header()
 }
 
-// WriteHeader sends an HTTP response header with status code.
-// If WriteHeader is not called explicitly, the first call to Write
-// will trigger an implicit WriteHeader(http.StatusOK).
-// Thus explicit calls to WriteHeader are mainly used to
-// send error codes.
-func (r *Response) WriteHeader(status int) {
-	if r.wrote {
-		r.wroteCallback()
-		return
-	}
-	r.status = status
-
-	r.httpResponseWriter.WriteHeader(status)
-	if r.responseWriter != nil {
-		r.responseWriter.SetHeader(r.httpResponseWriter)
-	}
-	r.wrote = true
-}
-
 // Write writes the data to the connection as part of an HTTP reply.
 // If WriteHeader has not yet been called, Write calls WriteHeader(http.StatusOK)
 // before writing the data.  If the Header does not contain a
 // Content-Type line, Write adds a Content-Type set to the result of passing
 // the initial 512 bytes of written data to DetectContentType.
 func (r *Response) Write(data interface{}) (n int, err error) {
-	if !r.wrote {
-		r.WriteHeader(http.StatusOK)
-	}
 	if r.responseWriter != nil {
 		n, err = r.responseWriter.Write(r.httpResponseWriter, data)
 	} else {
