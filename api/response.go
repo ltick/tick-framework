@@ -113,7 +113,7 @@ func NewResponseData(code string, data interface{}, messages ...string) *Respons
 	}
 }
 
-func AddResponseOption(code string, status int, message string) {
+func RegisterResponseOption(code string, status int, message string) {
 	responseOptions[code] = map[string]interface{}{
 		"status":  status,
 		"message": message,
