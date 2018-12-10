@@ -650,10 +650,10 @@ func (e *Engine) Startup() (err error) {
 					}
 				}
 				for routeId, handlerRoute := range handlerRoutes {
-					routeIds := strings.SplitN(routeId, "|", 4)
+					routeIds := strings.SplitN(routeId, "|", 3)
 					routeGroup := routeIds[0]
-					routeMethod := routeIds[2]
-					routePath := routeIds[3]
+					routeMethod := routeIds[1]
+					routePath := routeIds[2]
 					server.RouteGroups[routeGroup].AddApiRoute(routeMethod, routePath, handlerRoute.Host, handlerRoute.Handlers...)
 				}
 			}

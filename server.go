@@ -752,12 +752,12 @@ func (g *ServerRouteGroup) AddCallback(callback RouterCallback) *ServerRouteGrou
 func (g *ServerRouteGroup) AddApiRoute(method string, path string, hosts []string, handlers ...api.Handler) {
 	routeHandlers := make([]routing.Handler, len(handlers))
 	for index, handler := range handlers {
-		for _, host := range hosts {
-			routeHandlers[index] = func(ctx *routing.Context) error {
-				requestHost := ctx.Request.Host
-				if requestHost == "" {
-					requestHost = ctx.Request.URL.Host
-				}
+		routeHandlers[index] = func(ctx *routing.Context) error {
+			requestHost := ctx.Request.Host
+			if requestHost == "" {
+				requestHost = ctx.Request.URL.Host
+			}
+			for _, host := range hosts {
 				if utility.WildcardMatch(host, requestHost) {
 					apiCtx := &api.Context{
 						Context:  ctx,
@@ -776,8 +776,8 @@ func (g *ServerRouteGroup) AddApiRoute(method string, path string, hosts []strin
 						return err
 					}
 				}
-				return nil
 			}
+			return nil
 		}
 	}
 
