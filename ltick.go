@@ -637,18 +637,14 @@ func (e *Engine) Startup() (err error) {
 							for _, host := range proxy.Host {
 								if utility.WildcardMatch(host, requestHost) {
 									upstreamURL, err := proxy.Proxy(c)
-									e.Log(upstreamURL)
-									e.Log(err)
 									if err != nil {
 										return routing.NewHTTPError(http.StatusInternalServerError, err.Error())
 									}
 									if upstreamURL != nil {
-										e.Log("===")
-										e.Log(upstreamURL)
 										director := func(req *http.Request) {
-											req = c.Request
 											req.URL.Scheme = upstreamURL.Scheme
 											req.URL.Host = upstreamURL.Host
+											req.Host = upstreamURL.Host
 											req.RequestURI = upstreamURL.RequestURI()
 										}
 										proxy := &httputil.ReverseProxy{Director: director}
@@ -701,7 +697,7 @@ func (e *Engine) Startup() (err error) {
 				routeGroup := routeIds[0]
 				routeMethod := routeIds[1]
 				routePath := routeIds[2]
-				server.RouteGroups[routeGroup].AppendAnteriorHandler(proxyHandlers...)
+				server.RouteGroups[routeGroup].PrependAnteriorHandler(proxyHandlers...)
 				server.RouteGroups[routeGroup].AddApiRoute(routeMethod, routePath, routeHandlers)
 			}
 		}

@@ -287,10 +287,18 @@ func (sp *ServerRouterProxy) Proxy(c *routing.Context) (*url.URL, error) {
 		if i == 0 || name == "" {
 			continue
 		}
-		if name != "group" {
+		if name != "group" && name != "path" && name != "fragment" && name != "query" {
 			captures[name] = c.Param(name)
 		}
 	}
+	captures["group"] = sp.Group
+	path := c.Request.URL.Path
+	if path == "" {
+		path = c.Request.URL.RawPath
+	}
+	captures["fragment"] = c.Request.URL.Fragment
+	captures["query"] = c.Request.URL.RawQuery
+	captures["path"] = strings.TrimLeft(path, sp.Group)
 	captures["group"] = sp.Group
 	if len(captures) != 0 {
 		upstream := sp.Upstream
