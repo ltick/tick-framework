@@ -395,8 +395,8 @@ func (suite *TestServerSuite) TestApi() {
 	assert.NotNil(suite.T(), rg)
 	apiHandler, err := api.ToAPIHandler(&Param{}, true)
 	assert.Nil(suite.T(), err)
-	rg.AddApiRoute("POST", "user/<id>", []*ServerRouterHandlerRoute{
-		&ServerRouterHandlerRoute{Host: []string{"*"}, Handler: apiHandler},
+	rg.AddApiRoute("POST", "user/<id>", []*routeHandler{
+		&routeHandler{Host: []string{"*"}, Handler: apiHandler},
 	}, nil, nil)
 	err = suite.engine.Startup()
 	assert.Nil(suite.T(), err)

@@ -625,10 +625,10 @@ func (e *Engine) Startup() (err error) {
 			}
 			server.Router.Resolve()
 			// proxy
-			proxyHandlers := make(map[string][]routing.Handler, 0)
+			proxyHandlerMap := make(map[string][]routing.Handler, 0)
 			if server.Router.Proxys != nil && len(server.Router.Proxys) > 0 {
 				for _, proxy := range server.Router.Proxys {
-					if proxy == nil {
+					if proxy != nil {
 						proxyHandler := func(c *routing.Context) error {
 							upstreamURL, err := proxy.Proxy(c)
 							e.Log(upstreamURL)
@@ -651,18 +651,17 @@ func (e *Engine) Startup() (err error) {
 							}
 							return nil
 						}
-						return errors.Annotatef(errors.New("ltick: route does not exists"), errStartup)
 						routeId := proxy.Group + "|ANY|" + proxy.Path
-						if _, ok := proxyHandlers[routeId]; !ok {
-							proxyHandlers[routeId] = []routing.Handler{proxyHandler}
+						if _, ok := proxyHandlerMap[routeId]; !ok {
+							proxyHandlerMap[routeId] = []routing.Handler{proxyHandler}
 						} else {
-							proxyHandlers[routeId] = append(proxyHandlers[routeId], proxyHandler)
+							proxyHandlerMap[routeId] = append(proxyHandlerMap[routeId], proxyHandler)
 						}
 					}
 				}
 			}
+			routeHandlerMap := make(map[string][]*routeHandler)
 			if server.Router.Routes != nil && len(server.Router.Routes) > 0 {
-				handlerRouteMap := make(map[string][]*ServerRouterHandlerRoute)
 				for _, route := range server.Router.Routes {
 					if route == nil {
 						return errors.Annotatef(errors.New("ltick: route does not exists"), errStartup)
@@ -674,10 +673,10 @@ func (e *Engine) Startup() (err error) {
 					}
 					for index, method := range route.Method {
 						routeId := route.Group + "|" + method + "|" + route.Path
-						if _, ok := handlerRouteMap[routeId]; !ok {
+						if _, ok := routeHandlerMap[routeId]; !ok {
 							if route.Handlers[index] != nil {
-								handlerRouteMap[routeId] = []*ServerRouterHandlerRoute{
-									&ServerRouterHandlerRoute{
+								routeHandlerMap[routeId] = []*routeHandler{
+									&routeHandler{
 										Handler: route.Handlers[index],
 										Host:    route.Host,
 									},
@@ -685,7 +684,7 @@ func (e *Engine) Startup() (err error) {
 							}
 						} else {
 							if route.Handlers[index] != nil {
-								handlerRouteMap[routeId] = append(handlerRouteMap[routeId], &ServerRouterHandlerRoute{
+								routeHandlerMap[routeId] = append(routeHandlerMap[routeId], &routeHandler{
 									Handler: route.Handlers[index],
 									Host:    route.Host,
 								})
@@ -693,14 +692,23 @@ func (e *Engine) Startup() (err error) {
 						}
 					}
 				}
-				for routeId, handlerRoutes := range handlerRouteMap {
-					routeIds := strings.SplitN(routeId, "|", 3)
-					routeGroup := routeIds[0]
-					routeMethod := routeIds[1]
-					routePath := routeIds[2]
-					// TODO custom NotFoundHandler
-					server.RouteGroups[routeGroup].AddApiRoute(routeMethod, routePath, handlerRoutes, proxyHandlers[routeId], []routing.Handler{routing.NotFoundHandler})
-				}
+			}
+			for routeId, routeHandlers := range routeHandlerMap {
+				routeIds := strings.SplitN(routeId, "|", 3)
+				routeGroup := routeIds[0]
+				routeMethod := routeIds[1]
+				routePath := routeIds[2]
+				// TODO custom NotFoundHandler
+				server.RouteGroups[routeGroup].AddApiRoute(routeMethod, routePath, routeHandlers, proxyHandlerMap[routeId], []routing.Handler{routing.NotFoundHandler})
+				delete(proxyHandlerMap, routeId)
+			}
+			for proxyId, proxyHandlers := range proxyHandlerMap {
+				proxyIds := strings.SplitN(proxyId, "|", 3)
+				proxyGroup := proxyIds[0]
+				proxyMethod := proxyIds[1]
+				proxyPath := proxyIds[2]
+				// TODO custom NotFoundHandler
+				server.RouteGroups[proxyGroup].AddRoute(proxyMethod, proxyPath, proxyHandlers...)
 			}
 		}
 	}

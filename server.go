@@ -66,7 +66,7 @@ type (
 		Path     string
 		Handlers []api.Handler
 	}
-	ServerRouterHandlerRoute struct {
+	routeHandler struct {
 		Host    []string
 		Handler api.Handler
 	}
@@ -750,11 +750,11 @@ func (g *ServerRouteGroup) AddCallback(callback RouterCallback) *ServerRouteGrou
 
 // 添加API路由
 // 可进行参数校验
-func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes []*ServerRouterHandlerRoute, anteriorHandlers []routing.Handler, posteriorHandlers []routing.Handler) {
+func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes []*routeHandler, anteriorHandlers []routing.Handler, posteriorHandlers []routing.Handler) {
 	routeHandlers := make([]routing.Handler, len(handlerRoutes))
 	for index, handlerRoute := range handlerRoutes {
 		// TODO graceful copy
-		func(h *ServerRouterHandlerRoute) {
+		func(h *routeHandler) {
 			routeHandlers[index] = func(ctx *routing.Context) error {
 				select {
 				case <-ctx.Context.Done():
