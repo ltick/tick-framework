@@ -92,7 +92,7 @@ type (
 
 	ServerRouter struct {
 		*routing.Router
-		*ServerRouterOptions
+		Options     *ServerRouterOptions
 		Middlewares []MiddlewareInterface
 		Proxys      []*ServerRouterProxy
 		Routes      []*ServerRouterRoute
@@ -199,79 +199,78 @@ func (e *Engine) NewServerRouter(setters ...ServerRouterOption) (router *ServerR
 		setter(serverRouterOptions)
 	}
 	router = &ServerRouter{
-		Router:              routing.New(e.Context),
-		ServerRouterOptions: serverRouterOptions,
-		Routes:              make([]*ServerRouterRoute, 0),
-		Proxys:              make([]*ServerRouterProxy, 0),
+		Router:  routing.New(e.Context),
+		Options: serverRouterOptions,
+		Routes:  make([]*ServerRouterRoute, 0),
+		Proxys:  make([]*ServerRouterProxy, 0),
 	}
-	router.Resolve()
 	return
 }
 
 func (r *ServerRouter) Resolve() {
-	if r.ServerRouterOptions.HandlerTimeout != "" {
-		handlerTimeoutDuration, err := time.ParseDuration(r.ServerRouterOptions.HandlerTimeout)
+	if r.Options.HandlerTimeout != "" {
+		handlerTimeoutDuration, err := time.ParseDuration(r.Options.HandlerTimeout)
 		if err == nil {
-			r.ServerRouterOptions.handlerTimeoutDuration = handlerTimeoutDuration
+			r.Options.handlerTimeoutDuration = handlerTimeoutDuration
 		}
 	}
-	if r.ServerRouterOptions.GracefulStopTimeout != "" {
-		gracefulStopTimeoutDuration, err := time.ParseDuration(r.ServerRouterOptions.GracefulStopTimeout)
+	if r.Options.GracefulStopTimeout != "" {
+		gracefulStopTimeoutDuration, err := time.ParseDuration(r.Options.GracefulStopTimeout)
 		if err == nil {
-			r.ServerRouterOptions.gracefulStopTimeoutDuration = gracefulStopTimeoutDuration
+			r.Options.gracefulStopTimeoutDuration = gracefulStopTimeoutDuration
 		}
 	}
-	r.Timeout(r.ServerRouterOptions.handlerTimeoutDuration, r.ServerRouterOptions.TimeoutHandler)
-	if r.ServerRouterOptions.Callbacks != nil {
-		for _, c := range r.ServerRouterOptions.Callbacks {
+	r.Timeout(r.Options.handlerTimeoutDuration, r.Options.TimeoutHandler)
+	if r.Options.Callbacks != nil {
+		for _, c := range r.Options.Callbacks {
 			r.AddCallback(c)
 		}
 	}
-	if r.ServerRouterOptions.AccessLogFunc != nil {
-		r.WithAccessLogger(r.ServerRouterOptions.AccessLogFunc)
+	if r.Options.AccessLogFunc != nil {
+		r.WithAccessLogger(r.Options.AccessLogFunc)
 	} else {
 		r.WithAccessLogger(DefaultAccessLogFunc)
 	}
-	if r.ServerRouterOptions.ErrorLogFunc != nil && r.ServerRouterOptions.ErrorHandler != nil {
-		r.WithErrorHandler(r.ServerRouterOptions.ErrorLogFunc, r.ServerRouterOptions.ErrorHandler)
-	} else if r.ServerRouterOptions.ErrorLogFunc != nil {
-		r.WithErrorHandler(r.ServerRouterOptions.ErrorLogFunc, DefaultErrorHandler)
-	} else if r.ServerRouterOptions.ErrorHandler != nil {
-		r.WithErrorHandler(DefaultErrorLogFunc(), r.ServerRouterOptions.ErrorHandler)
+	if r.Options.ErrorLogFunc != nil && r.Options.ErrorHandler != nil {
+		r.WithErrorHandler(r.Options.ErrorLogFunc, r.Options.ErrorHandler)
+	} else if r.Options.ErrorLogFunc != nil {
+		r.WithErrorHandler(r.Options.ErrorLogFunc, DefaultErrorHandler)
+	} else if r.Options.ErrorHandler != nil {
+		r.WithErrorHandler(DefaultErrorLogFunc(), r.Options.ErrorHandler)
 	} else {
 		r.WithErrorHandler(DefaultErrorLogFunc(), DefaultErrorHandler)
 	}
-	if r.ServerRouterOptions.PanicHandler != nil {
-		r.WithPanicHandler(r.ServerRouterOptions.ErrorLogFunc)
+	if r.Options.PanicHandler != nil {
+		r.WithPanicHandler(r.Options.ErrorLogFunc)
 	} else {
 		r.WithPanicHandler(DefaultErrorLogFunc())
 	}
-	if r.ServerRouterOptions.RecoveryLogFunc != nil && r.ServerRouterOptions.RecoveryHandler != nil {
-		r.WithRecoveryHandler(r.ServerRouterOptions.RecoveryLogFunc, r.ServerRouterOptions.RecoveryHandler)
-	} else if r.ServerRouterOptions.RecoveryLogFunc != nil {
-		r.WithRecoveryHandler(r.ServerRouterOptions.RecoveryLogFunc, DefaultErrorHandler)
-	} else if r.ServerRouterOptions.RecoveryHandler != nil {
-		r.WithRecoveryHandler(DefaultErrorLogFunc(), r.ServerRouterOptions.RecoveryHandler)
+	if r.Options.RecoveryLogFunc != nil && r.Options.RecoveryHandler != nil {
+		r.WithRecoveryHandler(r.Options.RecoveryLogFunc, r.Options.RecoveryHandler)
+	} else if r.Options.RecoveryLogFunc != nil {
+		r.WithRecoveryHandler(r.Options.RecoveryLogFunc, DefaultErrorHandler)
+	} else if r.Options.RecoveryHandler != nil {
+		r.WithRecoveryHandler(DefaultErrorLogFunc(), r.Options.RecoveryHandler)
 	} else {
 		r.WithRecoveryHandler(DefaultErrorLogFunc(), DefaultErrorHandler)
 	}
-	if r.ServerRouterOptions.TypeNegotiator != nil {
-		r.WithTypeNegotiator(r.ServerRouterOptions.TypeNegotiator...)
+	if r.Options.TypeNegotiator != nil {
+		r.WithTypeNegotiator(r.Options.TypeNegotiator...)
 	} else {
 		r.WithTypeNegotiator(JSON, XML, XML2, HTML)
 	}
-	if r.ServerRouterOptions.SlashRemover != nil {
-		r.WithSlashRemover(*r.ServerRouterOptions.SlashRemover)
+	if r.Options.SlashRemover != nil {
+		r.WithSlashRemover(*r.Options.SlashRemover)
 	} else {
 		r.WithSlashRemover(http.StatusMovedPermanently)
 	}
-	if r.ServerRouterOptions.LanguageNegotiator != nil {
-		r.WithLanguageNegotiator(r.ServerRouterOptions.LanguageNegotiator...)
+	if r.Options.LanguageNegotiator != nil {
+		r.WithLanguageNegotiator(r.Options.LanguageNegotiator...)
 	} else {
 		r.WithLanguageNegotiator("en-US")
 	}
-	if r.ServerRouterOptions.Cors != nil {
-		r.WithCors(*r.ServerRouterOptions.Cors)
+	if r.Options.Cors != nil {
+		r.WithCors(*r.Options.Cors)
 	}
 }
 
@@ -345,7 +344,7 @@ func (e *Engine) GetServerMap() map[string]*Server {
 
 /********** Server **********/
 func (s *Server) GetGracefulStopTimeout() time.Duration {
-	return s.Router.gracefulStopTimeoutDuration
+	return s.Router.Options.gracefulStopTimeoutDuration
 }
 func (s *Server) Get(host []string, group string, path string, handlers ...api.Handler) *Server {
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
@@ -776,8 +775,14 @@ func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes
 									Message: httpError.Error(),
 								})
 								return err
+							} else {
+								ctx.ResponseWriter.WriteHeader(http.StatusInternalServerError)
+								err := ctx.Write(&api.ResponseData{
+									Code:    http.StatusText(http.StatusInternalServerError),
+									Message: err.Error(),
+								})
+								return err
 							}
-							return err
 						}
 						break
 					}

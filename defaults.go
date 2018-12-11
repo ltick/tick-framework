@@ -105,6 +105,7 @@ func DefaultTimeoutHandler() routing.Handler {
 }
 
 func defaultTimeoutHandler(c *routing.Context) error {
+	c.Abort()
 	return routing.NewHTTPError(http.StatusRequestTimeout)
 }
 

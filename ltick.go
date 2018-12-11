@@ -376,7 +376,7 @@ func (e *Engine) NewServer(router *ServerRouter, setters ...ServerOption) *Serve
 		RouteGroups:   make(map[string]*ServerRouteGroup),
 		mutex:         sync.RWMutex{},
 	}
-	server.Log(fmt.Sprintf("ltick: new server [serverOptions:'%v', serverRouterOptions:'%v', handlerTimeout:'%.fs']", server.ServerOptions, server.Router.ServerRouterOptions, router.TimeoutDuration.Seconds()))
+	server.Log(fmt.Sprintf("ltick: new server [serverOptions:'%+v', serverRouterOptions:'%+v', handlerTimeout:'%.fs']", server.ServerOptions, server.Router.Options, router.TimeoutDuration.Seconds()))
 	server.AddRouteGroup("/")
 	return server
 }
@@ -623,6 +623,7 @@ func (e *Engine) Startup() (err error) {
 			if server.Router == nil {
 				continue
 			}
+			server.Router.Resolve()
 			if server.Router.Routes != nil && len(server.Router.Routes) > 0 {
 				handlerRouteMap := make(map[string][]*ServerRouterHandlerRoute)
 				for _, route := range server.Router.Routes {
