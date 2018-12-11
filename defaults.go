@@ -74,6 +74,7 @@ func DefaultErrorHandler(c *routing.Context, err error) error {
 			fallthrough
 		case http.StatusMethodNotAllowed:
 			DefaultLogFunc(c.Context, `LTICK_CLIENT_ERROR|%s|%s|%s|%s|%s`, c.Get("forwardRequestId"), c.Get("requestId"), c.Get("serverAddress"), err.Error(), c.Get("errorStack"))
+		case http.StatusNoContent:
 		default:
 			DefaultLogFunc(c.Context, `LTICK_SERVER_ERROR|%s|%s|%s|%s|%s`, c.Get("forwardRequestId"), c.Get("requestId"), c.Get("serverAddress"), err.Error(), c.Get("errorStack"))
 		}
@@ -105,7 +106,6 @@ func DefaultTimeoutHandler() routing.Handler {
 }
 
 func defaultTimeoutHandler(c *routing.Context) error {
-	c.Abort()
 	return routing.NewHTTPError(http.StatusRequestTimeout)
 }
 

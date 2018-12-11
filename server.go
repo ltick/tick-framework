@@ -1,6 +1,7 @@
 package ltick
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"syscall"
 
 	"github.com/juju/errors"
 	"github.com/ltick/tick-framework/api"
@@ -754,38 +756,55 @@ func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes
 		// TODO graceful copy
 		func(h *ServerRouterHandlerRoute) {
 			routeHandlers[index] = func(ctx *routing.Context) error {
-				requestHost := ctx.Request.Host
-				if requestHost == "" {
-					requestHost = ctx.Request.URL.Host
-				}
-				for _, host := range h.Host {
-					if utility.WildcardMatch(host, requestHost) {
-						apiCtx := &api.Context{
-							Context:  ctx,
-							Response: api.NewResponse(ctx.ResponseWriter),
-						}
-						err := h.Handler.Serve(apiCtx)
-						// TODO 精确控制跳过的路由
-						ctx.Abort()
-						if err != nil {
-							if httpError, ok := err.(routing.HTTPError); ok {
-								ctx.ResponseWriter.WriteHeader(httpError.StatusCode())
-								err := ctx.Write(&api.ResponseData{
-									Code:    http.StatusText(httpError.StatusCode()),
-									Message: httpError.Error(),
-								})
-								return err
-							} else {
-								ctx.ResponseWriter.WriteHeader(http.StatusInternalServerError)
-								err := ctx.Write(&api.ResponseData{
-									Code:    http.StatusText(http.StatusInternalServerError),
-									Message: err.Error(),
-								})
-								return err
-							}
-						}
-						break
+				select {
+				case <-ctx.Context.Done():
+					ctx.Abort()
+					switch ctx.Context.Err() {
+					case context.DeadlineExceeded:
+						return routing.NewHTTPError(http.StatusRequestTimeout, http.StatusText(http.StatusRequestTimeout))
+					case context.Canceled:
+						return routing.NewHTTPError(http.StatusNoContent, http.StatusText(http.StatusNoContent))
 					}
+					return routing.NewHTTPError(http.StatusNoContent, http.StatusText(http.StatusNoContent))
+				default:
+					requestHost := ctx.Request.Host
+					if requestHost == "" {
+						requestHost = ctx.Request.URL.Host
+					}
+					for _, host := range h.Host {
+						if utility.WildcardMatch(host, requestHost) {
+							apiCtx := &api.Context{
+								Context:  ctx,
+								Response: api.NewResponse(ctx.ResponseWriter),
+							}
+							err := h.Handler.Serve(apiCtx)
+							// TODO 精确控制跳过的路由
+							ctx.Abort()
+							if err != nil {
+								if httpError, ok := err.(routing.HTTPError); ok {
+									ctx.ResponseWriter.WriteHeader(httpError.StatusCode())
+									err = ctx.Write(&api.ResponseData{
+										Code:    http.StatusText(httpError.StatusCode()),
+										Message: httpError.Error(),
+									})
+								} else {
+									ctx.ResponseWriter.WriteHeader(http.StatusInternalServerError)
+									err = ctx.Write(&api.ResponseData{
+										Code:    http.StatusText(http.StatusInternalServerError),
+										Message: err.Error(),
+									})
+								}
+								if err != nil {
+									if ConnectionResetByPeer(err) || Timeout(err) || NetworkUnreachable(err) {
+										return routing.NewHTTPError(499, "Response write error: "+err.Error())
+									}
+									return routing.NewHTTPError(http.StatusInternalServerError, "Response write error: "+err.Error())
+								}
+							}
+							break
+						}
+					}
+					return nil
 				}
 				return nil
 			}
@@ -837,3 +856,16 @@ func combineHandlers(h1 []routing.Handler, h2 []routing.Handler) []routing.Handl
 	copy(hh[len(h1):], h2)
 	return hh
 }
+
+func ConnectionResetByPeer(err error) bool {
+	return strings.Contains(err.Error(), syscall.ECONNRESET.Error())
+}
+
+func Timeout(err error) bool {
+	return strings.Contains(err.Error(), "i/o timeout")
+}
+
+func NetworkUnreachable(err error) bool {
+	return strings.Contains(err.Error(), "network is unreachable")
+}
+
