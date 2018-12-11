@@ -750,7 +750,7 @@ func (g *ServerRouteGroup) AddCallback(callback RouterCallback) *ServerRouteGrou
 
 // 添加API路由
 // 可进行参数校验
-func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes []*routeHandler, anteriorHandlers []routing.Handler, posteriorHandlers []routing.Handler) {
+func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes []*routeHandler) {
 	routeHandlers := make([]routing.Handler, len(handlerRoutes))
 	for index, handlerRoute := range handlerRoutes {
 		// TODO graceful copy
@@ -810,12 +810,8 @@ func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes
 			}
 		}(handlerRoute)
 	}
-	if anteriorHandlers != nil {
-		routeHandlers = combineHandlers(anteriorHandlers, routeHandlers)
-	}
-	if posteriorHandlers != nil {
-		routeHandlers = combineHandlers(routeHandlers, posteriorHandlers)
-	}
+	// TODO custom NotFoundHandler
+	routeHandlers = combineHandlers(routeHandlers, []routing.Handler{routing.NotFoundHandler})
 	g.AddRoute(method, path, routeHandlers...)
 }
 

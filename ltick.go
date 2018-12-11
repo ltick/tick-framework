@@ -625,38 +625,41 @@ func (e *Engine) Startup() (err error) {
 			}
 			server.Router.Resolve()
 			// proxy
-			proxyHandlerMap := make(map[string][]routing.Handler, 0)
+			proxyHandlers := make([]routing.Handler, 0)
 			if server.Router.Proxys != nil && len(server.Router.Proxys) > 0 {
 				for _, proxy := range server.Router.Proxys {
 					if proxy != nil {
 						proxyHandler := func(c *routing.Context) error {
-							upstreamURL, err := proxy.Proxy(c)
-							e.Log(upstreamURL)
-							e.Log(err)
-							if err != nil {
-								return routing.NewHTTPError(http.StatusInternalServerError, err.Error())
+							requestHost := c.Request.Host
+							if requestHost == "" {
+								requestHost = c.Request.URL.Host
 							}
-							if upstreamURL != nil {
-								e.Log("===")
-								e.Log(upstreamURL)
-								director := func(req *http.Request) {
-									req = c.Request
-									req.URL.Scheme = upstreamURL.Scheme
-									req.URL.Host = upstreamURL.Host
-									req.RequestURI = upstreamURL.RequestURI()
+							for _, host := range proxy.Host {
+								if utility.WildcardMatch(host, requestHost) {
+									upstreamURL, err := proxy.Proxy(c)
+									e.Log(upstreamURL)
+									e.Log(err)
+									if err != nil {
+										return routing.NewHTTPError(http.StatusInternalServerError, err.Error())
+									}
+									if upstreamURL != nil {
+										e.Log("===")
+										e.Log(upstreamURL)
+										director := func(req *http.Request) {
+											req = c.Request
+											req.URL.Scheme = upstreamURL.Scheme
+											req.URL.Host = upstreamURL.Host
+											req.RequestURI = upstreamURL.RequestURI()
+										}
+										proxy := &httputil.ReverseProxy{Director: director}
+										proxy.ServeHTTP(c.ResponseWriter, c.Request)
+										c.Abort()
+									}
 								}
-								proxy := &httputil.ReverseProxy{Director: director}
-								proxy.ServeHTTP(c.ResponseWriter, c.Request)
-								c.Abort()
 							}
 							return nil
 						}
-						routeId := proxy.Group + "|ANY|" + proxy.Path
-						if _, ok := proxyHandlerMap[routeId]; !ok {
-							proxyHandlerMap[routeId] = []routing.Handler{proxyHandler}
-						} else {
-							proxyHandlerMap[routeId] = append(proxyHandlerMap[routeId], proxyHandler)
-						}
+						proxyHandlers = append(proxyHandlers, proxyHandler)
 					}
 				}
 			}
@@ -698,17 +701,8 @@ func (e *Engine) Startup() (err error) {
 				routeGroup := routeIds[0]
 				routeMethod := routeIds[1]
 				routePath := routeIds[2]
-				// TODO custom NotFoundHandler
-				server.RouteGroups[routeGroup].AddApiRoute(routeMethod, routePath, routeHandlers, proxyHandlerMap[routeId], []routing.Handler{routing.NotFoundHandler})
-				delete(proxyHandlerMap, routeId)
-			}
-			for proxyId, proxyHandlers := range proxyHandlerMap {
-				proxyIds := strings.SplitN(proxyId, "|", 3)
-				proxyGroup := proxyIds[0]
-				proxyMethod := proxyIds[1]
-				proxyPath := proxyIds[2]
-				// TODO custom NotFoundHandler
-				server.RouteGroups[proxyGroup].AddRoute(proxyMethod, proxyPath, proxyHandlers...)
+				server.RouteGroups[routeGroup].AppendAnteriorHandler(proxyHandlers...)
+				server.RouteGroups[routeGroup].AddApiRoute(routeMethod, routePath, routeHandlers)
 			}
 		}
 	}
