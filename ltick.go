@@ -634,20 +634,24 @@ func (e *Engine) Startup() (err error) {
 					} else if _, ok := server.RouteGroups[route.Group]; !ok {
 						server.RouteGroups[route.Group] = server.AddRouteGroup(route.Group)
 					}
-					for _, method := range route.Method {
+					for index, method := range route.Method {
 						routeId := route.Group + "|" + method + "|" + route.Path
 						if _, ok := handlerRouteMap[routeId]; !ok {
-							handlerRouteMap[routeId] = []*ServerRouterHandlerRoute{
-								&ServerRouterHandlerRoute{
-									Handlers: route.Handlers,
-									Host:     route.Host,
-								},
+							if route.Handlers[index] != nil {
+								handlerRouteMap[routeId] = []*ServerRouterHandlerRoute{
+									&ServerRouterHandlerRoute{
+										Handler: route.Handlers[index],
+										Host:    route.Host,
+									},
+								}
 							}
 						} else {
-							handlerRouteMap[routeId] = append(handlerRouteMap[routeId], &ServerRouterHandlerRoute{
-								Handlers: route.Handlers,
-								Host:     route.Host,
-							})
+							if route.Handlers[index] != nil {
+								handlerRouteMap[routeId] = append(handlerRouteMap[routeId], &ServerRouterHandlerRoute{
+									Handler: route.Handlers[index],
+									Host:    route.Host,
+								})
+							}
 						}
 					}
 				}

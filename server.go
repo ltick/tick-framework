@@ -65,8 +65,8 @@ type (
 		Handlers []api.Handler
 	}
 	ServerRouterHandlerRoute struct {
-		Host     []string
-		Handlers []api.Handler
+		Host    []string
+		Handler api.Handler
 	}
 
 	ServerRouterOptions struct {
@@ -760,27 +760,25 @@ func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes
 					requestHost = ctx.Request.URL.Host
 				}
 				found := false
-				for _, handler := range handlerRoute.Handlers {
-					for _, host := range handlerRoute.Host {
-						if utility.WildcardMatch(host, requestHost) {
-							found = true
-							apiCtx := &api.Context{
-								Context:  ctx,
-								Response: api.NewResponse(ctx.ResponseWriter),
-							}
-							err := handler.Serve(apiCtx)
-							if err != nil {
-								ctx.Abort()
-								if httpError, ok := err.(routing.HTTPError); ok {
-									ctx.ResponseWriter.WriteHeader(httpError.StatusCode())
-									err := ctx.Write(&api.ResponseData{
-										Code:    http.StatusText(httpError.StatusCode()),
-										Message: httpError.Error(),
-									})
-									return err
-								}
+				for _, host := range handlerRoute.Host {
+					if utility.WildcardMatch(host, requestHost) {
+						found = true
+						apiCtx := &api.Context{
+							Context:  ctx,
+							Response: api.NewResponse(ctx.ResponseWriter),
+						}
+						err := handlerRoute.Handler.Serve(apiCtx)
+						if err != nil {
+							ctx.Abort()
+							if httpError, ok := err.(routing.HTTPError); ok {
+								ctx.ResponseWriter.WriteHeader(httpError.StatusCode())
+								err := ctx.Write(&api.ResponseData{
+									Code:    http.StatusText(httpError.StatusCode()),
+									Message: httpError.Error(),
+								})
 								return err
 							}
+							return err
 						}
 					}
 				}
