@@ -231,8 +231,7 @@ func (suite *TestServerSuite) SetupTest() {
 		}
 	}
 	router := suite.engine.NewServerRouter(
-		ServerRouterHandlerTimeout(3*time.Second),
-		ServerRouterGracefulStopTimeout(30*time.Second),
+		ServerRouterTimeout("3s"),
 		ServerRouterAccessLogFunc(accessLogFunc),
 		ServerRouterErrorLogFunc(systemLogger.Error),
 		ServerRouterErrorHandler(errorLogHandler),
@@ -244,7 +243,7 @@ func (suite *TestServerSuite) SetupTest() {
 		ServerRouterLanguageNegotiator("zh-CN", "en-US"),
 		ServerRouterCors(&CorsAllowAll))
 	assert.NotNil(suite.T(), router)
-	suite.server = suite.engine.NewServer(router, ServerLogWriter(ioutil.Discard), ServerPort(8080))
+	suite.server = suite.engine.NewServer(router, ServerLogWriter(ioutil.Discard), ServerPort(8080), ServerGracefulStopTimeoutDuration(30*time.Second))
 	suite.engine.SetServer("test", suite.server)
 
 	suite.defaultServer = suite.engine.NewServer(suite.engine.NewServerRouter())
@@ -397,7 +396,7 @@ func (suite *TestServerSuite) TestApi() {
 	assert.Nil(suite.T(), err)
 	rg.AddApiRoute("POST", "user/<id>", []*routeHandler{
 		&routeHandler{Host: []string{"*"}, Handler: apiHandler},
-	}, nil, nil)
+	})
 	err = suite.engine.Startup()
 	assert.Nil(suite.T(), err)
 	// case 1

@@ -365,6 +365,7 @@ func (e *Engine) NewServer(router *ServerRouter, setters ...ServerOption) *Serve
 	serverOptions := &ServerOptions{
 		logWriter: defaultServerLogWriter,
 		Port:      defaultServerPort,
+		GracefulStopTimeoutDuration: defaultServerGracefulStopTimeoutDuration,
 	}
 	for _, setter := range setters {
 		setter(serverOptions)
@@ -376,7 +377,7 @@ func (e *Engine) NewServer(router *ServerRouter, setters ...ServerOption) *Serve
 		RouteGroups:   make(map[string]*ServerRouteGroup),
 		mutex:         sync.RWMutex{},
 	}
-	server.Log(fmt.Sprintf("ltick: new server [serverOptions:'%+v', serverRouterOptions:'%+v', handlerTimeout:'%.fs']", server.ServerOptions, server.Router.Options, router.TimeoutDuration.Seconds()))
+	server.Log(fmt.Sprintf("ltick: new server [serverOptions:'%+v', serverRouterOptions:'%+v', handlerTimeout:'%.fs']", server.ServerOptions, server.Router.Options, server.Router.TimeoutDuration.Seconds()))
 	server.AddRouteGroup("/")
 	return server
 }
@@ -620,6 +621,7 @@ func (e *Engine) Startup() (err error) {
 	}
 	if e.ServerMap != nil {
 		for _, server := range e.ServerMap {
+			server.Resolve()
 			if server.Router == nil {
 				continue
 			}
@@ -793,7 +795,7 @@ func (e *Engine) ServerListenAndServe(server *Server) {
 		&http.Server{
 			Addr:    fmt.Sprintf(":%d", server.Port),
 			Handler: server.Router,
-		}).Timeout(server.GetGracefulStopTimeout()).Build()
+		}).Timeout(server.GracefulStopTimeoutDuration).Build()
 	if err := g.ListenAndServe(); err != nil {
 		if opErr, ok := err.(*net.OpError); !ok || (ok && opErr.Op != "accept") {
 			e.Log("ltick: Server stop error: ", err.Error())

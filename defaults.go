@@ -101,14 +101,6 @@ func DefaultErrorLogFunc() fault.LogFunc {
 	}
 }
 
-func DefaultTimeoutHandler() routing.Handler {
-	return defaultTimeoutHandler
-}
-
-func defaultTimeoutHandler(c *routing.Context) error {
-	return routing.NewHTTPError(http.StatusRequestTimeout)
-}
-
 func DefaultAccessLogFunc(c *routing.Context, rw *access.LogResponseWriter, elapsed float64) {
 	//来源请求ID
 	forwardRequestId := c.Get("uniqid")

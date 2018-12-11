@@ -28,16 +28,17 @@ import (
 )
 
 var (
-	defaultServerPort                      uint          = 80
-	defaultServerLogWriter                 io.Writer     = os.Stdout
-	defaultServerRouterGracefulStopTimeout time.Duration = 120 * time.Second
-	defaultServerRouterHandlerTimeout      time.Duration = 3 * time.Second
+	defaultServerPort                        uint          = 80
+	defaultServerLogWriter                   io.Writer     = os.Stdout
+	defaultServerGracefulStopTimeoutDuration time.Duration = 120 * time.Second
 )
 
 type (
 	ServerOptions struct {
-		logWriter io.Writer
-		Port      uint
+		logWriter                   io.Writer
+		Port                        uint
+		GracefulStopTimeout         string
+		GracefulStopTimeoutDuration time.Duration
 	}
 
 	ServerBasicAuth struct {
@@ -72,22 +73,19 @@ type (
 	}
 
 	ServerRouterOptions struct {
-		HandlerTimeout              string
-		GracefulStopTimeout         string
-		handlerTimeoutDuration      time.Duration
-		gracefulStopTimeoutDuration time.Duration
-		TimeoutHandler              routing.Handler
-		Callbacks                   []RouterCallback
-		AccessLogFunc               access.LogWriterFunc
-		ErrorLogFunc                fault.LogFunc
-		ErrorHandler                fault.ConvertErrorFunc
-		RecoveryLogFunc             fault.LogFunc
-		RecoveryHandler             fault.ConvertErrorFunc
-		PanicHandler                fault.LogFunc
-		TypeNegotiator              []string
-		SlashRemover                *int
-		LanguageNegotiator          []string
-		Cors                        *cors.Options
+		Timeout            string
+		TimeoutHandlers    []routing.Handler
+		Callbacks          []RouterCallback
+		AccessLogFunc      access.LogWriterFunc
+		ErrorLogFunc       fault.LogFunc
+		ErrorHandler       fault.ConvertErrorFunc
+		RecoveryLogFunc    fault.LogFunc
+		RecoveryHandler    fault.ConvertErrorFunc
+		PanicHandler       fault.LogFunc
+		TypeNegotiator     []string
+		SlashRemover       *int
+		LanguageNegotiator []string
+		Cors               *cors.Options
 	}
 
 	ServerRouterOption func(*ServerRouterOptions)
@@ -118,14 +116,30 @@ func ServerLogWriter(logWriter io.Writer) ServerOption {
 		options.logWriter = logWriter
 	}
 }
+func ServerGracefulStopTimeout(gracefulStopTimeout string) ServerOption {
+	return func(options *ServerOptions) {
+		options.GracefulStopTimeout = gracefulStopTimeout
+	}
+}
+func ServerGracefulStopTimeoutDuration(gracefulStopTimeoutDuration time.Duration) ServerOption {
+	return func(options *ServerOptions) {
+		options.GracefulStopTimeoutDuration = gracefulStopTimeoutDuration
+	}
+}
+func ServerRouterTimeoutHandlers(timeoutHandlers []routing.Handler) ServerRouterOption {
+	return func(options *ServerRouterOptions) {
+		options.TimeoutHandlers = timeoutHandlers
+	}
+}
+func ServerRouterTimeout(timeout string) ServerRouterOption {
+	return func(options *ServerRouterOptions) {
+		options.Timeout = timeout
+	}
+}
+
 func ServerRouterCallback(callbacks []RouterCallback) ServerRouterOption {
 	return func(options *ServerRouterOptions) {
 		options.Callbacks = callbacks
-	}
-}
-func ServerRouterHandlerTimeout(handlerTimeout time.Duration) ServerRouterOption {
-	return func(options *ServerRouterOptions) {
-		options.handlerTimeoutDuration = handlerTimeout
 	}
 }
 func ServerRouterAccessLogFunc(accessLogFunc access.LogWriterFunc) ServerRouterOption {
@@ -180,23 +194,8 @@ func ServerRouterCors(cors *cors.Options) ServerRouterOption {
 		}
 	}
 }
-
-func ServerRouterTimeoutHandler(timeoutHandler routing.Handler) ServerRouterOption {
-	return func(options *ServerRouterOptions) {
-		options.TimeoutHandler = timeoutHandler
-	}
-}
-func ServerRouterGracefulStopTimeout(gracefulStopTimeout time.Duration) ServerRouterOption {
-	return func(options *ServerRouterOptions) {
-		options.gracefulStopTimeoutDuration = gracefulStopTimeout
-	}
-}
 func (e *Engine) NewServerRouter(setters ...ServerRouterOption) (router *ServerRouter) {
-	serverRouterOptions := &ServerRouterOptions{
-		handlerTimeoutDuration:      defaultServerRouterHandlerTimeout,
-		gracefulStopTimeoutDuration: defaultServerRouterGracefulStopTimeout,
-		TimeoutHandler:              defaultTimeoutHandler,
-	}
+	serverRouterOptions := &ServerRouterOptions{}
 	for _, setter := range setters {
 		setter(serverRouterOptions)
 	}
@@ -210,19 +209,13 @@ func (e *Engine) NewServerRouter(setters ...ServerRouterOption) (router *ServerR
 }
 
 func (r *ServerRouter) Resolve() {
-	if r.Options.HandlerTimeout != "" {
-		handlerTimeoutDuration, err := time.ParseDuration(r.Options.HandlerTimeout)
+	if r.Options.Timeout != "" {
+		handlerTimeoutDuration, err := time.ParseDuration(r.Options.Timeout)
 		if err == nil {
-			r.Options.handlerTimeoutDuration = handlerTimeoutDuration
+			r.TimeoutDuration = handlerTimeoutDuration
 		}
 	}
-	if r.Options.GracefulStopTimeout != "" {
-		gracefulStopTimeoutDuration, err := time.ParseDuration(r.Options.GracefulStopTimeout)
-		if err == nil {
-			r.Options.gracefulStopTimeoutDuration = gracefulStopTimeoutDuration
-		}
-	}
-	r.Timeout(r.Options.handlerTimeoutDuration, r.Options.TimeoutHandler)
+	r.Timeout(r.TimeoutDuration, r.TimeoutHandlers...)
 	if r.Options.Callbacks != nil {
 		for _, c := range r.Options.Callbacks {
 			r.AddCallback(c)
@@ -353,8 +346,13 @@ func (e *Engine) GetServerMap() map[string]*Server {
 }
 
 /********** Server **********/
-func (s *Server) GetGracefulStopTimeout() time.Duration {
-	return s.Router.Options.gracefulStopTimeoutDuration
+func (s *Server) Resolve() {
+	if s.GracefulStopTimeout != "" {
+		gracefulStopTimeoutDuration, err := time.ParseDuration(s.GracefulStopTimeout)
+		if err == nil {
+			s.GracefulStopTimeoutDuration = gracefulStopTimeoutDuration
+		}
+	}
 }
 func (s *Server) Get(host []string, group string, path string, handlers ...api.Handler) *Server {
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
