@@ -629,9 +629,9 @@ func (e *Engine) Startup() (err error) {
 					if route == nil {
 						return errors.Annotatef(errors.New("ltick: route does not exists"), errStartup)
 					}
-					if server.RouteGroups[route.Group] == nil {
+					if _, ok := server.RouteGroups[route.Group]; !ok {
 						server.RouteGroups[route.Group] = server.AddRouteGroup(route.Group)
-					} else if _, ok := server.RouteGroups[route.Group]; !ok {
+					} else if server.RouteGroups[route.Group] == nil {
 						server.RouteGroups[route.Group] = server.AddRouteGroup(route.Group)
 					}
 					for index, method := range route.Method {

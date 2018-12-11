@@ -753,23 +753,22 @@ func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes
 	routeHandlers := make([]routing.Handler, len(handlerRoutes))
 	for index, handlerRoute := range handlerRoutes {
 		// TODO graceful copy
-		func(handlerRoute *ServerRouterHandlerRoute) {
+		func(h *ServerRouterHandlerRoute) {
 			routeHandlers[index] = func(ctx *routing.Context) error {
 				requestHost := ctx.Request.Host
 				if requestHost == "" {
 					requestHost = ctx.Request.URL.Host
 				}
-				found := false
-				for _, host := range handlerRoute.Host {
+				for _, host := range h.Host {
 					if utility.WildcardMatch(host, requestHost) {
-						found = true
 						apiCtx := &api.Context{
 							Context:  ctx,
 							Response: api.NewResponse(ctx.ResponseWriter),
 						}
-						err := handlerRoute.Handler.Serve(apiCtx)
+						err := h.Handler.Serve(apiCtx)
+						// TODO 精确控制跳过的路由
+						ctx.Abort()
 						if err != nil {
-							ctx.Abort()
 							if httpError, ok := err.(routing.HTTPError); ok {
 								ctx.ResponseWriter.WriteHeader(httpError.StatusCode())
 								err := ctx.Write(&api.ResponseData{
@@ -780,22 +779,21 @@ func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes
 							}
 							return err
 						}
+						break
 					}
-				}
-				if !found {
-					ctx.Abort()
-					ctx.ResponseWriter.WriteHeader(http.StatusNotFound)
-					err := ctx.Write(&api.ResponseData{
-						Code:    "RouteNotFound",
-						Message: "Route Not Found",
-					})
-					return err
 				}
 				return nil
 			}
 		}(handlerRoute)
 	}
-
+	routeNotFound := func(ctx *routing.Context) error {
+		ctx.ResponseWriter.WriteHeader(http.StatusNotFound)
+		return ctx.Write(&api.ResponseData{
+			Code:    "RouteNotFound",
+			Message: "Route Not Found",
+		})
+	}
+	routeHandlers = combineHandlers(routeHandlers, []routing.Handler{routeNotFound})
 	g.AddRoute(method, path, routeHandlers...)
 }
 
