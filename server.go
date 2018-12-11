@@ -773,9 +773,8 @@ func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes
 								ctx.Abort()
 								if httpError, ok := err.(routing.HTTPError); ok {
 									ctx.ResponseWriter.WriteHeader(httpError.StatusCode())
-									_, err := api.NewResponse(ctx.ResponseWriter).Write(api.ResponseData{
+									err := ctx.Write(&api.ResponseData{
 										Code:    http.StatusText(httpError.StatusCode()),
-
 										Message: httpError.Error(),
 									})
 									return err
@@ -788,8 +787,8 @@ func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes
 				if !found {
 					ctx.Abort()
 					ctx.ResponseWriter.WriteHeader(http.StatusNotFound)
-					_, err := api.NewResponse(ctx.ResponseWriter).SetDataWriter(api.DefaultResponseWriter{}).Write(api.ResponseData{
-						Code:    http.StatusText(http.StatusNotFound),
+					err := ctx.Write(&api.ResponseData{
+						Code:    "NotFound",
 						Message: http.StatusText(http.StatusNotFound),
 					})
 					return err

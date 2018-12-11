@@ -306,12 +306,12 @@ func (ctx *Context) ResponseJSONOrXML(status int, data interface{}, isIndent ...
 
 func (ctx *Context) ResponseDefault(code string, data interface{}, messages ...string) error {
 	responseData := NewResponseData(code, data, messages...)
-	_, err := ctx.Response.Write(responseData)
+	err := ctx.Write(responseData)
 	if err != nil {
 		if ConnectionResetByPeer(err) || Timeout(err) || NetworkUnreachable(err) {
 			return routing.NewHTTPError(499, "Response write error: "+err.Error())
 		}
-		return routing.NewHTTPError(http.StatusInternalServerError, "Response write error: "+err.Error())
+		return routing.NewHTTPError(http.StatusRequestTimeout, "Response write error: "+err.Error())
 	}
 	return err
 }
