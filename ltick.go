@@ -624,6 +624,43 @@ func (e *Engine) Startup() (err error) {
 				continue
 			}
 			server.Router.Resolve()
+			// proxy
+			proxyHandlers := make(map[string][]routing.Handler, 0)
+			if server.Router.Proxys != nil && len(server.Router.Proxys) > 0 {
+				for _, proxy := range server.Router.Proxys {
+					if proxy == nil {
+						proxyHandler := func(c *routing.Context) error {
+							upstreamURL, err := proxy.Proxy(c)
+							e.Log(upstreamURL)
+							e.Log(err)
+							if err != nil {
+								return routing.NewHTTPError(http.StatusInternalServerError, err.Error())
+							}
+							if upstreamURL != nil {
+								e.Log("===")
+								e.Log(upstreamURL)
+								director := func(req *http.Request) {
+									req = c.Request
+									req.URL.Scheme = upstreamURL.Scheme
+									req.URL.Host = upstreamURL.Host
+									req.RequestURI = upstreamURL.RequestURI()
+								}
+								proxy := &httputil.ReverseProxy{Director: director}
+								proxy.ServeHTTP(c.ResponseWriter, c.Request)
+								c.Abort()
+							}
+							return nil
+						}
+						return errors.Annotatef(errors.New("ltick: route does not exists"), errStartup)
+						routeId := proxy.Group + "|ANY|" + proxy.Path
+						if _, ok := proxyHandlers[routeId]; !ok {
+							proxyHandlers[routeId] = []routing.Handler{proxyHandler}
+						} else {
+							proxyHandlers[routeId] = append(proxyHandlers[routeId], proxyHandler)
+						}
+					}
+				}
+			}
 			if server.Router.Routes != nil && len(server.Router.Routes) > 0 {
 				handlerRouteMap := make(map[string][]*ServerRouterHandlerRoute)
 				for _, route := range server.Router.Routes {
@@ -661,42 +698,8 @@ func (e *Engine) Startup() (err error) {
 					routeGroup := routeIds[0]
 					routeMethod := routeIds[1]
 					routePath := routeIds[2]
-					server.RouteGroups[routeGroup].AddApiRoute(routeMethod, routePath, handlerRoutes)
-				}
-			}
-			// proxy
-			if server.Router.Proxys != nil && len(server.Router.Proxys) > 0 {
-				for _, proxy := range server.Router.Proxys {
-					if proxy == nil {
-						return errors.Annotatef(errors.New("ltick: route does not exists"), errStartup)
-					}
-					if server.RouteGroups[proxy.Group] == nil {
-						server.RouteGroups[proxy.Group] = server.AddRouteGroup(proxy.Group)
-					} else if _, ok := server.RouteGroups[proxy.Group]; !ok {
-						server.RouteGroups[proxy.Group] = server.AddRouteGroup(proxy.Group)
-					}
-					server.RouteGroups[proxy.Group].AddRoute("ANY", proxy.Path, func(c *routing.Context) error {
-						upstreamURL, err := proxy.Proxy(c)
-						e.Log(upstreamURL)
-						e.Log(err)
-						if err != nil {
-							return routing.NewHTTPError(http.StatusInternalServerError, err.Error())
-						}
-						if upstreamURL != nil {
-							e.Log("===")
-							e.Log(upstreamURL)
-							director := func(req *http.Request) {
-								req = c.Request
-								req.URL.Scheme = upstreamURL.Scheme
-								req.URL.Host = upstreamURL.Host
-								req.RequestURI = upstreamURL.RequestURI()
-							}
-							proxy := &httputil.ReverseProxy{Director: director}
-							proxy.ServeHTTP(c.ResponseWriter, c.Request)
-							c.Abort()
-						}
-						return nil
-					})
+					// TODO custom NotFoundHandler
+					server.RouteGroups[routeGroup].AddApiRoute(routeMethod, routePath, handlerRoutes, proxyHandlers[routeId], []routing.Handler{routing.NotFoundHandler})
 				}
 			}
 		}

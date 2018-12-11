@@ -11,8 +11,8 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"time"
 	"syscall"
+	"time"
 
 	"github.com/juju/errors"
 	"github.com/ltick/tick-framework/api"
@@ -750,7 +750,7 @@ func (g *ServerRouteGroup) AddCallback(callback RouterCallback) *ServerRouteGrou
 
 // 添加API路由
 // 可进行参数校验
-func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes []*ServerRouterHandlerRoute) {
+func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes []*ServerRouterHandlerRoute, anteriorHandlers []routing.Handler, posteriorHandlers []routing.Handler) {
 	routeHandlers := make([]routing.Handler, len(handlerRoutes))
 	for index, handlerRoute := range handlerRoutes {
 		// TODO graceful copy
@@ -810,14 +810,12 @@ func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes
 			}
 		}(handlerRoute)
 	}
-	routeNotFound := func(ctx *routing.Context) error {
-		ctx.ResponseWriter.WriteHeader(http.StatusNotFound)
-		return ctx.Write(&api.ResponseData{
-			Code:    "RouteNotFound",
-			Message: "Route Not Found",
-		})
+	if anteriorHandlers != nil {
+		routeHandlers = combineHandlers(anteriorHandlers, routeHandlers)
 	}
-	routeHandlers = combineHandlers(routeHandlers, []routing.Handler{routeNotFound})
+	if posteriorHandlers != nil {
+		routeHandlers = combineHandlers(routeHandlers, posteriorHandlers)
+	}
 	g.AddRoute(method, path, routeHandlers...)
 }
 
@@ -868,4 +866,3 @@ func Timeout(err error) bool {
 func NetworkUnreachable(err error) bool {
 	return strings.Contains(err.Error(), "network is unreachable")
 }
-
