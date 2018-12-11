@@ -788,8 +788,8 @@ func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes
 					ctx.Abort()
 					ctx.ResponseWriter.WriteHeader(http.StatusNotFound)
 					err := ctx.Write(&api.ResponseData{
-						Code:    "NotFound",
-						Message: http.StatusText(http.StatusNotFound),
+						Code:    "RouteNotFound",
+						Message: "Route Not Found",
 					})
 					return err
 				}
