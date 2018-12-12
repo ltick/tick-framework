@@ -19,8 +19,8 @@ var (
 	errRegister       = "database: register error"
 	errNosqlRegister       = "database: register error"
 	errNosqlUse       = "database: register error"
-	errNewConnection = "database: new '%s' connection error"
-	errGetConnection = "database: get '%s' connection error"
+	errNewHandler = "database: new '%s' connection error"
+	errGetHandler = "database: get '%s' connection error"
 )
 
 func NewDatabase() *Database {
@@ -151,35 +151,32 @@ func (d *Database) Use(ctx context.Context, Provider string) error {
 	}
 	return nil
 }
-func (d *Database) NewConnection(name string, config map[string]interface{}) (DatabaseHandler, error) {
-	databaseHandler, err := d.GetConnection(name)
+func (d *Database) NewHandler(name string, config map[string]interface{}) (DatabaseHandler, error) {
+	databaseHandler, err := d.handler.GetHandler(name)
 	if err == nil {
 		return databaseHandler, nil
 	}
-	databaseHandler, err = d.handler.NewConnection(name, d.configs)
+	databaseHandler, err = d.handler.NewHandler(name, d.configs)
 	if err != nil {
-		return nil, errors.Annotate(err, fmt.Sprintf(errNewConnection, name))
+		return nil, errors.Annotate(err, fmt.Sprintf(errNewHandler, name))
 	}
 	if databaseHandler == nil {
-		return nil, errors.Annotate(errors.New("database: empty database"), fmt.Sprintf(errNewConnection, name))
+		return nil, errors.Annotate(errors.New("database: empty database"), fmt.Sprintf(errNewHandler, name))
 	}
 	return databaseHandler, nil
 }
-func (d *Database) GetConnection(name string) (DatabaseHandler, error) {
-	databaseHandler, err := d.handler.GetConnection(name)
+func (d *Database) GetHandler(name string) (DatabaseHandler, error) {
+	databaseHandler, err := d.handler.GetHandler(name)
 	if err != nil {
-		if ConnectionNotExists(err) {
-			databaseHandler, err = d.handler.NewConnection(name, d.configs)
-		}
-		return nil, errors.Annotate(err, fmt.Sprintf(errGetConnection, name))
+		return nil, errors.Annotate(err, fmt.Sprintf(errGetHandler, name))
 	}
 	return databaseHandler, err
 }
 
 type Handler interface {
 	Initiate(ctx context.Context) error
-	NewConnection(name string, config map[string]interface{}) (DatabaseHandler, error)
-	GetConnection(name string) (DatabaseHandler, error)
+	NewHandler(name string, config map[string]interface{}) (DatabaseHandler, error)
+	GetHandler(name string) (DatabaseHandler, error)
 }
 
 type DatabaseCallback interface {
@@ -290,8 +287,8 @@ func (d *Database) NosqlUse(ctx context.Context, Provider string) error {
 	}
 	return nil
 }
-func (d *Database) NewNosqlConnection(name string, config map[string]interface{}) (NosqlDatabaseHandler, error) {
-	database, err := d.GetNosqlConnection(name)
+func (d *Database) NewNosqlHandler(name string, config map[string]interface{}) (NosqlDatabaseHandler, error) {
+	database, err := d.GetNosqlHandler(name)
 	if err == nil {
 		return database, nil
 	}
@@ -316,30 +313,30 @@ func (d *Database) NewNosqlConnection(name string, config map[string]interface{}
 	if _, ok := config["DATABASE_HBASE_MAX_ACTIVE"]; !ok {
 		config["DATABASE_HBASE_MAX_ACTIVE"] = d.Config.GetInt("DATABASE_HBASE_MAX_ACTIVE")
 	}
-	database, err = d.nosqlHandler.NewConnection(name, config)
+	database, err = d.nosqlHandler.NewHandler(name, config)
 	if err != nil {
-		return nil, errors.Annotate(err, fmt.Sprintf(errNewConnection, name))
+		return nil, errors.Annotate(err, fmt.Sprintf(errNewHandler, name))
 	}
 	if database == nil {
-		return nil, errors.Annotate(err, fmt.Sprintf(errNewConnection+": empty database", name))
+		return nil, errors.Annotate(err, fmt.Sprintf(errNewHandler+": empty database", name))
 	}
 	return database, nil
 }
-func (d *Database) GetNosqlConnection(name string) (NosqlDatabaseHandler, error) {
-	databaseHandler, err := d.nosqlHandler.GetConnection(name)
+func (d *Database) GetNosqlHandler(name string) (NosqlDatabaseHandler, error) {
+	databaseHandler, err := d.nosqlHandler.GetHandler(name)
 	if err != nil {
-		if ConnectionNotExists(err) {
-			databaseHandler, err = d.nosqlHandler.NewConnection(name, d.configs)
+		if HandlerNotExists(err) {
+			databaseHandler, err = d.nosqlHandler.NewHandler(name, d.configs)
 		}
-		return nil, errors.Annotate(err, fmt.Sprintf(errGetConnection, name))
+		return nil, errors.Annotate(err, fmt.Sprintf(errGetHandler, name))
 	}
 	return databaseHandler, err
 }
 
 type NosqlHandler interface {
 	Initiate(ctx context.Context) error
-	NewConnection(name string, config map[string]interface{}) (NosqlDatabaseHandler, error)
-	GetConnection(name string) (NosqlDatabaseHandler, error)
+	NewHandler(name string, config map[string]interface{}) (NosqlDatabaseHandler, error)
+	GetHandler(name string) (NosqlDatabaseHandler, error)
 }
 type NosqlDatabaseCallback interface {
 }
@@ -348,9 +345,9 @@ type NosqlDatabaseScanner interface {
 	Close() error
 }
 type NosqlDatabaseHandler interface {
-	GetConnection() (client interface{}, err error)
-	ReleaseConnection(client interface{})
-	GetConnectionPoolSize() int
+	GetHandler() (client interface{}, err error)
+	ReleaseHandler(client interface{})
+	GetHandlerPoolSize() int
 	Scan(ctx context.Context, table string) (NosqlDatabaseScanner, error)
 	Get(ctx context.Context, table string, key string) ([]map[string]string, error)
 	Put(ctx context.Context, table string, key string, values map[string]map[string][]byte) (err error)
@@ -382,6 +379,6 @@ func NosqlUse(name string) (nosqlDatabaseHandler, error) {
 	return nosqlDatabaseHandlers[name], nil
 }
 
-func ConnectionNotExists(err error) bool {
+func HandlerNotExists(err error) bool {
 	return strings.Contains(err.Error(), "connection not exists")
 }

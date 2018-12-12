@@ -2,19 +2,20 @@ package kvstore
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
+	"github.com/juju/errors"
 	"github.com/ltick/tick-framework/config"
 )
 
 var (
-	errPrepare       = "kvstore: prepare '%s' error"
-	errInitiate      = "kvstore: initiate '%s' error"
-	errStartup       = "kvstore: startup '%s' error"
-	errNewConnection = "kvstore: new '%s' kvstore error"
-	errGetConnection = "kvstore: get '%s' kvstore error"
+	errRegister   = "kvstore: register '%s' error"
+	errPrepare    = "kvstore: prepare '%s' error"
+	errInitiate   = "kvstore: initiate '%s' error"
+	errStartup    = "kvstore: startup '%s' error"
+	errNewHandler = "kvstore: new '%s' kvstore error"
+	errGetHandler = "kvstore: get '%s' kvstore error"
 )
 
 func NewKvstore(configs map[string]interface{}) *Kvstore {
@@ -53,11 +54,11 @@ func (c *Kvstore) Prepare(ctx context.Context) (context.Context, error) {
 func (c *Kvstore) Initiate(ctx context.Context) (context.Context, error) {
 	err := Register("redis", NewRedisHandler)
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate + ": " + err.Error()))
+		return ctx, errors.Annotate(err, errInitiate)
 	}
 	err = c.Use(ctx, "redis")
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate + ": " + err.Error()))
+		return ctx, errors.Annotate(err, errInitiate)
 	}
 	if _, ok := c.configs["KVSTORE_REDIS_HOST"]; !ok {
 		c.configs["KVSTORE_REDIS_HOST"] = c.Config.GetString("KVSTORE_REDIS_HOST")
@@ -86,12 +87,12 @@ func (c *Kvstore) OnStartup(ctx context.Context) (context.Context, error) {
 	var err error
 	err = Register("redis", NewRedisHandler)
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), c.provider))
+		return ctx, errors.Annotate(err, fmt.Sprintf(errStartup, c.provider))
 	}
 	if kvstoreProvider := c.Config.GetString("KVSTORE_PROVIDER"); kvstoreProvider != "" {
 		err = c.Use(ctx, kvstoreProvider)
 		if err != nil {
-			return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), c.provider))
+			return ctx, errors.Annotate(err, fmt.Sprintf(errStartup, c.provider))
 		}
 	}
 	return ctx, nil
@@ -112,47 +113,40 @@ func (c *Kvstore) Use(ctx context.Context, provider string) error {
 	c.handler = handler()
 	err = c.handler.Initiate(ctx)
 	if err != nil {
-		return errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), c.provider))
+		return errors.Annotate(err, fmt.Sprintf(errInitiate, c.provider))
 	}
 	return nil
 }
-func (c *Kvstore) NewConnection(name string, configs... map[string]interface{}) (KvstoreHandler, error) {
-	kvstoreHandler, err := c.GetConnection(name)
+func (c *Kvstore) NewHandler(name string, configs ...map[string]interface{}) (KvstoreHandler, error) {
+	kvstoreHandler, err := c.GetHandler(name)
 	if err == nil {
 		return kvstoreHandler, nil
 	}
-	if len(configs) >0 {
-		kvstoreHandler, err = c.handler.NewConnection(name, configs[0])
+	if len(configs) > 0 {
+		kvstoreHandler, err = c.handler.NewHandler(name, configs[0])
 	} else {
-		kvstoreHandler, err = c.handler.NewConnection(name, c.configs)
+		kvstoreHandler, err = c.handler.NewHandler(name, c.configs)
 	}
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf(errNewConnection+": "+err.Error(), name))
+		return nil, errors.Annotate(err, fmt.Sprintf(errNewHandler, name))
 	}
 	if kvstoreHandler == nil {
-		return nil, errors.New(fmt.Sprintf(errNewConnection+": empty pool", name))
+		return nil, errors.Annotate(err, fmt.Sprintf(errNewHandler+": empty pool", name))
 	}
 	return kvstoreHandler, nil
 }
-func (c *Kvstore) GetConnection(name string) (KvstoreHandler, error) {
-	kvstoreHandler, err := c.handler.GetConnection(name)
+func (c *Kvstore) GetHandler(name string) (KvstoreHandler, error) {
+	kvstoreHandler, err := c.handler.GetHandler(name)
 	if err != nil {
-		if ConnectionNotExists(err) {
-			kvstoreHandler, err = c.handler.NewConnection(name, c.configs)
-			if err != nil {
-				return nil, errors.New(fmt.Sprintf(errGetConnection+": "+err.Error(), name))
-			}
-		} else {
-			return nil, errors.New(fmt.Sprintf(errGetConnection+": "+err.Error(), name))
-		}
+		return nil, errors.Annotate(err, fmt.Sprintf(errGetHandler, name))
 	}
 	return kvstoreHandler, err
 }
 
 type Handler interface {
 	Initiate(ctx context.Context) error
-	NewConnection(name string, config map[string]interface{}) (KvstoreHandler, error)
-	GetConnection(name string) (KvstoreHandler, error)
+	NewHandler(name string, config map[string]interface{}) (KvstoreHandler, error)
+	GetHandler(name string) (KvstoreHandler, error)
 }
 
 type KvstoreHandler interface {
@@ -190,7 +184,7 @@ var kvstoreHandlers = make(map[string]kvstoreHandler)
 
 func Register(name string, kvstoreHandler kvstoreHandler) error {
 	if kvstoreHandler == nil {
-		return errors.New("kvstore: Register kvstore handler is nil")
+		return errors.Annotate(errors.New("kvstore: kvstore handler is nil"), errRegister)
 	}
 	if _, ok := kvstoreHandlers[name]; !ok {
 		kvstoreHandlers[name] = kvstoreHandler
@@ -199,7 +193,7 @@ func Register(name string, kvstoreHandler kvstoreHandler) error {
 }
 func Use(name string) (kvstoreHandler, error) {
 	if _, exist := kvstoreHandlers[name]; !exist {
-		return nil, errors.New("kvstore: unknown kvstore " + name + " (forgotten register?)")
+		return nil, errors.Annotate(errors.New("kvstore: unknown kvstore "+name+" (forgotten register?)"), errRegister)
 	}
 	return kvstoreHandlers[name], nil
 }
@@ -208,6 +202,6 @@ func ErrNil(err error) bool {
 	return RedisErrNil(err)
 }
 
-func ConnectionNotExists(err error) bool {
+func HandlerNotExists(err error) bool {
 	return strings.Contains(err.Error(), "connection not exists")
 }
