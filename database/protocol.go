@@ -7,20 +7,20 @@ import (
 	"strings"
 
 	"github.com/jinzhu/gorm"
+	"github.com/juju/errors"
 	"github.com/ltick/tick-framework/config"
 	"github.com/tsuna/gohbase/hrpc"
-	"github.com/juju/errors"
 )
 
 var (
 	errPrepare       = "database: prepare '%s' error"
 	errInitiate      = "database: initiate '%s' error"
 	errStartup       = "database: startup '%s' error"
-	errRegister       = "database: register error"
-	errNosqlRegister       = "database: register error"
-	errNosqlUse       = "database: register error"
-	errNewHandler = "database: new '%s' connection error"
-	errGetHandler = "database: get '%s' connection error"
+	errRegister      = "database: register error"
+	errNosqlRegister = "database: register error"
+	errNosqlUse      = "database: register error"
+	errNewHandler    = "database: new '%s' handler error"
+	errGetHandler    = "database: get '%s' handler error"
 )
 
 func NewDatabase() *Database {
@@ -380,5 +380,5 @@ func NosqlUse(name string) (nosqlDatabaseHandler, error) {
 }
 
 func HandlerNotExists(err error) bool {
-	return strings.Contains(err.Error(), "connection not exists")
+	return strings.Contains(err.Error(), "handler not exists")
 }

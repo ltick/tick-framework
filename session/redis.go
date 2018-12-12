@@ -50,7 +50,7 @@ func (m *RedisHandler) Initiate(ctx context.Context, maxAge int64, config map[st
 	if err != nil {
 		return errors.New(errRedisInitiate + ": " + err.Error())
 	}
-	m.sessionKvstoreProvider, err = m.Kvstore.NewConnection("session", map[string]interface{}{
+	m.sessionKvstoreProvider, err = m.Kvstore.NewHandler("session", map[string]interface{}{
 		"KVSTORE_REDIS_DATABASE":   config["KVSTORE_REDIS_DATABASE"],
 		"KVSTORE_REDIS_KEY_PREFIX": config["KVSTORE_REDIS_KEY_PREFIX"],
 	})

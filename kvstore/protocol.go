@@ -203,5 +203,5 @@ func ErrNil(err error) bool {
 }
 
 func HandlerNotExists(err error) bool {
-	return strings.Contains(err.Error(), "connection not exists")
+	return strings.Contains(err.Error(), "handler not exists")
 }

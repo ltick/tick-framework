@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	errRedisNewConnection         = "kvstore(redis): new connection error"
-	errRedisConnectionNotExists   = "kvstore(redis): '%s' connection not exists"
+	errRedisNewHandler         = "kvstore(redis): new handler error"
+	errRedisConnectionNotExists   = "kvstore(redis): '%s' handler not exists"
 	errRedisZscanCursorTypeError  = "kvstore(redis): zscan cursor type error"
 	errRedisZscanValueTypeError   = "kvstore(redis): zscan value type error"
 	errRedisZscanValueLengthError = "kvstore(redis): zscan value length error"
@@ -32,7 +32,7 @@ func (this *RedisHandler) Initiate(ctx context.Context) error {
 	return nil
 }
 
-func (this *RedisHandler) NewConnection(name string, config map[string]interface{}) (KvstoreHandler, error) {
+func (this *RedisHandler) NewHandler(name string, config map[string]interface{}) (KvstoreHandler, error) {
 	pool := &RedisPool{Pool: &redis.Pool{}}
 	configHost := config["KVSTORE_REDIS_HOST"]
 	if configHost != nil {
@@ -40,7 +40,7 @@ func (this *RedisHandler) NewConnection(name string, config map[string]interface
 		if ok {
 			pool.Host = host
 		} else {
-			return nil, errors.New(errRedisNewConnection + ": KVSTORE_REDIS_HOST data type must be string")
+			return nil, errors.New(errRedisNewHandler + ": KVSTORE_REDIS_HOST data type must be string")
 		}
 	}
 	configPort := config["KVSTORE_REDIS_PORT"]
@@ -49,7 +49,7 @@ func (this *RedisHandler) NewConnection(name string, config map[string]interface
 		if ok {
 			pool.Port = port
 		} else {
-			return nil, errors.New(errRedisNewConnection + ": KVSTORE_REDIS_PORT data type must be string")
+			return nil, errors.New(errRedisNewHandler + ": KVSTORE_REDIS_PORT data type must be string")
 		}
 	}
 	configPassword := config["KVSTORE_REDIS_PASSWORD"]
@@ -58,7 +58,7 @@ func (this *RedisHandler) NewConnection(name string, config map[string]interface
 		if ok {
 			pool.Password = password
 		} else {
-			return nil, errors.New(errRedisNewConnection + ": KVSTORE_REDIS_PASSWORD data type must be string")
+			return nil, errors.New(errRedisNewHandler + ": KVSTORE_REDIS_PASSWORD data type must be string")
 		}
 	}
 	configDatabase := config["KVSTORE_REDIS_DATABASE"]
@@ -67,7 +67,7 @@ func (this *RedisHandler) NewConnection(name string, config map[string]interface
 		if ok {
 			pool.Database = database
 		} else {
-			return nil, errors.New(errRedisNewConnection + ": KVSTORE_REDIS_DATABASE data type must be int")
+			return nil, errors.New(errRedisNewHandler + ": KVSTORE_REDIS_DATABASE data type must be int")
 		}
 	}
 	configKeyPrefix := config["KVSTORE_REDIS_KEY_PREFIX"]
@@ -76,7 +76,7 @@ func (this *RedisHandler) NewConnection(name string, config map[string]interface
 		if ok {
 			pool.KeyPrefix = keyPrefix
 		} else {
-			return nil, errors.New(errRedisNewConnection + ": KVSTORE_REDIS_KEY_PREFIX data type must be string")
+			return nil, errors.New(errRedisNewHandler + ": KVSTORE_REDIS_KEY_PREFIX data type must be string")
 		}
 	}
 	configMaxActive := config["KVSTORE_REDIS_MAX_ACTIVE"]
@@ -85,7 +85,7 @@ func (this *RedisHandler) NewConnection(name string, config map[string]interface
 		if ok {
 			pool.MaxActive = maxActive
 		} else {
-			return nil, errors.New(errRedisNewConnection + ": KVSTORE_REDIS_MAX_ACTIVE data type must be int")
+			return nil, errors.New(errRedisNewHandler + ": KVSTORE_REDIS_MAX_ACTIVE data type must be int")
 		}
 	}
 	configMaxIdle := config["KVSTORE_REDIS_MAX_IDLE"]
@@ -94,7 +94,7 @@ func (this *RedisHandler) NewConnection(name string, config map[string]interface
 		if ok {
 			pool.MaxIdle = maxIdle
 		} else {
-			return nil, errors.New(errRedisNewConnection + ": KVSTORE_REDIS_MAX_IDLE data type must be int")
+			return nil, errors.New(errRedisNewHandler + ": KVSTORE_REDIS_MAX_IDLE data type must be int")
 		}
 	}
 	if pool.Host != "" {
@@ -119,10 +119,10 @@ func (this *RedisHandler) NewConnection(name string, config map[string]interface
 		this.pools[name] = pool
 		return pool, nil
 	}
-	return nil, errors.New(errRedisNewConnection + ": pool.Host is empty")
+	return nil, errors.New(errRedisNewHandler + ": pool.Host is empty")
 }
 
-func (this *RedisHandler) GetConnection(name string) (KvstoreHandler, error) {
+func (this *RedisHandler) GetHandler(name string) (KvstoreHandler, error) {
 	if this.pools == nil {
 		return nil, errors.New(fmt.Sprintf(errRedisConnectionNotExists, name))
 	}
