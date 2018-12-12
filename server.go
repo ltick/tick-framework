@@ -308,12 +308,12 @@ func (sp *ServerRouterProxy) Proxy(c *routing.Context) (*url.URL, error) {
 	return nil, nil
 }
 
-func (e *Engine) SetServer(name string, server *Server) {
+func (e *Engine) RegisterServer(name string, server *Server) {
 	if e.ServerMap == nil {
 		e.ServerMap = make(map[string]*Server, 0)
 	}
 	if _, ok := e.ServerMap[name]; ok {
-		fmt.Printf(errNewServer+": server '%s' already exists\r\n", name)
+		fmt.Printf(errRegisterServer+": server '%s' already exists\r\n", name)
 		os.Exit(1)
 	}
 	e.ServerMap[name] = server

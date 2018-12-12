@@ -34,6 +34,7 @@ var (
 	errEngineConfigOption        = "ltick: set engine config option error"
 	errNewDefault                = "ltick: new classic error"
 	errNewServer                 = "ltick: new server error"
+	errRegisterServer            = "ltick: register server error"
 	errGetLogger                 = "ltick: get logger error"
 	errConfigureServer           = "ltick: configure server error"
 	errStartupCallback           = "ltick: startup callback error"
@@ -377,7 +378,6 @@ func (e *Engine) NewServer(router *ServerRouter, setters ...ServerOption) *Serve
 		RouteGroups:   make(map[string]*ServerRouteGroup),
 		mutex:         sync.RWMutex{},
 	}
-	server.Log(fmt.Sprintf("ltick: new server [serverOptions:'%+v', serverRouterOptions:'%+v', handlerTimeout:'%.fs']", server.ServerOptions, server.Router.Options, server.Router.TimeoutDuration.Seconds()))
 	server.AddRouteGroup("/")
 	return server
 }
@@ -702,6 +702,7 @@ func (e *Engine) Startup() (err error) {
 				server.RouteGroups[routeGroup].PrependAnteriorHandler(proxyHandlers...)
 				server.RouteGroups[routeGroup].AddApiRoute(routeMethod, routePath, routeHandlers)
 			}
+			e.Log(fmt.Sprintf("ltick: new server [serverOptions:'%+v', serverRouterOptions:'%+v', handlerTimeout:'%.fs']", server.ServerOptions, server.Router.Options, server.Router.TimeoutDuration.Seconds()))
 		}
 	}
 	sortedComponenetName := e.Registry.GetSortedComponentName()
