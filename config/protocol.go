@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/go-ozzo/ozzo-config"
+	"github.com/ltick/ltick-config"
 	"github.com/joho/godotenv"
 	_ "github.com/joho/godotenv/autoload"
 	"github.com/juju/errors"

@@ -411,7 +411,7 @@ func (e *Engine) loadConfig(setters ...EngineOption) *Engine {
 	if configCacheFile != "" {
 		f, err := filepath.Abs(configCacheFile)
 		if err == nil {
-			configCacheFileName	 = f
+			configCacheFileName = f
 		}
 	}
 	configCachedFile, err := e.openCacheConfigFile(configCacheFileName)
@@ -620,15 +620,19 @@ func (e *Engine) Startup() (err error) {
 	if e.EngineOptions.callback != nil {
 		err = e.Registry.InjectComponentTo([]interface{}{e.EngineOptions.callback})
 		if err != nil {
-			return errors.Annotatef(err, errStartupCallback)
+			err = errors.Annotate(err, errStartup)
+			e.Log(errors.ErrorStack(err))
+			os.Exit(1)
 		}
 		err = e.EngineOptions.callback.OnStartup(e)
 		if err != nil {
-			return errors.Annotatef(err, errStartupCallback)
+			err = errors.Annotate(err, errStartup)
+			e.Log(errors.ErrorStack(err))
+			os.Exit(1)
 		}
 	}
 	if e.ServerMap != nil {
-		for _, server := range e.ServerMap {
+		for serverName, server := range e.ServerMap {
 			server.Resolve()
 			if server.Router == nil {
 				continue
@@ -711,6 +715,12 @@ func (e *Engine) Startup() (err error) {
 				server.RouteGroups[routeGroup].AddApiRoute(routeMethod, routePath, routeHandlers)
 			}
 			e.Log(fmt.Sprintf("ltick: new server [serverOptions:'%+v', serverRouterOptions:'%+v', handlerTimeout:'%.fs']", server.ServerOptions, server.Router.Options, server.Router.TimeoutDuration.Seconds()))
+			err = e.ConfigureServerFromFile(server, e.GetConfigCachedFileName(), server.Router.Options.RouteProviders, "server."+serverName)
+			if err != nil {
+				err = errors.Annotate(err, errStartup)
+				e.Log(errors.ErrorStack(err))
+				os.Exit(1)
+			}
 		}
 	}
 	sortedComponenetName := e.Registry.GetSortedComponentName()

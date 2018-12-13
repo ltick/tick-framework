@@ -86,16 +86,17 @@ type (
 		SlashRemover       *int
 		LanguageNegotiator []string
 		Cors               *cors.Options
+		RouteProviders     map[string]interface{}
 	}
 
 	ServerRouterOption func(*ServerRouterOptions)
 
 	ServerRouter struct {
 		*routing.Router
-		Options     *ServerRouterOptions
-		Middlewares []MiddlewareInterface
-		Proxys      []*ServerRouterProxy
-		Routes      []*ServerRouterRoute
+		Options        *ServerRouterOptions
+		Middlewares    []MiddlewareInterface
+		Proxys         []*ServerRouterProxy
+		Routes         []*ServerRouterRoute
 	}
 	ServerRouteGroup struct {
 		*routing.RouteGroup
@@ -194,16 +195,21 @@ func ServerRouterCors(cors *cors.Options) ServerRouterOption {
 		}
 	}
 }
+func ServerRouterRouteProviders(routeProviders map[string]interface{}) ServerRouterOption {
+	return func(options *ServerRouterOptions) {
+		options.RouteProviders = routeProviders
+	}
+}
 func (e *Engine) NewServerRouter(setters ...ServerRouterOption) (router *ServerRouter) {
 	serverRouterOptions := &ServerRouterOptions{}
 	for _, setter := range setters {
 		setter(serverRouterOptions)
 	}
 	router = &ServerRouter{
-		Router:  routing.New(e.Context),
-		Options: serverRouterOptions,
-		Routes:  make([]*ServerRouterRoute, 0),
-		Proxys:  make([]*ServerRouterProxy, 0),
+		Router:         routing.New(e.Context),
+		Options:        serverRouterOptions,
+		Routes:         make([]*ServerRouterRoute, 0),
+		Proxys:         make([]*ServerRouterProxy, 0),
 	}
 	return
 }
