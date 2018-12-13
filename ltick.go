@@ -400,11 +400,18 @@ func (e *Engine) loadConfig(setters ...EngineOption) *Engine {
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
+	// 读取环境变量
 	if !path.IsAbs(e.EngineOptions.EngineConfigOptions.dotenvFile) {
 		err = errors.Annotate(fmt.Errorf("ltick: '%s' is not a valid dotenv path", e.EngineOptions.EngineConfigOptions.dotenvFile), errNew)
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
+	if e.EngineOptions.EngineConfigOptions.dotenvFile != "" {
+		e.LoadEnvFile(e.EngineOptions.EngineConfigOptions.envPrefix, e.EngineOptions.EngineConfigOptions.dotenvFile)
+	} else {
+		e.LoadEnv(e.EngineOptions.EngineConfigOptions.envPrefix)
+	}
+	// 生成配置缓存文件
 	fileExtension := filepath.Ext(e.EngineOptions.EngineConfigOptions.configFile)
 	configCacheFileName := strings.Replace(e.EngineOptions.EngineConfigOptions.configFile, fileExtension, "", -1) + ".cached" + fileExtension
 	configCacheFile := e.configer.GetString("CONFIG_CACHE_FILE")
@@ -422,11 +429,7 @@ func (e *Engine) loadConfig(setters ...EngineOption) *Engine {
 	}
 	defer configCachedFile.Close()
 	e.cachedConfigFileName = configCachedFile.Name()
-	if e.EngineOptions.EngineConfigOptions.dotenvFile != "" {
-		e.LoadEnvFile(e.EngineOptions.EngineConfigOptions.envPrefix, e.EngineOptions.EngineConfigOptions.dotenvFile)
-	} else {
-		e.LoadEnv(e.EngineOptions.EngineConfigOptions.envPrefix)
-	}
+	// 读取配置缓存文件
 	e.loadCachedFileConfig(e.EngineOptions.EngineConfigOptions.configFile, e.cachedConfigFileName)
 	go func() {
 		// 刷新缓存
