@@ -167,13 +167,10 @@ func (s *Session) Use(ctx context.Context, provider string) error {
 	s.handler = handler()
 	switch s.provider {
 	case "redis":
-		redisDatabase := s.Config.GetString("SESSION_REDIS_DATABASE")
-		if redisDatabase == "" {
-			return errors.Annotate(errors.New(errMissRedisDatabase), fmt.Sprintf(errUseProvider, s.provider))
-		}
+		redisDatabase := s.Config.GetInt("SESSION_REDIS_DATABASE")
 		redisKeyPrefix := s.Config.GetString("SESSION_REDIS_KEY_PREFIX")
 		if redisKeyPrefix == "" {
-			return errors.New(errMissRedisKeyPrefix)
+			return errors.Annotate(errors.New(errMissRedisKeyPrefix), fmt.Sprintf(errUseProvider, s.provider))
 		}
 		err = s.handler.Initiate(ctx, s.MaxAge, map[string]interface{}{
 			"KVSTORE_INSTANCE":         s.Kvstore,
