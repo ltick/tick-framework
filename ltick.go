@@ -339,7 +339,7 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 }
 
 func (e *Engine) ConfigureServerFromFile(s *Server, configFile string, providers map[string]interface{}, configTag string) error {
-	err := e.configer.ConfigureFileConfig(s, configFile, providers, "server")
+	err := e.configer.ConfigureFileConfig(s, configFile, providers, configTag)
 	if err != nil {
 		return errors.Annotate(err, errConfigureServer)
 	}
@@ -347,7 +347,7 @@ func (e *Engine) ConfigureServerFromFile(s *Server, configFile string, providers
 }
 
 func (e *Engine) ConfigureServerFromJson(s *Server, configJson []byte, providers map[string]interface{}, configTag string) error {
-	err := e.configer.ConfigureJsonConfig(s, configJson, providers, "server")
+	err := e.configer.ConfigureJsonConfig(s, configJson, providers, configTag)
 	if err != nil {
 		return errors.Annotate(err, errConfigureServer)
 	}
@@ -718,7 +718,7 @@ func (e *Engine) Startup() (err error) {
 				server.RouteGroups[routeGroup].AddApiRoute(routeMethod, routePath, routeHandlers)
 			}
 			e.Log(fmt.Sprintf("ltick: new server [serverOptions:'%+v', serverRouterOptions:'%+v', handlerTimeout:'%.fs']", server.ServerOptions, server.Router.Options, server.Router.TimeoutDuration.Seconds()))
-			err = e.ConfigureServerFromFile(server, e.GetConfigCachedFileName(), server.Router.Options.RouteProviders, "server."+serverName)
+			err = e.ConfigureServerFromFile(server, e.GetConfigCachedFileName(), server.Router.Options.RouteProviders, "servers."+serverName)
 			if err != nil {
 				err = errors.Annotate(err, errStartup)
 				e.Log(errors.ErrorStack(err))
