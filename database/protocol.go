@@ -151,12 +151,22 @@ func (d *Database) Use(ctx context.Context, Provider string) error {
 	}
 	return nil
 }
-func (d *Database) NewHandler(name string, config map[string]interface{}) (DatabaseHandler, error) {
+func (d *Database) NewHandler(name string, configs ...map[string]interface{}) (DatabaseHandler, error) {
 	databaseHandler, err := d.handler.GetHandler(name)
 	if err == nil {
 		return databaseHandler, nil
 	}
-	databaseHandler, err = d.handler.NewHandler(name, d.configs)
+	if len(configs) > 0 {
+		// merge
+		for key, value := range d.configs {
+			if _, ok := configs[0][key]; !ok {
+				configs[0][key] = value
+			}
+		}
+		databaseHandler, err = d.handler.NewHandler(name, configs[0])
+	} else {
+		databaseHandler, err = d.handler.NewHandler(name, d.configs)
+	}
 	if err != nil {
 		return nil, errors.Annotate(err, fmt.Sprintf(errNewHandler, name))
 	}

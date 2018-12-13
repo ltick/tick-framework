@@ -404,6 +404,45 @@ func (this *RedisPool) Zrange(key interface{}, start, end interface{}) (interfac
 	if err != nil {
 		return nil, err
 	}
+	value, err := c.Do("ZRANGE", sKey, start, end, "WITHSCORES")
+	if err != nil {
+		return nil, err
+	}
+	return value, nil
+}
+func (this *RedisPool) Zrevrange(key interface{}, start, end interface{}) (interface{}, error) {
+	c := this.Pool.Get()
+	defer c.Close()
+	sKey, err := this.generateKey(key)
+	if err != nil {
+		return nil, err
+	}
+	value, err := c.Do("ZREVRANGE", sKey, start, end, "WITHSCORES")
+	if err != nil {
+		return nil, err
+	}
+	return value, nil
+}
+func (this *RedisPool) ZrangeByScore(key interface{}, start, end interface{}) (interface{}, error) {
+	c := this.Pool.Get()
+	defer c.Close()
+	sKey, err := this.generateKey(key)
+	if err != nil {
+		return nil, err
+	}
+	value, err := c.Do("ZRANGEBYSCORE", sKey, start, end, "WITHSCORES")
+	if err != nil {
+		return nil, err
+	}
+	return value, nil
+}
+func (this *RedisPool) ZrevrangeByScore(key interface{}, start, end interface{}) (interface{}, error) {
+	c := this.Pool.Get()
+	defer c.Close()
+	sKey, err := this.generateKey(key)
+	if err != nil {
+		return nil, err
+	}
 	value, err := c.Do("ZREVRANGEBYSCORE", sKey, start, end, "WITHSCORES")
 	if err != nil {
 		return nil, err

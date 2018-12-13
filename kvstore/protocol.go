@@ -123,6 +123,12 @@ func (c *Kvstore) NewHandler(name string, configs ...map[string]interface{}) (Kv
 		return kvstoreHandler, nil
 	}
 	if len(configs) > 0 {
+		// merge
+		for key, value := range c.configs {
+			if _, ok := configs[0][key]; !ok {
+				configs[0][key] = value
+			}
+		}
 		kvstoreHandler, err = c.handler.NewHandler(name, configs[0])
 	} else {
 		kvstoreHandler, err = c.handler.NewHandler(name, c.configs)

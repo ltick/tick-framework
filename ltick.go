@@ -641,6 +641,7 @@ func (e *Engine) Startup() (err error) {
 				continue
 			}
 			server.Router.Resolve()
+			// configure
 			err = e.ConfigureServerFromFile(server, e.GetConfigCachedFileName(), server.Router.Options.RouteProviders, "servers."+serverName)
 			if err != nil {
 				err = errors.Annotate(err, errStartup)
