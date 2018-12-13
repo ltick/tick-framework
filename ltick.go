@@ -641,6 +641,12 @@ func (e *Engine) Startup() (err error) {
 				continue
 			}
 			server.Router.Resolve()
+			err = e.ConfigureServerFromFile(server, e.GetConfigCachedFileName(), server.Router.Options.RouteProviders, "servers."+serverName)
+			if err != nil {
+				err = errors.Annotate(err, errStartup)
+				e.Log(errors.ErrorStack(err))
+				os.Exit(1)
+			}
 			// proxy
 			proxyHandlers := make([]routing.Handler, 0)
 			if server.Router.Proxys != nil && len(server.Router.Proxys) > 0 {
@@ -718,12 +724,6 @@ func (e *Engine) Startup() (err error) {
 				server.RouteGroups[routeGroup].AddApiRoute(routeMethod, routePath, routeHandlers)
 			}
 			e.Log(fmt.Sprintf("ltick: new server [serverOptions:'%+v', serverRouterOptions:'%+v', handlerTimeout:'%.fs']", server.ServerOptions, server.Router.Options, server.Router.TimeoutDuration.Seconds()))
-			err = e.ConfigureServerFromFile(server, e.GetConfigCachedFileName(), server.Router.Options.RouteProviders, "servers."+serverName)
-			if err != nil {
-				err = errors.Annotate(err, errStartup)
-				e.Log(errors.ErrorStack(err))
-				os.Exit(1)
-			}
 		}
 	}
 	sortedComponenetName := e.Registry.GetSortedComponentName()
