@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/ltick/ltick-config"
+	"github.com/ltick/tick-config"
 	"github.com/joho/godotenv"
 	_ "github.com/joho/godotenv/autoload"
 	"github.com/juju/errors"
