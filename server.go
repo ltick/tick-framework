@@ -466,8 +466,8 @@ func (s *Server) Prometheus(host []string, basicAuth *ServerBasicAuth) *Server {
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
 		Method: []string{"ANY"},
 		Host:   host,
-		Group:  "/",
-		Path:   "metrics",
+		Group:  "/metrics",
+		Path:   "",
 		Handlers: []api.Handler{
 			prometheusHandler{
 				httpHandler: promhttp.Handler(),
@@ -487,12 +487,12 @@ func (h pprofHandler) Serve(ctx *api.Context) error {
 	return nil
 }
 
-func (s *Server) Pprof(host []string, group string) *Server {
+func (s *Server) Pprof(host []string) *Server {
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
 		Method: []string{"ANY"},
 		Host:   host,
-		Group:  group,
-		Path:   "pprof",
+		Group:  "/pprof",
+		Path:   "",
 		Handlers: []api.Handler{
 			pprofHandler{
 				httpHandlerFunc: pprof.Index,
@@ -502,8 +502,8 @@ func (s *Server) Pprof(host []string, group string) *Server {
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
 		Method: []string{"ANY"},
 		Host:   host,
-		Group:  group,
-		Path:   "pprof/cmdline",
+		Group:  "/pprof",
+		Path:   "/cmdline",
 		Handlers: []api.Handler{
 			pprofHandler{
 				httpHandlerFunc: pprof.Cmdline,
@@ -513,8 +513,8 @@ func (s *Server) Pprof(host []string, group string) *Server {
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
 		Method: []string{"ANY"},
 		Host:   host,
-		Group:  group,
-		Path:   "pprof/profile",
+		Group:  "/pprof",
+		Path:   "/profile",
 		Handlers: []api.Handler{
 			pprofHandler{
 				httpHandlerFunc: pprof.Profile,
@@ -524,8 +524,8 @@ func (s *Server) Pprof(host []string, group string) *Server {
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
 		Method: []string{"ANY"},
 		Host:   host,
-		Group:  group,
-		Path:   "pprof/symbol",
+		Group:  "/pprof",
+		Path:   "/symbol",
 		Handlers: []api.Handler{
 			pprofHandler{
 				httpHandlerFunc: pprof.Symbol,
@@ -535,8 +535,8 @@ func (s *Server) Pprof(host []string, group string) *Server {
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
 		Method: []string{"ANY"},
 		Host:   host,
-		Group:  group,
-		Path:   "pprof/trace",
+		Group:  "/pprof",
+		Path:   "/trace",
 		Handlers: []api.Handler{
 			pprofHandler{
 				httpHandlerFunc: pprof.Trace,
@@ -562,9 +562,7 @@ func (s *Server) SetServerReuqestCors(corsOptions *cors.Options) *Server {
 }
 func (s *Server) AddRouteGroup(group string) *ServerRouteGroup {
 	// Router Handlers (Global)
-	startupHandlers := combineHandlers(s.Router.GetStartupHandlers(), s.Router.GetAnteriorHandlers())
-	shutdownHandlers := combineHandlers(s.Router.GetPosteriorHandlers(), s.Router.GetShutdownHandlers())
-	s.RouteGroups[group] = s.Router.AddRouteGroup(group, startupHandlers, shutdownHandlers)
+	s.RouteGroups[group] = s.Router.AddRouteGroup(group)
 	return s.RouteGroups[group]
 }
 func (s *Server) AddRoute(method string, path string, handlers ...routing.Handler) *Server {
@@ -740,9 +738,9 @@ func (r *ServerRouter) NewFileHandler(pathMap file.PathMap, opts ...file.ServerO
 	return file.Server(pathMap, opts...)
 }
 
-func (r *ServerRouter) AddRouteGroup(groupName string, startupHandlers []routing.Handler, shutdownHandlers []routing.Handler) *ServerRouteGroup {
+func (r *ServerRouter) AddRouteGroup(groupName string) *ServerRouteGroup {
 	g := &ServerRouteGroup{
-		RouteGroup: r.Group(groupName, startupHandlers, shutdownHandlers),
+		RouteGroup: r.Group(groupName),
 	}
 	for _, m := range r.Middlewares {
 		g.AppendAnteriorHandler(m.OnRequestStartup)

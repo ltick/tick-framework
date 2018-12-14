@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/juju/errors"
-	"github.com/ltick/tick-routing"
 	"github.com/ltick/tick-framework/middleware"
+	"github.com/ltick/tick-routing"
 )
 
 var (
@@ -16,7 +16,7 @@ var (
 	errRegisterMiddleware   = "ltick: register middleware '%s' error"
 	errUnRegisterMiddleware = "ltick: unregister middleware '%s' error"
 	errInjectMiddlewareTo   = "ltick: inject middleware '%s' field '%s' error"
-	errUseMiddleware   = "ltick: use middleware '%s' error"
+	errUseMiddleware        = "ltick: use middleware '%s' error"
 )
 
 type MiddlewareInterface interface {
@@ -87,11 +87,11 @@ func (r *Registry) RegisterMiddleware(middleware *Middleware, ignoreIfExistses .
 	}
 	if _, ok := r.MiddlewareMap[canonicalMiddlewareName]; ok {
 		if !ignoreIfExists {
-			return fmt.Errorf(errMiddlewareExists, canonicalMiddlewareName)
+			return errors.Annotatef(fmt.Errorf(errMiddlewareExists, canonicalMiddlewareName), fmt.Sprintf(errRegisterMiddleware, canonicalMiddlewareName))
 		}
 		err = r.UnregisterMiddleware(canonicalMiddlewareName)
 		if err != nil {
-			return fmt.Errorf(errRegisterMiddleware+": %s", canonicalMiddlewareName, err.Error())
+			return errors.Annotatef(err, fmt.Sprintf(errRegisterMiddleware, canonicalMiddlewareName))
 		}
 	}
 	r.Middlewares = append(r.Middlewares, middleware)
@@ -107,7 +107,7 @@ func (r *Registry) UnregisterMiddleware(middlewareNames ...string) error {
 			canonicalMiddlewareName := canonicalName(middlewareName)
 			_, ok := r.MiddlewareMap[canonicalMiddlewareName]
 			if !ok {
-				return fmt.Errorf(errMiddlewareNotExists, canonicalMiddlewareName)
+				return errors.Annotatef(fmt.Errorf(errMiddlewareNotExists, canonicalMiddlewareName), fmt.Sprintf(errUnRegisterMiddleware, canonicalMiddlewareName))
 			}
 			for index, sortedMiddlewareName := range r.SortedMiddlewareName {
 				if canonicalMiddlewareName == sortedMiddlewareName {
