@@ -39,8 +39,9 @@ func (q *Queue) Prepare(ctx context.Context) (context.Context, error) {
 	}
 	err := q.Config.SetOptions(configs)
 	if err != nil {
-		return ctx, fmt.Errorf(errPrepare+": %s", err.Error())
+		return ctx, errors.Annotate(err, errPrepare)
 	}
+	q.configs = make(map[string]interface{}, 0)
 	return ctx, nil
 }
 
