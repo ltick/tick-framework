@@ -782,6 +782,8 @@ func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes
 					}
 					for _, host := range h.Host {
 						if utility.WildcardMatch(host, requestHost) {
+							// TODO 精确跳过请求路由
+							ctx.Abort()
 							apiCtx := &api.Context{
 								Context:  ctx,
 								Response: api.NewResponse(ctx.ResponseWriter),
