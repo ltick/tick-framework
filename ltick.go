@@ -310,7 +310,9 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 	e.loadConfig(setters...)
 	for _, component := range e.Registry.GetComponentMap() {
 		err = e.ConfigureComponentFileConfig(component, e.configer.ConfigFileUsed(), make(map[string]interface{}))
-		e.Log(err.Error())
+		if err != nil {
+			e.Log(err.Error())
+		}
 		// ignore error
 		/*if err != nil {
 			err = errors.Annotate(err, errNew)
