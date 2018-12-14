@@ -381,7 +381,6 @@ func (e *Engine) NewServer(router *ServerRouter, setters ...ServerOption) *Serve
 		RouteGroups:   make(map[string]*ServerRouteGroup),
 		mutex:         sync.RWMutex{},
 	}
-	server.AddRouteGroup("/")
 	return server
 }
 

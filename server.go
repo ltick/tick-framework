@@ -740,7 +740,7 @@ func (r *ServerRouter) NewFileHandler(pathMap file.PathMap, opts ...file.ServerO
 
 func (r *ServerRouter) AddRouteGroup(groupName string) *ServerRouteGroup {
 	g := &ServerRouteGroup{
-		RouteGroup: r.Group(groupName),
+		RouteGroup: r.Group(groupName, r.GetStartupHandlers(), r.GetShutdownHandlers()),
 	}
 	for _, m := range r.Middlewares {
 		g.AppendAnteriorHandler(m.OnRequestStartup)
