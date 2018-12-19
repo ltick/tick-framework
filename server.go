@@ -39,8 +39,8 @@ type (
 	}
 
 	ServerBasicAuth struct {
-		username string
-		password string
+		Username string
+		Password string
 	}
 
 	ServerOption func(*ServerOptions)
@@ -64,8 +64,6 @@ type (
 	}
 	ServerRouterMetrics struct {
 		Host      []string
-		Group     string
-		Path      string
 		BasicAuth *ServerBasicAuth
 	}
 	ServerRouterRoute struct {
@@ -469,8 +467,6 @@ func (s *Server) Proxy(host []string, group string, path string, upstream string
 func (s *Server) Metrics(host []string, group string, basicAuth *ServerBasicAuth) *Server {
 	s.Router.Metrics = &ServerRouterMetrics{
 		Host:      host,
-		Group:     group,
-		Path:      "",
 		BasicAuth: basicAuth,
 	}
 	return s
@@ -484,14 +480,14 @@ func (s *Server) Pprof(host []string, group string, basicAuth *ServerBasicAuth) 
 	return s
 }
 
-type prometheusHandler struct {
+type metricsHandler struct {
 	httpHandler http.Handler
 	basicAuth   *ServerBasicAuth
 }
 
-func (h prometheusHandler) Serve(ctx *api.Context) error {
+func (h metricsHandler) Serve(ctx *api.Context) error {
 	if h.basicAuth != nil {
-		ctx.Request.SetBasicAuth(h.basicAuth.username, h.basicAuth.password)
+		ctx.Request.SetBasicAuth(h.basicAuth.Username, h.basicAuth.Password)
 	}
 	h.httpHandler.ServeHTTP(ctx.ResponseWriter, ctx.Request)
 	return nil
@@ -504,7 +500,7 @@ type pprofHandler struct {
 
 func (h pprofHandler) Serve(ctx *api.Context) error {
 	if h.basicAuth != nil {
-		ctx.Request.SetBasicAuth(h.basicAuth.username, h.basicAuth.password)
+		ctx.Request.SetBasicAuth(h.basicAuth.Username, h.basicAuth.Username)
 	}
 	h.httpHandlerFunc(ctx.ResponseWriter, ctx.Request)
 	return nil

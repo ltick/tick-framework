@@ -746,10 +746,10 @@ func (e *Engine) Startup() (err error) {
 				server.Router.Routes = append(server.Router.Routes, &ServerRouterRoute{
 					Method: []string{"ANY"},
 					Host:   server.Router.Metrics.Host,
-					Group:  server.Router.Metrics.Group,
+					Group:  "/metrics",
 					Path:   "",
 					Handlers: []api.Handler{
-						prometheusHandler{
+						metricsHandler{
 							httpHandler: promhttp.Handler(),
 							basicAuth:   server.Router.Metrics.BasicAuth,
 						},
