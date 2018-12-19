@@ -143,7 +143,7 @@ func (suite *TestSuite) TestMiddleware() {
 	}}), ServerRouterTimeout("3s"), )
 	assert.NotNil(suite.T(), router)
 	srv := a.NewServer(router, ServerLogWriter(ioutil.Discard), ServerPort(8080), ServerGracefulStopTimeoutDuration(30*time.Second))
-	a.SetServer("test", srv)
+	a.RegisterServer("test", srv)
 	rg := srv.AddRouteGroup("/").AddCallback(&TestRequestCallback{})
 	assert.NotNil(suite.T(), rg)
 	rg.AddRoute("GET", "test", func(c *routing.Context) error {

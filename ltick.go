@@ -17,14 +17,17 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"net/http/pprof"
 
 	"github.com/juju/errors"
+	"github.com/ltick/tick-framework/api"
 	"github.com/ltick/tick-framework/config"
 	"github.com/ltick/tick-framework/logger"
 	"github.com/ltick/tick-framework/utility"
 	"github.com/ltick/tick-graceful"
 	libLog "github.com/ltick/tick-log"
 	"github.com/ltick/tick-routing"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var (
@@ -636,19 +639,12 @@ func (e *Engine) Startup() (err error) {
 		}
 	}
 	if e.ServerMap != nil {
-		for serverName, server := range e.ServerMap {
+		for _, server := range e.ServerMap {
 			server.Resolve()
 			if server.Router == nil {
 				continue
 			}
 			server.Router.Resolve()
-			// configure
-			err = e.ConfigureServerFromFile(server, e.GetConfigCachedFileName(), server.Router.Options.RouteProviders, "servers."+serverName)
-			if err != nil {
-				err = errors.Annotate(err, errStartup)
-				e.Log(errors.ErrorStack(err))
-				os.Exit(1)
-			}
 			// proxy
 			proxyHandlers := make([]routing.Handler, 0)
 			if server.Router.Proxys != nil && len(server.Router.Proxys) > 0 {
@@ -683,6 +679,82 @@ func (e *Engine) Startup() (err error) {
 						proxyHandlers = append(proxyHandlers, proxyHandler)
 					}
 				}
+			}
+			if server.Router.Pprof != nil {
+				server.Router.Routes = append(server.Router.Routes, &ServerRouterRoute{
+					Method: []string{"ANY"},
+					Host:   server.Router.Pprof.Host,
+					Group:  server.Router.Pprof.Group,
+					Path:   "",
+					Handlers: []api.Handler{
+						pprofHandler{
+							httpHandlerFunc: pprof.Index,
+							basicAuth:       server.Router.Pprof.BasicAuth,
+						},
+					},
+				})
+				server.Router.Routes = append(server.Router.Routes, &ServerRouterRoute{
+					Method: []string{"ANY"},
+					Host:   server.Router.Pprof.Host,
+					Group:  server.Router.Pprof.Group,
+					Path:   "/cmdline",
+					Handlers: []api.Handler{
+						pprofHandler{
+							httpHandlerFunc: pprof.Cmdline,
+							basicAuth:       server.Router.Pprof.BasicAuth,
+						},
+					},
+				})
+				server.Router.Routes = append(server.Router.Routes, &ServerRouterRoute{
+					Method: []string{"ANY"},
+					Host:   server.Router.Pprof.Host,
+					Group:  server.Router.Pprof.Group,
+					Path:   "/profile",
+					Handlers: []api.Handler{
+						pprofHandler{
+							httpHandlerFunc: pprof.Profile,
+							basicAuth:       server.Router.Pprof.BasicAuth,
+						},
+					},
+				})
+				server.Router.Routes = append(server.Router.Routes, &ServerRouterRoute{
+					Method: []string{"ANY"},
+					Host:   server.Router.Pprof.Host,
+					Group:  server.Router.Pprof.Group,
+					Path:   "/symbol",
+					Handlers: []api.Handler{
+						pprofHandler{
+							httpHandlerFunc: pprof.Symbol,
+							basicAuth:       server.Router.Pprof.BasicAuth,
+						},
+					},
+				})
+				server.Router.Routes = append(server.Router.Routes, &ServerRouterRoute{
+					Method: []string{"ANY"},
+					Host:   server.Router.Pprof.Host,
+					Group:  server.Router.Pprof.Group,
+					Path:   "/trace",
+					Handlers: []api.Handler{
+						pprofHandler{
+							httpHandlerFunc: pprof.Trace,
+							basicAuth:       server.Router.Pprof.BasicAuth,
+						},
+					},
+				})
+			}
+			if server.Router.Metrics != nil {
+				server.Router.Routes = append(server.Router.Routes, &ServerRouterRoute{
+					Method: []string{"ANY"},
+					Host:   server.Router.Metrics.Host,
+					Group:  server.Router.Metrics.Group,
+					Path:   "",
+					Handlers: []api.Handler{
+						prometheusHandler{
+							httpHandler: promhttp.Handler(),
+							basicAuth:   server.Router.Metrics.BasicAuth,
+						},
+					},
+				})
 			}
 			routeHandlerMap := make(map[string][]*routeHandler)
 			if server.Router.Routes != nil && len(server.Router.Routes) > 0 {

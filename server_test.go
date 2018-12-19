@@ -244,10 +244,10 @@ func (suite *TestServerSuite) SetupTest() {
 		ServerRouterCors(&CorsAllowAll))
 	assert.NotNil(suite.T(), router)
 	suite.server = suite.engine.NewServer(router, ServerLogWriter(ioutil.Discard), ServerPort(8080), ServerGracefulStopTimeoutDuration(30*time.Second))
-	suite.engine.SetServer("test", suite.server)
+	suite.engine.RegisterServer("test", suite.server)
 
 	suite.defaultServer = suite.engine.NewServer(suite.engine.NewServerRouter())
-	suite.engine.SetServer("default", suite.defaultServer)
+	suite.engine.RegisterServer("default", suite.defaultServer)
 }
 
 func (suite *TestServerSuite) TestDefaultServer() {

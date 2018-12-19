@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/pprof"
 	"net/url"
 	"os"
 	"regexp"
@@ -23,7 +22,6 @@ import (
 	"github.com/ltick/tick-routing/fault"
 	"github.com/ltick/tick-routing/file"
 	"github.com/ltick/tick-routing/slash"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var (
@@ -59,6 +57,17 @@ type (
 		Path     string
 		Upstream string
 	}
+	ServerRouterPprof struct {
+		Host      []string
+		Group     string
+		BasicAuth *ServerBasicAuth
+	}
+	ServerRouterMetrics struct {
+		Host      []string
+		Group     string
+		Path      string
+		BasicAuth *ServerBasicAuth
+	}
 	ServerRouterRoute struct {
 		Host     []string
 		Group    string
@@ -92,10 +101,12 @@ type (
 
 	ServerRouter struct {
 		*routing.Router
-		Options        *ServerRouterOptions
-		Middlewares    []MiddlewareInterface
-		Proxys         []*ServerRouterProxy
-		Routes         []*ServerRouterRoute
+		Options     *ServerRouterOptions
+		Middlewares []MiddlewareInterface
+		Pprof       *ServerRouterPprof
+		Metrics     *ServerRouterMetrics
+		Proxys      []*ServerRouterProxy
+		Routes      []*ServerRouterRoute
 	}
 	ServerRouteGroup struct {
 		*routing.RouteGroup
@@ -205,10 +216,10 @@ func (e *Engine) NewServerRouter(setters ...ServerRouterOption) (router *ServerR
 		setter(serverRouterOptions)
 	}
 	router = &ServerRouter{
-		Router:         routing.New(e.Context),
-		Options:        serverRouterOptions,
-		Routes:         make([]*ServerRouterRoute, 0),
-		Proxys:         make([]*ServerRouterProxy, 0),
+		Router:  routing.New(e.Context),
+		Options: serverRouterOptions,
+		Routes:  make([]*ServerRouterRoute, 0),
+		Proxys:  make([]*ServerRouterProxy, 0),
 	}
 	return
 }
@@ -322,6 +333,13 @@ func (e *Engine) RegisterServer(name string, server *Server) {
 		os.Exit(1)
 	}
 	e.ServerMap[name] = server
+	// configure
+	err := e.ConfigureServerFromFile(server, e.GetConfigCachedFileName(), server.Router.Options.RouteProviders, "servers."+name)
+	if err != nil {
+		err = errors.Annotate(err, errStartup)
+		e.Log(errors.ErrorStack(err))
+		os.Exit(1)
+	}
 }
 
 func (e *Engine) SetServerReuqestSlashRemover(name string, status int) *Engine {
@@ -448,6 +466,23 @@ func (s *Server) Proxy(host []string, group string, path string, upstream string
 	})
 	return s
 }
+func (s *Server) Metrics(host []string, group string, basicAuth *ServerBasicAuth) *Server {
+	s.Router.Metrics = &ServerRouterMetrics{
+		Host:      host,
+		Group:     group,
+		Path:      "",
+		BasicAuth: basicAuth,
+	}
+	return s
+}
+func (s *Server) Pprof(host []string, group string, basicAuth *ServerBasicAuth) *Server {
+	s.Router.Pprof = &ServerRouterPprof{
+		Host:      host,
+		Group:     group,
+		BasicAuth: basicAuth,
+	}
+	return s
+}
 
 type prometheusHandler struct {
 	httpHandler http.Handler
@@ -462,89 +497,19 @@ func (h prometheusHandler) Serve(ctx *api.Context) error {
 	return nil
 }
 
-func (s *Server) Prometheus(host []string, basicAuth *ServerBasicAuth) *Server {
-	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method: []string{"ANY"},
-		Host:   host,
-		Group:  "/metrics",
-		Path:   "",
-		Handlers: []api.Handler{
-			prometheusHandler{
-				httpHandler: promhttp.Handler(),
-				basicAuth:   basicAuth,
-			},
-		},
-	})
-	return s
-}
-
 type pprofHandler struct {
 	httpHandlerFunc http.HandlerFunc
+	basicAuth       *ServerBasicAuth
 }
 
 func (h pprofHandler) Serve(ctx *api.Context) error {
+	if h.basicAuth != nil {
+		ctx.Request.SetBasicAuth(h.basicAuth.username, h.basicAuth.password)
+	}
 	h.httpHandlerFunc(ctx.ResponseWriter, ctx.Request)
 	return nil
 }
 
-func (s *Server) Pprof(host []string) *Server {
-	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method: []string{"ANY"},
-		Host:   host,
-		Group:  "/pprof",
-		Path:   "",
-		Handlers: []api.Handler{
-			pprofHandler{
-				httpHandlerFunc: pprof.Index,
-			},
-		},
-	})
-	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method: []string{"ANY"},
-		Host:   host,
-		Group:  "/pprof",
-		Path:   "/cmdline",
-		Handlers: []api.Handler{
-			pprofHandler{
-				httpHandlerFunc: pprof.Cmdline,
-			},
-		},
-	})
-	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method: []string{"ANY"},
-		Host:   host,
-		Group:  "/pprof",
-		Path:   "/profile",
-		Handlers: []api.Handler{
-			pprofHandler{
-				httpHandlerFunc: pprof.Profile,
-			},
-		},
-	})
-	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method: []string{"ANY"},
-		Host:   host,
-		Group:  "/pprof",
-		Path:   "/symbol",
-		Handlers: []api.Handler{
-			pprofHandler{
-				httpHandlerFunc: pprof.Symbol,
-			},
-		},
-	})
-	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method: []string{"ANY"},
-		Host:   host,
-		Group:  "/pprof",
-		Path:   "/trace",
-		Handlers: []api.Handler{
-			pprofHandler{
-				httpHandlerFunc: pprof.Trace,
-			},
-		},
-	})
-	return s
-}
 func (s *Server) SetReuqestSlashRemover(status int) *Server {
 	switch status {
 	case http.StatusMovedPermanently, http.StatusFound:
