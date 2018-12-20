@@ -240,28 +240,28 @@ func (r *ServerRouter) Resolve() {
 	} else {
 		r.WithAccessLogger(DefaultAccessLogFunc)
 	}
-	if r.Options.ErrorLogFunc != nil && r.Options.ErrorHandler != nil {
-		r.WithErrorHandler(r.Options.ErrorLogFunc, r.Options.ErrorHandler)
-	} else if r.Options.ErrorLogFunc != nil {
-		r.WithErrorHandler(r.Options.ErrorLogFunc, DefaultErrorHandler)
+	if r.Options.ErrorLogFunc != nil {
+		if r.Options.ErrorHandler != nil {
+			r.WithErrorHandler(r.Options.ErrorLogFunc, r.Options.ErrorHandler)
+		} else {
+			r.WithErrorHandler(r.Options.ErrorLogFunc)
+		}
 	} else if r.Options.ErrorHandler != nil {
 		r.WithErrorHandler(DefaultErrorLogFunc(), r.Options.ErrorHandler)
-	} else {
-		r.WithErrorHandler(DefaultErrorLogFunc(), DefaultErrorHandler)
 	}
 	if r.Options.PanicHandler != nil {
-		r.WithPanicHandler(r.Options.ErrorLogFunc)
+		r.WithPanicHandler(r.Options.PanicHandler)
 	} else {
 		r.WithPanicHandler(DefaultErrorLogFunc())
 	}
-	if r.Options.RecoveryLogFunc != nil && r.Options.RecoveryHandler != nil {
-		r.WithRecoveryHandler(r.Options.RecoveryLogFunc, r.Options.RecoveryHandler)
-	} else if r.Options.RecoveryLogFunc != nil {
-		r.WithRecoveryHandler(r.Options.RecoveryLogFunc, DefaultErrorHandler)
+	if r.Options.RecoveryLogFunc != nil {
+		if r.Options.RecoveryHandler != nil {
+			r.WithRecoveryHandler(r.Options.RecoveryLogFunc, r.Options.RecoveryHandler)
+		} else {
+			r.WithRecoveryHandler(r.Options.RecoveryLogFunc)
+		}
 	} else if r.Options.RecoveryHandler != nil {
 		r.WithRecoveryHandler(DefaultErrorLogFunc(), r.Options.RecoveryHandler)
-	} else {
-		r.WithRecoveryHandler(DefaultErrorLogFunc(), DefaultErrorHandler)
 	}
 	if r.Options.TypeNegotiator != nil {
 		r.WithTypeNegotiator(r.Options.TypeNegotiator...)

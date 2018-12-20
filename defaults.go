@@ -3,14 +3,12 @@ package ltick
 import (
 	"context"
 	"fmt"
-	libLog "log"
-	"net/http"
+	"log"
 	"time"
 
 	"github.com/ltick/tick-framework/utility"
 	"github.com/ltick/tick-routing"
 	"github.com/ltick/tick-routing/access"
-	"github.com/ltick/tick-routing/content"
 	"github.com/ltick/tick-routing/fault"
 )
 
@@ -53,38 +51,8 @@ func DefaultLogFunc(ctx context.Context, format string, data ...interface{}) {
 	if CustomDefaultLogFunc != nil {
 		CustomDefaultLogFunc(ctx, format, data...)
 	} else {
-		libLog.Printf(format, data...)
+		log.Printf(format, data...)
 	}
-}
-
-func DefaultErrorHandler(c *routing.Context, err error) error {
-	if c == nil {
-		return routing.NewHTTPError(http.StatusInternalServerError)
-	}
-	if httpError, ok := err.(routing.HTTPError); ok {
-		status := httpError.StatusCode()
-		switch status {
-		case http.StatusBadRequest:
-			fallthrough
-		case http.StatusForbidden:
-			fallthrough
-		case http.StatusNotFound:
-			fallthrough
-		case http.StatusRequestTimeout:
-			fallthrough
-		case http.StatusMethodNotAllowed:
-			DefaultLogFunc(c.Context, `LTICK_CLIENT_ERROR|%s|%s|%s|%s|%s`, c.Get("forwardRequestId"), c.Get("requestId"), c.Get("serverAddress"), err.Error(), c.Get("errorStack"))
-		case http.StatusNoContent:
-		default:
-			DefaultLogFunc(c.Context, `LTICK_SERVER_ERROR|%s|%s|%s|%s|%s`, c.Get("forwardRequestId"), c.Get("requestId"), c.Get("serverAddress"), err.Error(), c.Get("errorStack"))
-		}
-		content.TypeNegotiator(XML, XML2, JSON)(c)
-		return routing.NewHTTPError(status, httpError.Error())
-	} else {
-		DefaultLogFunc(c.Context, `LTICK_SERVER_ERROR|%s|%s|%s|%s|%s`, c.Get("forwardRequestId"), c.Get("requestId"), c.Get("serverAddress"), err.Error(), c.Get("errorStack"))
-		return routing.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-	return nil
 }
 
 var CustomDefaultErrorLogFunc fault.LogFunc
@@ -97,7 +65,7 @@ func DefaultErrorLogFunc() fault.LogFunc {
 	if CustomDefaultErrorLogFunc != nil {
 		return CustomDefaultErrorLogFunc
 	} else {
-		return libLog.Printf
+		return log.Printf
 	}
 }
 
