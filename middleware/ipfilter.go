@@ -13,14 +13,17 @@ type IPFilter struct {
 	realIP    bool
 }
 
-// NewIPFilter creates middleware that intercepts the specified IP prefix.
-func NewIPFilter(whitelist []string, realIP bool) *IPFilter {
-	return &IPFilter{
-		whitelist: whitelist,
-		realIP:    realIP,
-	}
-}
 func (i *IPFilter) Prepare(ctx context.Context) (context.Context, error) {
+	ctxWhitelist := ctx.Value("LTICK_IPFILTER_WHITELIST")
+	whitelist, ok := ctxWhitelist.([]string)
+	if ok {
+		i.whitelist = whitelist
+	}
+	ctxRealIP := ctx.Value("LTICK_IPFILTER_REALIP")
+	realIP, ok := ctxRealIP.(bool)
+	if ok {
+		i.realIP = realIP
+	}
 	return ctx, nil
 }
 func (i *IPFilter) Initiate(ctx context.Context) (context.Context, error) {

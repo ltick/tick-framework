@@ -64,6 +64,7 @@ type (
 	}
 	ServerRouterMetrics struct {
 		Host      []string
+		Path      string
 		BasicAuth *ServerBasicAuth
 	}
 	ServerRouterRoute struct {
@@ -464,9 +465,10 @@ func (s *Server) Proxy(host []string, group string, path string, upstream string
 	})
 	return s
 }
-func (s *Server) Metrics(host []string, group string, basicAuth *ServerBasicAuth) *Server {
+func (s *Server) Metrics(host []string, path string, basicAuth *ServerBasicAuth) *Server {
 	s.Router.Metrics = &ServerRouterMetrics{
 		Host:      host,
+		Path:      path,
 		BasicAuth: basicAuth,
 	}
 	return s

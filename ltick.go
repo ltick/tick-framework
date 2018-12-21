@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"net/http/pprof"
 	"os"
 	"os/exec"
 	"path"
@@ -17,7 +18,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"net/http/pprof"
 
 	"github.com/juju/errors"
 	"github.com/ltick/tick-framework/api"
@@ -746,8 +746,8 @@ func (e *Engine) Startup() (err error) {
 				server.Router.Routes = append(server.Router.Routes, &ServerRouterRoute{
 					Method: []string{"ANY"},
 					Host:   server.Router.Metrics.Host,
-					Group:  "/metrics",
-					Path:   "",
+					Group:  "/",
+					Path:   server.Router.Metrics.Path,
 					Handlers: []api.Handler{
 						metricsHandler{
 							httpHandler: promhttp.Handler(),
