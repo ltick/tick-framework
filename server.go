@@ -728,7 +728,7 @@ func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes
 	}
 	for index, handlerRoute := range handlerRoutes {
 		// TODO graceful copy
-		func(h *routeHandler) {
+		func(h *routeHandler, routeCnt int) {
 			routeHandlers[index] = func(ctx *routing.Context) error {
 				select {
 				case <-ctx.Context.Done():
@@ -754,13 +754,13 @@ func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes
 							}
 							return h.Handler.Serve(apiCtx)
 						}
-						routeCnt--
 					}
 					return nil
 				}
 				return nil
 			}
-		}(handlerRoute)
+		}(handlerRoute, routeCnt)
+		routeCnt--
 	}
 	// TODO custom NotFoundHandler
 	routeHandlers = combineHandlers(routeHandlers, []routing.Handler{routing.NotFoundHandler})
