@@ -470,19 +470,6 @@ func (s *Server) Pprof(host []string, group string, basicAuth *ServerBasicAuth) 
 	return s
 }
 
-type metricsHandler struct {
-	httpHandler http.Handler
-	basicAuth   *ServerBasicAuth
-}
-
-func (h metricsHandler) Serve(ctx *api.Context) error {
-	if h.basicAuth != nil {
-		ctx.Request.SetBasicAuth(h.basicAuth.Username, h.basicAuth.Password)
-	}
-	h.httpHandler.ServeHTTP(ctx.ResponseWriter, ctx.Request)
-	return nil
-}
-
 type pprofHandler struct {
 	httpHandlerFunc http.HandlerFunc
 	basicAuth       *ServerBasicAuth
