@@ -27,7 +27,6 @@ import (
 	"github.com/ltick/tick-graceful"
 	libLog "github.com/ltick/tick-log"
 	"github.com/ltick/tick-routing"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var (
@@ -738,20 +737,6 @@ func (e *Engine) Startup() (err error) {
 						pprofHandler{
 							httpHandlerFunc: pprof.Trace,
 							basicAuth:       server.Router.Pprof.BasicAuth,
-						},
-					},
-				})
-			}
-			if server.Router.Metrics != nil {
-				server.Router.Routes = append(server.Router.Routes, &ServerRouterRoute{
-					Method: []string{"ANY"},
-					Host:   server.Router.Metrics.Host,
-					Group:  "/",
-					Path:   server.Router.Metrics.Path,
-					Handlers: []api.Handler{
-						metricsHandler{
-							httpHandler: promhttp.Handler(),
-							basicAuth:   server.Router.Metrics.BasicAuth,
 						},
 					},
 				})

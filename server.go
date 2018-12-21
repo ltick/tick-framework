@@ -62,20 +62,17 @@ type (
 		Group     string
 		BasicAuth *ServerBasicAuth
 	}
-	ServerRouterMetrics struct {
-		Host      []string
-		Path      string
-		BasicAuth *ServerBasicAuth
-	}
 	ServerRouterRoute struct {
 		Host     []string
 		Group    string
 		Method   []string
 		Path     string
+		BasicAuth *ServerBasicAuth
 		Handlers []api.Handler
 	}
 	routeHandler struct {
 		Host    []string
+		BasicAuth *ServerBasicAuth
 		Handler api.Handler
 	}
 
@@ -103,7 +100,6 @@ type (
 		Options     *ServerRouterOptions
 		Middlewares []MiddlewareInterface
 		Pprof       *ServerRouterPprof
-		Metrics     *ServerRouterMetrics
 		Proxys      []*ServerRouterProxy
 		Routes      []*ServerRouterRoute
 	}
@@ -465,14 +461,6 @@ func (s *Server) Proxy(host []string, group string, path string, upstream string
 	})
 	return s
 }
-func (s *Server) Metrics(host []string, path string, basicAuth *ServerBasicAuth) *Server {
-	s.Router.Metrics = &ServerRouterMetrics{
-		Host:      host,
-		Path:      path,
-		BasicAuth: basicAuth,
-	}
-	return s
-}
 func (s *Server) Pprof(host []string, group string, basicAuth *ServerBasicAuth) *Server {
 	s.Router.Pprof = &ServerRouterPprof{
 		Host:      host,
@@ -750,6 +738,9 @@ func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes
 					for _, host := range h.Host {
 						if utility.WildcardMatch(host, requestHost) {
 							ctx.Jump(routeCnt)
+							if handlerRoute.BasicAuth != nil {
+								ctx.Request.SetBasicAuth(h.BasicAuth.Username, h.BasicAuth.Password)
+							}
 							apiCtx := &api.Context{
 								Context:  ctx,
 								Response: api.NewResponse(ctx.ResponseWriter),

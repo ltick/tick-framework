@@ -46,7 +46,6 @@ type Middleware struct {
 var (
 	OptionalMiddlewares = Middlewares{
 		&Middleware{Name: "IPFilter", Middleware: &middleware.IPFilter{}},
-		&Middleware{Name: "Prometheus", Middleware: &middleware.Prometheus{}},
 	}
 )
 
