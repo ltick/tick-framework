@@ -722,6 +722,10 @@ func (g *ServerRouteGroup) AddCallback(callback RouterCallback) *ServerRouteGrou
 // 可进行参数校验
 func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes []*routeHandler) {
 	routeHandlers := make([]routing.Handler, len(handlerRoutes))
+	routeCnt := 0
+	for _, handlerRoute := range handlerRoutes {
+		routeCnt = routeCnt + len(handlerRoute.Host)
+	}
 	for index, handlerRoute := range handlerRoutes {
 		// TODO graceful copy
 		func(h *routeHandler) {
@@ -743,14 +747,14 @@ func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes
 					}
 					for _, host := range h.Host {
 						if utility.WildcardMatch(host, requestHost) {
-							// TODO 精确跳过请求路由
-							ctx.Abort()
+							ctx.Jump(routeCnt)
 							apiCtx := &api.Context{
 								Context:  ctx,
 								Response: api.NewResponse(ctx.ResponseWriter),
 							}
 							return h.Handler.Serve(apiCtx)
 						}
+						routeCnt--
 					}
 					return nil
 				}
