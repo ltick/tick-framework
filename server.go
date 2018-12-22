@@ -63,17 +63,17 @@ type (
 		BasicAuth *ServerBasicAuth
 	}
 	ServerRouterRoute struct {
-		Host     []string
-		Group    string
-		Method   []string
-		Path     string
+		Host      []string
+		Group     string
+		Method    []string
+		Path      string
 		BasicAuth *ServerBasicAuth
-		Handlers []api.Handler
+		Handlers  []api.Handler
 	}
 	routeHandler struct {
-		Host    []string
+		Host      []string
 		BasicAuth *ServerBasicAuth
-		Handler api.Handler
+		Handler   api.Handler
 	}
 
 	ServerRouterOptions struct {
@@ -699,48 +699,43 @@ func (g *ServerRouteGroup) AddCallback(callback RouterCallback) *ServerRouteGrou
 // 可进行参数校验
 func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes []*routeHandler) {
 	routeHandlers := make([]routing.Handler, len(handlerRoutes))
-	routeCnt := 0
-	for _, handlerRoute := range handlerRoutes {
-		routeCnt = routeCnt + len(handlerRoute.Host)
-	}
+	routeCnt := len(handlerRoutes)
 	for index, handlerRoute := range handlerRoutes {
-		// TODO graceful copy
-		func(h *routeHandler, routeCnt int) {
-			routeHandlers[index] = func(ctx *routing.Context) error {
-				select {
-				case <-ctx.Context.Done():
-					ctx.Abort()
-					switch ctx.Context.Err() {
-					case context.DeadlineExceeded:
-						return routing.NewHTTPError(http.StatusRequestTimeout, http.StatusText(http.StatusRequestTimeout))
-					case context.Canceled:
-						return routing.NewHTTPError(http.StatusNoContent, http.StatusText(http.StatusNoContent))
-					}
+		route := handlerRoute
+		routeHandlers[index] = func(ctx *routing.Context) error {
+			select {
+			case <-ctx.Context.Done():
+				ctx.Abort()
+				switch ctx.Context.Err() {
+				case context.DeadlineExceeded:
+					return routing.NewHTTPError(http.StatusRequestTimeout, http.StatusText(http.StatusRequestTimeout))
+				case context.Canceled:
 					return routing.NewHTTPError(http.StatusNoContent, http.StatusText(http.StatusNoContent))
-				default:
-					requestHost := ctx.Request.Host
-					if requestHost == "" {
-						requestHost = ctx.Request.URL.Host
-					}
-					for _, host := range h.Host {
-						if utility.WildcardMatch(host, requestHost) {
-							ctx.Jump(routeCnt)
-							if handlerRoute.BasicAuth != nil {
-								ctx.Request.SetBasicAuth(h.BasicAuth.Username, h.BasicAuth.Password)
-							}
-							apiCtx := &api.Context{
-								Context:  ctx,
-								Response: api.NewResponse(ctx.ResponseWriter),
-							}
-							return h.Handler.Serve(apiCtx)
+				}
+				return routing.NewHTTPError(http.StatusNoContent, http.StatusText(http.StatusNoContent))
+			default:
+				requestHost := ctx.Request.Host
+				if requestHost == "" {
+					requestHost = ctx.Request.URL.Host
+				}
+				for _, host := range route.Host {
+					if utility.WildcardMatch(host, requestHost) {
+						// Jump After NotFoundHandler
+						ctx.Jump(routeCnt-index+3)
+						if route.BasicAuth != nil {
+							ctx.Request.SetBasicAuth(route.BasicAuth.Username, route.BasicAuth.Password)
 						}
+						apiCtx := &api.Context{
+							Context:  ctx,
+							Response: api.NewResponse(ctx.ResponseWriter),
+						}
+						return route.Handler.Serve(apiCtx)
 					}
-					return nil
 				}
 				return nil
 			}
-		}(handlerRoute, routeCnt)
-		routeCnt--
+			return nil
+		}
 	}
 	// TODO custom NotFoundHandler
 	routeHandlers = combineHandlers(routeHandlers, []routing.Handler{routing.NotFoundHandler})
