@@ -33,15 +33,20 @@ var (
 
 type (
 	ServerOptions struct {
-		logWriter                   io.Writer
-		Port                        uint
-		GracefulStopTimeout         string
-		GracefulStopTimeoutDuration time.Duration
-		MetricsHandlerInFlight     prometheus.Gauge
-		MetricsHandlerCounter      *prometheus.CounterVec
-		MetricsHandlerDuration     *prometheus.HistogramVec
-		MetricsHandlerResponseSize *prometheus.HistogramVec
-		MetricsHandlerRequestSize  *prometheus.HistogramVec
+		logWriter                        io.Writer
+		Port                             uint
+		GracefulStopTimeout              string
+		GracefulStopTimeoutDuration      time.Duration
+		EnableMetricsHandlerInFlight     bool
+		MetricsHandlerInFlight           prometheus.Gauge
+		EnableMetricsHandlerCounter      bool
+		MetricsHandlerCounter            *prometheus.CounterVec
+		EnableMetricsHandlerDuration     bool
+		MetricsHandlerDuration           *prometheus.HistogramVec
+		EnableMetricsHandlerResponseSize bool
+		MetricsHandlerResponseSize       *prometheus.HistogramVec
+		EnableMetricsHandlerRequestSize  bool
+		MetricsHandlerRequestSize        *prometheus.HistogramVec
 	}
 	ServerBasicAuth struct {
 		Username string
@@ -122,9 +127,88 @@ func ServerPort(port uint) ServerOption {
 		options.Port = port
 	}
 }
-func ServerMetrics(metrics *ServerMetricOptions) ServerOption {
+func ServerEnableMetricsHandlerInFlight(handlers ...prometheus.Gauge) ServerOption {
 	return func(options *ServerOptions) {
-		options.Metrics = metrics
+		options.EnableMetricsHandlerInFlight = true
+		if len(handlers) > 0 {
+			options.MetricsHandlerInFlight = handlers[0]
+		} else {
+			options.MetricsHandlerInFlight = prometheus.NewGauge(prometheus.GaugeOpts{
+				Name: "ltick_request_in_flight",
+				Help: "A gauge of requests currently being served by the wrapped handler.",
+			})
+		}
+		prometheus.MustRegister(options.MetricsHandlerInFlight)
+	}
+}
+func ServerEnableMetricsHandlerCounter(handlers ...*prometheus.CounterVec) ServerOption {
+	return func(options *ServerOptions) {
+		options.EnableMetricsHandlerCounter = true
+		if len(handlers) > 0 {
+			options.MetricsHandlerCounter = handlers[0]
+		} else {
+			options.MetricsHandlerCounter = prometheus.NewCounterVec(
+				prometheus.CounterOpts{
+					Name: "ltick_request_count",
+					Help: "A counter for requests to the wrapped handler.",
+				},
+				[]string{"code", "method"},
+			)
+		}
+		prometheus.MustRegister(options.MetricsHandlerCounter)
+	}
+}
+func ServerEnableMetricsHandlerDuration(handlers ...*prometheus.HistogramVec) ServerOption {
+	return func(options *ServerOptions) {
+		options.EnableMetricsHandlerDuration = true
+		if len(handlers) > 0 {
+			options.MetricsHandlerDuration = handlers[0]
+		} else {
+			options.MetricsHandlerDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+				Name:    "ltick_request_duration_seconds",
+				Help:    "A histogram of latencies for requests.",
+				Buckets: []float64{.25, .5, 1, 2.5, 5, 10},
+			},
+				[]string{"server", "method"},
+			)
+		}
+		prometheus.MustRegister(options.MetricsHandlerDuration)
+	}
+}
+func ServerEnableMetricsHandlerResponseSize(handlers ...*prometheus.HistogramVec) ServerOption {
+	return func(options *ServerOptions) {
+		options.EnableMetricsHandlerResponseSize = true
+		if len(handlers) > 0 {
+			options.MetricsHandlerResponseSize = handlers[0]
+		} else {
+			options.MetricsHandlerResponseSize = prometheus.NewHistogramVec(
+				prometheus.HistogramOpts{
+					Name:    "ltick_response_size_bytes",
+					Help:    "A histogram of response sizes for requests.",
+					Buckets: []float64{200, 500, 900, 1500},
+				},
+				[]string{},
+			)
+		}
+		prometheus.MustRegister(options.MetricsHandlerResponseSize)
+	}
+}
+func ServerEnableMetricsHandlerRequestSize(handlers ...*prometheus.HistogramVec) ServerOption {
+	return func(options *ServerOptions) {
+		options.EnableMetricsHandlerRequestSize = true
+		if len(handlers) > 0 {
+			options.MetricsHandlerRequestSize = handlers[0]
+		} else {
+			options.MetricsHandlerResponseSize = prometheus.NewHistogramVec(
+				prometheus.HistogramOpts{
+					Name:    "ltick_request_size_bytes",
+					Help:    "A histogram of request sizes for requests.",
+					Buckets: []float64{200, 500, 900, 1500},
+				},
+				[]string{},
+			)
+		}
+		prometheus.MustRegister(options.MetricsHandlerRequestSize)
 	}
 }
 func ServerLogWriter(logWriter io.Writer) ServerOption {

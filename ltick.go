@@ -877,23 +877,18 @@ func (e *Engine) ServerListenAndServe(name string, server *Server) {
 	e.Log("ltick: Server start listen ", server.Port, "...")
 	var handler http.Handler = server.Router
 	if server.MetricsHandlerInFlight != nil {
-		prometheus.MustRegister(server.MetricsHandlerInFlight)
 		handler = promhttp.InstrumentHandlerInFlight(server.MetricsHandlerInFlight, handler)
 	}
 	if server.MetricsHandlerDuration != nil {
-		prometheus.MustRegister(server.MetricsHandlerDuration)
 		handler = promhttp.InstrumentHandlerDuration(server.MetricsHandlerDuration.MustCurryWith(prometheus.Labels{"server": name}), handler)
 	}
 	if server.MetricsHandlerCounter != nil {
-		prometheus.MustRegister(server.MetricsHandlerCounter)
 		handler = promhttp.InstrumentHandlerCounter(server.MetricsHandlerCounter, handler)
 	}
 	if server.MetricsHandlerResponseSize != nil {
-		prometheus.MustRegister(server.MetricsHandlerResponseSize)
 		handler = promhttp.InstrumentHandlerResponseSize(server.MetricsHandlerResponseSize, handler)
 	}
 	if server.MetricsHandlerRequestSize != nil {
-		prometheus.MustRegister(server.MetricsHandlerRequestSize)
 		handler = promhttp.InstrumentHandlerRequestSize(server.MetricsHandlerRequestSize, handler)
 	}
 	g := graceful.New().Server(
