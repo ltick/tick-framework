@@ -37,14 +37,11 @@ type (
 		Port                        uint
 		GracefulStopTimeout         string
 		GracefulStopTimeoutDuration time.Duration
-		Metrics                     *ServerMetricOptions
-	}
-	ServerMetricOptions struct {
-		HandlerInFlight     prometheus.Gauge
-		HandlerCounter      *prometheus.CounterVec
-		HandlerDuration     *prometheus.HistogramVec
-		HandlerResponseSize *prometheus.HistogramVec
-		HandlerRequestSize  *prometheus.HistogramVec
+		MetricsHandlerInFlight     prometheus.Gauge
+		MetricsHandlerCounter      *prometheus.CounterVec
+		MetricsHandlerDuration     *prometheus.HistogramVec
+		MetricsHandlerResponseSize *prometheus.HistogramVec
+		MetricsHandlerRequestSize  *prometheus.HistogramVec
 	}
 	ServerBasicAuth struct {
 		Username string
