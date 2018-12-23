@@ -876,6 +876,11 @@ func (e *Engine) ListenAndServe() {
 func (e *Engine) ServerListenAndServe(name string, server *Server) {
 	e.Log("ltick: Server start listen ", server.Port, "...")
 	var handler http.Handler
+	prometheus.MustRegister(server.Metrics.HandlerInFlight)
+	prometheus.MustRegister(server.Metrics.HandlerDuration)
+	prometheus.MustRegister(server.Metrics.HandlerCounter)
+	prometheus.MustRegister(server.Metrics.HandlerResponseSize)
+	prometheus.MustRegister(server.Metrics.HandlerRequestSize)
 	if server.Metrics != nil {
 		handler = promhttp.InstrumentHandlerInFlight(server.Metrics.HandlerInFlight,
 			promhttp.InstrumentHandlerDuration(server.Metrics.HandlerDuration.MustCurryWith(prometheus.Labels{"server": name}),
