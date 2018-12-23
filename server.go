@@ -22,6 +22,7 @@ import (
 	"github.com/ltick/tick-routing/fault"
 	"github.com/ltick/tick-routing/file"
 	"github.com/ltick/tick-routing/slash"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 var (
@@ -36,8 +37,15 @@ type (
 		Port                        uint
 		GracefulStopTimeout         string
 		GracefulStopTimeoutDuration time.Duration
+		Metrics                     *ServerMetricOptions
 	}
-
+	ServerMetricOptions struct {
+		HandlerInFlight     prometheus.Gauge
+		HandlerCounter      *prometheus.CounterVec
+		HandlerDuration     *prometheus.HistogramVec
+		HandlerResponseSize *prometheus.HistogramVec
+		HandlerRequestSize  *prometheus.HistogramVec
+	}
 	ServerBasicAuth struct {
 		Username string
 		Password string
@@ -115,6 +123,11 @@ type (
 func ServerPort(port uint) ServerOption {
 	return func(options *ServerOptions) {
 		options.Port = port
+	}
+}
+func ServerMetrics(metrics *ServerMetricOptions) ServerOption {
+	return func(options *ServerOptions) {
+		options.Metrics = metrics
 	}
 }
 func ServerLogWriter(logWriter io.Writer) ServerOption {
@@ -721,7 +734,7 @@ func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes
 				for _, host := range route.Host {
 					if utility.WildcardMatch(host, requestHost) {
 						// Jump After NotFoundHandler
-						ctx.Jump(routeCnt-index+3)
+						ctx.Jump(routeCnt - index + 3)
 						if route.BasicAuth != nil {
 							ctx.Request.SetBasicAuth(route.BasicAuth.Username, route.BasicAuth.Password)
 						}
