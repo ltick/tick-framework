@@ -683,7 +683,7 @@ func (e *Engine) Startup() (err error) {
 					}
 				}
 			}
-			server.Router.Routes = append(server.Router.Routes, &ServerRouterRoute{
+			server.Router.Routes = append([]*ServerRouterRoute{&ServerRouterRoute{
 				Method: []string{"GET"},
 				Host:   server.Router.Metrics.Host,
 				Group:  server.Router.Metrics.Group,
@@ -693,9 +693,9 @@ func (e *Engine) Startup() (err error) {
 						basicAuth: server.Router.Metrics.BasicAuth,
 					},
 				},
-			})
+			}}, server.Router.Routes...)
 			if server.Router.Pprof != nil {
-				server.Router.Routes = append(server.Router.Routes, &ServerRouterRoute{
+				server.Router.Routes = append([]*ServerRouterRoute{&ServerRouterRoute{
 					Method: []string{"ANY"},
 					Host:   server.Router.Pprof.Host,
 					Group:  server.Router.Pprof.Group,
@@ -706,8 +706,7 @@ func (e *Engine) Startup() (err error) {
 							basicAuth:       server.Router.Pprof.BasicAuth,
 						},
 					},
-				})
-				server.Router.Routes = append(server.Router.Routes, &ServerRouterRoute{
+				}, &ServerRouterRoute{
 					Method: []string{"ANY"},
 					Host:   server.Router.Pprof.Host,
 					Group:  server.Router.Pprof.Group,
@@ -718,8 +717,7 @@ func (e *Engine) Startup() (err error) {
 							basicAuth:       server.Router.Pprof.BasicAuth,
 						},
 					},
-				})
-				server.Router.Routes = append(server.Router.Routes, &ServerRouterRoute{
+				}, &ServerRouterRoute{
 					Method: []string{"ANY"},
 					Host:   server.Router.Pprof.Host,
 					Group:  server.Router.Pprof.Group,
@@ -730,8 +728,7 @@ func (e *Engine) Startup() (err error) {
 							basicAuth:       server.Router.Pprof.BasicAuth,
 						},
 					},
-				})
-				server.Router.Routes = append(server.Router.Routes, &ServerRouterRoute{
+				}, &ServerRouterRoute{
 					Method: []string{"ANY"},
 					Host:   server.Router.Pprof.Host,
 					Group:  server.Router.Pprof.Group,
@@ -742,8 +739,7 @@ func (e *Engine) Startup() (err error) {
 							basicAuth:       server.Router.Pprof.BasicAuth,
 						},
 					},
-				})
-				server.Router.Routes = append(server.Router.Routes, &ServerRouterRoute{
+				}, &ServerRouterRoute{
 					Method: []string{"ANY"},
 					Host:   server.Router.Pprof.Host,
 					Group:  server.Router.Pprof.Group,
@@ -754,7 +750,7 @@ func (e *Engine) Startup() (err error) {
 							basicAuth:       server.Router.Pprof.BasicAuth,
 						},
 					},
-				})
+				}}, server.Router.Routes...)
 			}
 			routeHandlerMap := make(map[string][]*routeHandler)
 			if server.Router.Routes != nil && len(server.Router.Routes) > 0 {
