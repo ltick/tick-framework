@@ -23,6 +23,7 @@ import (
 	"github.com/ltick/tick-routing/file"
 	"github.com/ltick/tick-routing/slash"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var (
@@ -62,6 +63,11 @@ type (
 		Group    string
 		Path     string
 		Upstream string
+	}
+	ServerRouterMetrics struct {
+		Host      []string
+		Group     string
+		BasicAuth *ServerBasicAuth
 	}
 	ServerRouterPprof struct {
 		Host      []string
@@ -105,6 +111,7 @@ type (
 		*routing.Router
 		Options     *ServerRouterOptions
 		Middlewares []MiddlewareInterface
+		Metrics     *ServerRouterMetrics
 		Pprof       *ServerRouterPprof
 		Proxys      []*ServerRouterProxy
 		Routes      []*ServerRouterRoute
@@ -527,6 +534,26 @@ func (s *Server) Pprof(host []string, group string, basicAuth *ServerBasicAuth) 
 		BasicAuth: basicAuth,
 	}
 	return s
+}
+func (s *Server) Metrics(host []string, group string, basicAuth *ServerBasicAuth) *Server {
+	s.Router.Metrics = &ServerRouterMetrics{
+		Host:      host,
+		Group:     group,
+		BasicAuth: basicAuth,
+	}
+	return s
+}
+
+type metricsHandler struct {
+	basicAuth       *ServerBasicAuth
+}
+
+func (h metricsHandler) Serve(ctx *api.Context) error {
+	if h.basicAuth != nil {
+		ctx.Request.SetBasicAuth(h.basicAuth.Username, h.basicAuth.Username)
+	}
+	promhttp.Handler().ServeHTTP(ctx.ResponseWriter, ctx.Request)
+	return nil
 }
 
 type pprofHandler struct {

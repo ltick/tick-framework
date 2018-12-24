@@ -683,6 +683,17 @@ func (e *Engine) Startup() (err error) {
 					}
 				}
 			}
+			server.Router.Routes = append(server.Router.Routes, &ServerRouterRoute{
+				Method: []string{"GET"},
+				Host:   server.Router.Metrics.Host,
+				Group:  server.Router.Metrics.Group,
+				Path:   "",
+				Handlers: []api.Handler{
+					metricsHandler{
+						basicAuth: server.Router.Metrics.BasicAuth,
+					},
+				},
+			})
 			if server.Router.Pprof != nil {
 				server.Router.Routes = append(server.Router.Routes, &ServerRouterRoute{
 					Method: []string{"ANY"},
