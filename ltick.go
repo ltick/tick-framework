@@ -752,6 +752,7 @@ func (e *Engine) Startup() (err error) {
 					},
 				}}, server.Router.Routes...)
 			}
+			sortedRouteHandlers := []string{}
 			routeHandlerMap := make(map[string][]*routeHandler)
 			if server.Router.Routes != nil && len(server.Router.Routes) > 0 {
 				for _, route := range server.Router.Routes {
@@ -766,6 +767,7 @@ func (e *Engine) Startup() (err error) {
 					for index, method := range route.Method {
 						routeId := route.Group + "|" + method + "|" + route.Path
 						if _, ok := routeHandlerMap[routeId]; !ok {
+							sortedRouteHandlers = append(sortedRouteHandlers, routeId)
 							if route.Handlers[index] != nil {
 								routeHandlerMap[routeId] = []*routeHandler{
 									&routeHandler{
@@ -785,13 +787,15 @@ func (e *Engine) Startup() (err error) {
 					}
 				}
 			}
-			for routeId, routeHandlers := range routeHandlerMap {
-				routeIds := strings.SplitN(routeId, "|", 3)
-				routeGroup := routeIds[0]
-				routeMethod := routeIds[1]
-				routePath := routeIds[2]
-				server.RouteGroups[routeGroup].PrependAnteriorHandler(proxyHandlers...)
-				server.RouteGroups[routeGroup].AddApiRoute(routeMethod, routePath, routeHandlers)
+			for _, routeId := range sortedRouteHandlers {
+				if routeHandlers, ok := routeHandlerMap[routeId]; ok {
+					routeIds := strings.SplitN(routeId, "|", 3)
+					routeGroup := routeIds[0]
+					routeMethod := routeIds[1]
+					routePath := routeIds[2]
+					server.RouteGroups[routeGroup].PrependAnteriorHandler(proxyHandlers...)
+					server.RouteGroups[routeGroup].AddApiRoute(routeMethod, routePath, routeHandlers)
+				}
 			}
 			e.Log(fmt.Sprintf("ltick: new server [serverOptions:'%+v', serverRouterOptions:'%+v', handlerTimeout:'%.fs']", server.ServerOptions, server.Router.Options, server.Router.TimeoutDuration.Seconds()))
 		}
