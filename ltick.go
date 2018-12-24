@@ -23,8 +23,8 @@ import (
 	"github.com/ltick/tick-framework/api"
 	"github.com/ltick/tick-framework/config"
 	"github.com/ltick/tick-framework/logger"
-	"github.com/ltick/tick-framework/utility"
 	"github.com/ltick/tick-framework/metrics"
+	"github.com/ltick/tick-framework/utility"
 	"github.com/ltick/tick-graceful"
 	libLog "github.com/ltick/tick-log"
 	"github.com/ltick/tick-routing"
@@ -881,10 +881,10 @@ func (e *Engine) ServerListenAndServe(name string, server *Server) {
 		handler = metrics.InstrumentHandlerDuration(server.MetricsHandlerDuration.MustCurryWith(prometheus.Labels{"server": name}), handler)
 	}
 	if server.MetricsHandlerResponseSize != nil {
-		handler = metrics.InstrumentHandlerResponseSize(server.MetricsHandlerResponseSize, handler)
+		handler = metrics.InstrumentHandlerResponseSize(server.MetricsHandlerResponseSize.MustCurryWith(prometheus.Labels{"server": name}), handler)
 	}
 	if server.MetricsHandlerRequestSize != nil {
-		handler = metrics.InstrumentHandlerRequestSize(server.MetricsHandlerRequestSize, handler)
+		handler = metrics.InstrumentHandlerRequestSize(server.MetricsHandlerRequestSize.MustCurryWith(prometheus.Labels{"server": name}), handler)
 	}
 	handler = promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handler)
 	g := graceful.New().Server(
