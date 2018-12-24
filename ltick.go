@@ -24,6 +24,7 @@ import (
 	"github.com/ltick/tick-framework/config"
 	"github.com/ltick/tick-framework/logger"
 	"github.com/ltick/tick-framework/utility"
+	"github.com/ltick/tick-framework/metrics"
 	"github.com/ltick/tick-graceful"
 	libLog "github.com/ltick/tick-log"
 	"github.com/ltick/tick-routing"
@@ -876,21 +877,16 @@ func (e *Engine) ListenAndServe() {
 func (e *Engine) ServerListenAndServe(name string, server *Server) {
 	e.Log("ltick: Server start listen ", server.Port, "...")
 	var handler http.Handler = server.Router
-	if server.MetricsHandlerInFlight != nil {
-		handler = promhttp.InstrumentHandlerInFlight(server.MetricsHandlerInFlight, handler)
-	}
 	if server.MetricsHandlerDuration != nil {
-		handler = promhttp.InstrumentHandlerDuration(server.MetricsHandlerDuration.MustCurryWith(prometheus.Labels{"server": name}), handler)
-	}
-	if server.MetricsHandlerCounter != nil {
-		handler = promhttp.InstrumentHandlerCounter(server.MetricsHandlerCounter, handler)
+		handler = metrics.InstrumentHandlerDuration(server.MetricsHandlerDuration.MustCurryWith(prometheus.Labels{"server": name}), handler)
 	}
 	if server.MetricsHandlerResponseSize != nil {
-		handler = promhttp.InstrumentHandlerResponseSize(server.MetricsHandlerResponseSize, handler)
+		handler = metrics.InstrumentHandlerResponseSize(server.MetricsHandlerResponseSize, handler)
 	}
 	if server.MetricsHandlerRequestSize != nil {
-		handler = promhttp.InstrumentHandlerRequestSize(server.MetricsHandlerRequestSize, handler)
+		handler = metrics.InstrumentHandlerRequestSize(server.MetricsHandlerRequestSize, handler)
 	}
+	handler = promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handler)
 	g := graceful.New().Server(
 		&http.Server{
 			Addr:    fmt.Sprintf(":%d", server.Port),
