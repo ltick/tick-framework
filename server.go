@@ -148,7 +148,7 @@ func ServerEnableMetricsHttpServerRequestsDuration(handlers ...prometheus.Collec
 					prometheus.SummaryOpts{
 						Name:       "http_server_requests_duration_seconds",
 						Help:       "A summary of request latencies for requests.",
-						Objectives: map[float64]float64{0.9: 0, 0.95: 0, 0.99: 0, 0.999: 0, 0.9999: 0},
+						Objectives: map[float64]float64{0.9: 0.05, 0.95: 0.05, 0.99: 0.05, 0.999: 0.05, 0.9999: 0.05},
 					},
 					[]string{"server", "server_addr", "host", "method", "path", "status"},
 				),
