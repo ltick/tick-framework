@@ -888,14 +888,14 @@ func (e *Engine) ListenAndServe() {
 func (e *Engine) ServerListenAndServe(name string, server *Server) {
 	e.Log("ltick: Server start listen ", server.Port, "...")
 	var handler http.Handler = server.Router
-	if server.MetricsHttpServerRequestsDuration != nil {
-		handler = metrics.InstrumentHttpServerRequestsDuration(server.MetricsHttpServerRequestsDuration.MustCurryWith(prometheus.Labels{"server": name}), handler)
+	if server.MetricsHttpServerRequestsDurations != nil {
+		handler = metrics.InstrumentHttpServerRequestsDuration(server.MetricsHttpServerRequestsDurations, handler)
 	}
-	if server.MetricsHttpServerRequestsResponseSize != nil {
-		handler = metrics.InstrumentHttpServerRequestsResponseSize(server.MetricsHttpServerRequestsResponseSize.MustCurryWith(prometheus.Labels{"server": name}), handler)
+	if server.MetricsHttpServerRequestsResponseSizes != nil {
+		handler = metrics.InstrumentHttpServerRequestsResponseSize(server.MetricsHttpServerRequestsResponseSizes, handler)
 	}
-	if server.MetricsHttpServerRequestsRequestSize != nil {
-		handler = metrics.InstrumentHttpServerRequestsRequestSize(server.MetricsHttpServerRequestsRequestSize.MustCurryWith(prometheus.Labels{"server": name}), handler)
+	if server.MetricsHttpServerRequestsRequestSizes != nil {
+		handler = metrics.InstrumentHttpServerRequestsRequestSize(server.MetricsHttpServerRequestsRequestSizes, handler)
 	}
 	handler = promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handler)
 	g := graceful.New().Server(

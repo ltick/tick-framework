@@ -1,14 +1,18 @@
 package metrics
 
 import (
+	"context"
+	"crypto/tls"
 	"errors"
 	"net/http"
+	"net/http/httptrace"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/ltick/tick-framework/utility"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	dto "github.com/prometheus/client_model/go"
 )
 
@@ -32,8 +36,7 @@ const magicString = "zZgWfBxLqvG8kc8IMv3POi2Bb0tZI3vAnBx+gBaFi9FyPzB/CzKUer1yufD
 //
 // Note that this method is only guaranteed to never observe negative durations
 // if used with Go1.9+.
-func InstrumentHttpServerRequestsDuration(obs prometheus.ObserverVec, next http.Handler) http.HandlerFunc {
-	serverAddr, host, method, path, status := checkLabels(obs)
+func InstrumentHttpServerRequestsDuration(observers []prometheus.ObserverVec, next http.Handler) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		now := time.Now()
 		d := newDelegator(w, nil)
@@ -47,7 +50,10 @@ func InstrumentHttpServerRequestsDuration(obs prometheus.ObserverVec, next http.
 			reqPath = r.URL.RawPath
 		}
 		reqServerAddr, _ := utility.GetServerAddress()
-		obs.With(labels(serverAddr, host, method, path, status, reqServerAddr, reqHost, r.Method, reqPath, d.Status())).Observe(time.Since(now).Seconds())
+		for _, obs := range observers {
+			serverAddr, host, method, path, status := checkLabels(obs)
+			obs.With(labels(serverAddr, host, method, path, status, reqServerAddr, reqHost, r.Method, reqPath, d.Status())).Observe(time.Since(now).Seconds())
+		}
 	})
 }
 
@@ -67,8 +73,7 @@ func InstrumentHttpServerRequestsDuration(obs prometheus.ObserverVec, next http.
 // If the wrapped Handler panics, no values are reported.
 //
 // See the example for InstrumentHttpServerRequestsDuration for example usage.
-func InstrumentHttpServerRequestsRequestSize(obs prometheus.ObserverVec, next http.Handler) http.HandlerFunc {
-	serverAddr, host, method, path, status := checkLabels(obs)
+func InstrumentHttpServerRequestsRequestSize(observers []prometheus.ObserverVec, next http.Handler) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		d := newDelegator(w, nil)
 		next.ServeHTTP(d, r)
@@ -82,7 +87,10 @@ func InstrumentHttpServerRequestsRequestSize(obs prometheus.ObserverVec, next ht
 			reqPath = r.URL.RawPath
 		}
 		reqServerAddr, _ := utility.GetServerAddress()
-		obs.With(labels(serverAddr, host, method, path, status, reqServerAddr, reqHost, r.Method, reqPath, d.Status())).Observe(float64(size))
+		for _, obs := range observers {
+			serverAddr, host, method, path, status := checkLabels(obs)
+			obs.With(labels(serverAddr, host, method, path, status, reqServerAddr, reqHost, r.Method, reqPath, d.Status())).Observe(float64(size))
+		}
 	})
 }
 
@@ -102,8 +110,7 @@ func InstrumentHttpServerRequestsRequestSize(obs prometheus.ObserverVec, next ht
 // If the wrapped Handler panics, no values are reported.
 //
 // See the example for InstrumentHttpServerRequestsDuration for example usage.
-func InstrumentHttpServerRequestsResponseSize(obs prometheus.ObserverVec, next http.Handler) http.Handler {
-	serverAddr, host, method, path, status := checkLabels(obs)
+func InstrumentHttpServerRequestsResponseSize(observers []prometheus.ObserverVec, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		d := newDelegator(w, nil)
 		next.ServeHTTP(d, r)
@@ -116,7 +123,301 @@ func InstrumentHttpServerRequestsResponseSize(obs prometheus.ObserverVec, next h
 			reqPath = r.URL.RawPath
 		}
 		reqServerAddr, _ := utility.GetServerAddress()
-		obs.With(labels(serverAddr, host, method, path, status, reqServerAddr, reqHost, r.Method, reqPath, d.Status())).Observe(float64(d.Written()))
+		for _, obs := range observers {
+			serverAddr, host, method, path, status := checkLabels(obs)
+			obs.With(labels(serverAddr, host, method, path, status, reqServerAddr, reqHost, r.Method, reqPath, d.Status())).Observe(float64(d.Written()))
+		}
+	})
+}
+
+// InstrumentHttpClientRoundTripperCounter is a middleware that wraps the provided
+// http.RoundTripper to observe the request result with the provided CounterVec.
+// The CounterVec must have zero, one, or two non-const non-curried labels. For
+// those, the only allowed label names are "code" and "method". The function
+// panics otherwise. Partitioning of the CounterVec happens by HTTP status code
+// and/or HTTP method if the respective instance label names are present in the
+// CounterVec. For unpartitioned counting, use a CounterVec with zero labels.
+//
+// If the wrapped RoundTripper panics or returns a non-nil error, the Counter
+// is not incremented.
+//
+// See the example for ExampleInstrumentHttpClientRoundTripperDuration for example usage.
+func InstrumentHttpClientRoundTripperCounter(counter *prometheus.CounterVec, next http.RoundTripper) promhttp.RoundTripperFunc {
+	serverAddr, host, method, path, status := checkLabels(counter)
+
+	return promhttp.RoundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		resp, err := next.RoundTrip(r)
+		if err == nil {
+			reqHost := r.Host
+			if reqHost == "" {
+				reqHost = r.URL.Host
+			}
+			reqPath := r.URL.Path
+			if reqPath == "" {
+				reqPath = r.URL.RawPath
+			}
+			reqServerAddr, _ := utility.GetServerAddress()
+			counter.With(labels(serverAddr, host, method, path, status, reqServerAddr, reqHost, r.Method, reqPath, resp.StatusCode)).Inc()
+		}
+		return resp, err
+	})
+}
+
+// InstrumentHttpClientRoundTripperDuration is a middleware that wraps the provided
+// http.RoundTripper to observe the request duration with the provided
+// ObserverVec.  The ObserverVec must have zero, one, or two non-const
+// non-curried labels. For those, the only allowed label names are "code" and
+// "method". The function panics otherwise. The Observe method of the Observer
+// in the ObserverVec is called with the request duration in
+// seconds. Partitioning happens by HTTP status code and/or HTTP method if the
+// respective instance label names are present in the ObserverVec. For
+// unpartitioned observations, use an ObserverVec with zero labels. Note that
+// partitioning of Histograms is expensive and should be used judiciously.
+//
+// If the wrapped RoundTripper panics or returns a non-nil error, no values are
+// reported.
+//
+// Note that this method is only guaranteed to never observe negative durations
+// if used with Go1.9+.
+func InstrumentHttpClientRoundTripperDuration(observers []prometheus.ObserverVec, next http.RoundTripper) promhttp.RoundTripperFunc {
+	return promhttp.RoundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		start := time.Now()
+		resp, err := next.RoundTrip(r)
+		if err == nil {
+			reqHost := r.Host
+			if reqHost == "" {
+				reqHost = r.URL.Host
+			}
+			reqPath := r.URL.Path
+			if reqPath == "" {
+				reqPath = r.URL.RawPath
+			}
+			reqServerAddr, _ := utility.GetServerAddress()
+			for _, obs := range observers {
+				serverAddr, host, method, path, status := checkLabels(obs)
+				obs.With(labels(serverAddr, host, method, path, status, reqServerAddr, reqHost, r.Method, reqPath, resp.StatusCode)).Observe(time.Since(start).Seconds())
+			}
+		}
+		return resp, err
+	})
+}
+
+// InstrumentTrace is used to offer flexibility in instrumenting the available
+// httptrace.ClientTrace hook functions. Each function is passed a float64
+// representing the time in seconds since the start of the http request. A user
+// may choose to use separately buckets Histograms, or implement custom
+// instance labels on a per function basis.
+type InstrumentTrace struct {
+	GotConn              func(float64, *http.Request)
+	PutIdleConn          func(float64, *http.Request)
+	GotFirstResponseByte func(float64, *http.Request)
+	Got100Continue       func(float64, *http.Request)
+	DNSStart             func(float64, *http.Request)
+	DNSDone              func(float64, *http.Request)
+	ConnectStart         func(float64, *http.Request)
+	ConnectDone          func(float64, *http.Request)
+	TLSHandshakeStart    func(float64, *http.Request)
+	TLSHandshakeDone     func(float64, *http.Request)
+	WroteHeaders         func(float64, *http.Request)
+	Wait100Continue      func(float64, *http.Request)
+	WroteRequest         func(float64, *http.Request)
+}
+
+// InstrumentHttpClientRoundTripperTrace is a middleware that wraps the provided
+// RoundTripper and reports times to hook functions provided in the
+// InstrumentTrace struct. Hook functions that are not present in the provided
+// InstrumentTrace struct are ignored. Times reported to the hook functions are
+// time since the start of the request. Only with Go1.9+, those times are
+// guaranteed to never be negative. (Earlier Go versions are not using a
+// monotonic clock.) Note that partitioning of Histograms is expensive and
+// should be used judiciously.
+//
+// For hook functions that receive an error as an argument, no observations are
+// made in the event of a non-nil error value.
+//
+// See the example for ExampleInstrumentRoundTripperDuration for example usage.
+func InstrumentHttpClientRoundTripperTrace(observers map[string][]prometheus.ObserverVec, next http.RoundTripper) promhttp.RoundTripperFunc {
+	return promhttp.RoundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		start := time.Now()
+		reqHost := r.Host
+		if reqHost == "" {
+			reqHost = r.URL.Host
+		}
+		reqPath := r.URL.Path
+		if reqPath == "" {
+			reqPath = r.URL.RawPath
+		}
+		reqServerAddr, _ := utility.GetServerAddress()
+		// Define functions for the available httptrace.ClientTrace hook
+		// functions that we want to instrument.
+		it := &InstrumentTrace{}
+		if _, ok := observers["connection"]; ok {
+			it.GotConn = func(t float64, r *http.Request) {
+				for _, obs := range observers["connection"] {
+					serverAddr, host, method, path, _ := checkLabels(obs)
+					obs.With(traceLabels(serverAddr, host, method, path, reqServerAddr, reqHost, r.Method, reqPath, "got_conn"))
+				}
+			}
+			it.PutIdleConn = func(t float64, r *http.Request) {
+				for _, obs := range observers["connection"] {
+					serverAddr, host, method, path, _ := checkLabels(obs)
+					obs.With(traceLabels(serverAddr, host, method, path, reqServerAddr, reqHost, r.Method, reqPath, "put_idle_conn"))
+				}
+			}
+		}
+		if _, ok := observers["dns"]; ok {
+			it.DNSStart = func(t float64, r *http.Request) {
+				for _, obs := range observers["dns"] {
+					serverAddr, host, method, path, _ := checkLabels(obs)
+					obs.With(traceLabels(serverAddr, host, method, path, reqServerAddr, reqHost, r.Method, reqPath, "dns_start"))
+				}
+			}
+			it.DNSDone = func(t float64, r *http.Request) {
+				for _, obs := range observers["dns"] {
+					serverAddr, host, method, path, _ := checkLabels(obs)
+					obs.With(traceLabels(serverAddr, host, method, path, reqServerAddr, reqHost, r.Method, reqPath, "dns_done"))
+				}
+			}
+		}
+		if _, ok := observers["connect"]; ok {
+			it.ConnectStart = func(t float64, r *http.Request) {
+				for _, obs := range observers["connect"] {
+					serverAddr, host, method, path, _ := checkLabels(obs)
+					obs.With(traceLabels(serverAddr, host, method, path, reqServerAddr, reqHost, r.Method, reqPath, "connect_start"))
+				}
+			}
+			it.ConnectDone = func(t float64, r *http.Request) {
+				for _, obs := range observers["connect"] {
+					serverAddr, host, method, path, _ := checkLabels(obs)
+					obs.With(traceLabels(serverAddr, host, method, path, reqServerAddr, reqHost, r.Method, reqPath, "connect_done"))
+				}
+			}
+		}
+		if _, ok := observers["tls"]; ok {
+			it.TLSHandshakeStart = func(t float64, r *http.Request) {
+				for _, obs := range observers["tls"] {
+					serverAddr, host, method, path, _ := checkLabels(obs)
+					obs.With(traceLabels(serverAddr, host, method, path, reqServerAddr, reqHost, r.Method, reqPath, "tls_handshake_start"))
+				}
+			}
+			it.TLSHandshakeDone = func(t float64, r *http.Request) {
+				for _, obs := range observers["tls"] {
+					serverAddr, host, method, path, _ := checkLabels(obs)
+					obs.With(traceLabels(serverAddr, host, method, path, reqServerAddr, reqHost, r.Method, reqPath, "tls_handshake_done"))
+				}
+			}
+		}
+		if _, ok := observers["request"]; ok {
+			it.WroteHeaders = func(t float64, r *http.Request) {
+				for _, obs := range observers["request"] {
+					serverAddr, host, method, path, _ := checkLabels(obs)
+					obs.With(traceLabels(serverAddr, host, method, path, reqServerAddr, reqHost, r.Method, reqPath, "wrote_headers"))
+				}
+			}
+			it.WroteRequest = func(t float64, r *http.Request) {
+				for _, obs := range observers["request"] {
+					serverAddr, host, method, path, _ := checkLabels(obs)
+					obs.With(traceLabels(serverAddr, host, method, path, reqServerAddr, reqHost, r.Method, reqPath, "wrote_request"))
+				}
+			}
+			it.GotFirstResponseByte = func(t float64, r *http.Request) {
+				for _, obs := range observers["request"] {
+					serverAddr, host, method, path, _ := checkLabels(obs)
+					obs.With(traceLabels(serverAddr, host, method, path, reqServerAddr, reqHost, r.Method, reqPath, "got_first_response_byte"))
+				}
+			}
+			it.Got100Continue = func(t float64, r *http.Request) {
+				for _, obs := range observers["request"] {
+					serverAddr, host, method, path, _ := checkLabels(obs)
+					obs.With(traceLabels(serverAddr, host, method, path, reqServerAddr, reqHost, r.Method, reqPath, "got_100_continue"))
+				}
+			}
+			it.Wait100Continue = func(t float64, r *http.Request) {
+				for _, obs := range observers["request"] {
+					serverAddr, host, method, path, _ := checkLabels(obs)
+					obs.With(traceLabels(serverAddr, host, method, path, reqServerAddr, reqHost, r.Method, reqPath, "wait_100_continue"))
+				}
+			}
+		}
+		trace := &httptrace.ClientTrace{
+			GotConn: func(_ httptrace.GotConnInfo) {
+				if it.GotConn != nil {
+					it.GotConn(time.Since(start).Seconds(), r)
+				}
+			},
+			PutIdleConn: func(err error) {
+				if err != nil {
+					return
+				}
+				if it.PutIdleConn != nil {
+					it.PutIdleConn(time.Since(start).Seconds(), r)
+				}
+			},
+			DNSStart: func(_ httptrace.DNSStartInfo) {
+				if it.DNSStart != nil {
+					it.DNSStart(time.Since(start).Seconds(), r)
+				}
+			},
+			DNSDone: func(_ httptrace.DNSDoneInfo) {
+				if it.DNSDone != nil {
+					it.DNSDone(time.Since(start).Seconds(), r)
+				}
+			},
+			ConnectStart: func(_, _ string) {
+				if it.ConnectStart != nil {
+					it.ConnectStart(time.Since(start).Seconds(), r)
+				}
+			},
+			ConnectDone: func(_, _ string, err error) {
+				if err != nil {
+					return
+				}
+				if it.ConnectDone != nil {
+					it.ConnectDone(time.Since(start).Seconds(), r)
+				}
+			},
+			GotFirstResponseByte: func() {
+				if it.GotFirstResponseByte != nil {
+					it.GotFirstResponseByte(time.Since(start).Seconds(), r)
+				}
+			},
+			Got100Continue: func() {
+				if it.Got100Continue != nil {
+					it.Got100Continue(time.Since(start).Seconds(), r)
+				}
+			},
+			TLSHandshakeStart: func() {
+				if it.TLSHandshakeStart != nil {
+					it.TLSHandshakeStart(time.Since(start).Seconds(), r)
+				}
+			},
+			TLSHandshakeDone: func(_ tls.ConnectionState, err error) {
+				if err != nil {
+					return
+				}
+				if it.TLSHandshakeDone != nil {
+					it.TLSHandshakeDone(time.Since(start).Seconds(), r)
+				}
+			},
+			WroteHeaders: func() {
+				if it.WroteHeaders != nil {
+					it.WroteHeaders(time.Since(start).Seconds(), r)
+				}
+			},
+			Wait100Continue: func() {
+				if it.Wait100Continue != nil {
+					it.Wait100Continue(time.Since(start).Seconds(), r)
+				}
+			},
+			WroteRequest: func(_ httptrace.WroteRequestInfo) {
+				if it.WroteRequest != nil {
+					it.WroteRequest(time.Since(start).Seconds(), r)
+				}
+			},
+		}
+		r = r.WithContext(httptrace.WithClientTrace(context.Background(), trace))
+
+		return next.RoundTrip(r)
 	})
 }
 
@@ -127,13 +428,30 @@ var emptyLabels = prometheus.Labels{}
 func labels(serverAddr, host, method, path, status bool, reqScheme string, reqHost string, reqMethod string, reqPath string, repStatus int) prometheus.Labels {
 	labels := prometheus.Labels{}
 	if serverAddr {
-		labels["serverAddr"] = reqScheme
+		labels["server_addr"] = reqScheme
 	}
 	if host {
 		labels["host"] = reqHost
 	}
 	if status {
 		labels["status"] = sanitizeStatus(repStatus)
+	}
+	if method {
+		labels["method"] = sanitizeMethod(reqMethod)
+	}
+	if path {
+		labels["path"] = reqPath
+	}
+	return labels
+}
+
+func traceLabels(serverAddr, host, method, path bool, reqScheme string, reqHost string, reqMethod string, reqPath string, event string) prometheus.Labels {
+	labels := prometheus.Labels{"event": event}
+	if serverAddr {
+		labels["server_addr"] = reqScheme
+	}
+	if host {
+		labels["host"] = reqHost
 	}
 	if method {
 		labels["method"] = sanitizeMethod(reqMethod)
