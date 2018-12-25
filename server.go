@@ -137,8 +137,8 @@ func ServerEnableMetricsHandlerDuration(handlers ...*prometheus.HistogramVec) Se
 			options.MetricsHandlerDuration = handlers[0]
 		} else {
 			options.MetricsHandlerDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-				Name:    "ltick_metric_handler_requests_duration_seconds",
-				Help:    "A histogram of latencies for requests.",
+				Name:    "http_request_duration_seconds",
+				Help:    "A histogram of request latencies for requests.",
 				Buckets: []float64{.25, .5, 1, 2.5, 5, 10},
 			},
 				[]string{"server", "scheme", "host", "method", "path", "status"},
@@ -155,7 +155,7 @@ func ServerEnableMetricsHandlerResponseSize(handlers ...*prometheus.HistogramVec
 		} else {
 			options.MetricsHandlerResponseSize = prometheus.NewHistogramVec(
 				prometheus.HistogramOpts{
-					Name:    "ltick_metric_handler_requests_response_size_bytes",
+					Name:    "http_response_size_bytes",
 					Help:    "A histogram of response size for requests.",
 					Buckets: []float64{200, 500, 900, 1500},
 				},
@@ -173,7 +173,7 @@ func ServerEnableMetricsHandlerRequestSize(handlers ...*prometheus.HistogramVec)
 		} else {
 			options.MetricsHandlerRequestSize = prometheus.NewHistogramVec(
 				prometheus.HistogramOpts{
-					Name:    "ltick_metric_handler_requests_request_size_bytes",
+					Name:    "http_request_size_bytes",
 					Help:    "A histogram of request size for requests.",
 					Buckets: []float64{200, 500, 900, 1500},
 				},
