@@ -48,7 +48,7 @@ type (
 	}
 
 	Client struct {
-		ClientOptions
+		*ClientOptions
 	}
 )
 
@@ -307,7 +307,13 @@ func ClientMetricsHttpClientRequestsTraceRequest(histogram *prometheus.Histogram
 	}
 }
 
-func (c *Client) NewHttpClient(setters ...ClientOption) *http.Client {
+func NewHttpClient(setters ...ClientOption) *http.Client {
+	c  := Client{
+		&ClientOptions{},
+	}
+	for _, setter := range setters {
+		setter(c.ClientOptions)
+	}
 	if c.DialTimeout == 0 {
 		c.DialTimeout = DEFAULT_DIAL_TIMEOUT
 	}
