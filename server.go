@@ -34,16 +34,16 @@ var (
 
 type (
 	ServerOptions struct {
-		logWriter                        io.Writer
-		Port                             uint
-		GracefulStopTimeout              string
-		GracefulStopTimeoutDuration      time.Duration
-		EnableMetricsHandlerDuration     bool
-		MetricsHandlerDuration           *prometheus.HistogramVec
-		EnableMetricsHandlerResponseSize bool
-		MetricsHandlerResponseSize       *prometheus.HistogramVec
-		EnableMetricsHandlerRequestSize  bool
-		MetricsHandlerRequestSize        *prometheus.HistogramVec
+		logWriter                                   io.Writer
+		Port                                        uint
+		GracefulStopTimeout                         string
+		GracefulStopTimeoutDuration                 time.Duration
+		EnableMetricsHttpServerRequestsDuration     bool
+		MetricsHttpServerRequestsDurations          []prometheus.Collector
+		EnableMetricsHttpServerRequestsResponseSize bool
+		MetricsHttpServerRequestsResponseSizes      []prometheus.Collector
+		EnableMetricsHttpServerRequestsRequestSize  bool
+		MetricsHttpServerRequestsRequestSizes       []prometheus.Collector
 	}
 	ServerBasicAuth struct {
 		Username string
@@ -130,57 +130,87 @@ func ServerPort(port uint) ServerOption {
 		options.Port = port
 	}
 }
-func ServerEnableMetricsHandlerDuration(handlers ...*prometheus.HistogramVec) ServerOption {
+func ServerEnableMetricsHttpServerRequestsDuration(handlers ...prometheus.Collector) ServerOption {
 	return func(options *ServerOptions) {
-		options.EnableMetricsHandlerDuration = true
+		options.EnableMetricsHttpServerRequestsDuration = true
 		if len(handlers) > 0 {
-			options.MetricsHandlerDuration = handlers[0]
+			options.MetricsHttpServerRequestsDurations = handlers
 		} else {
-			options.MetricsHandlerDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-				Name:    "http_server_requests_duration_seconds",
-				Help:    "A histogram of request latencies for requests.",
-				Buckets: []float64{.25, .5, 1, 2.5, 5, 10},
-			},
-				[]string{"server", "scheme", "host", "method", "path", "status"},
-			)
+			options.MetricsHttpServerRequestsDurations = []prometheus.Collector{
+				prometheus.NewHistogramVec(prometheus.HistogramOpts{
+					Name:    "http_server_requests_duration_seconds",
+					Help:    "A histogram of request latencies for requests.",
+					Buckets: []float64{.25, .5, 1, 2.5, 5, 10},
+				},
+					[]string{"server", "server_addr", "host", "method", "path", "status"},
+				),
+				prometheus.NewSummaryVec(
+					prometheus.SummaryOpts{
+						Name:       "http_server_requests_duration_seconds",
+						Help:       "A summary of request latencies for requests.",
+						Objectives: map[float64]float64{0.9: 0, 0.95: 0, 0.99: 0, 0.999: 0, 0.9999: 0},
+					},
+					[]string{"server", "server_addr", "host", "method", "path", "status"},
+				),
+			}
 		}
-		prometheus.MustRegister(options.MetricsHandlerDuration)
+		prometheus.MustRegister(options.MetricsHttpServerRequestsDurations...)
 	}
 }
-func ServerEnableMetricsHandlerResponseSize(handlers ...*prometheus.HistogramVec) ServerOption {
+func ServerEnableMetricsHttpServerRequestsResponseSize(handlers ...prometheus.Collector) ServerOption {
 	return func(options *ServerOptions) {
-		options.EnableMetricsHandlerResponseSize = true
+		options.EnableMetricsHttpServerRequestsResponseSize = true
 		if len(handlers) > 0 {
-			options.MetricsHandlerResponseSize = handlers[0]
+			options.MetricsHttpServerRequestsResponseSizes = handlers
 		} else {
-			options.MetricsHandlerResponseSize = prometheus.NewHistogramVec(
-				prometheus.HistogramOpts{
-					Name:    "http_server_requests_response_size_bytes",
-					Help:    "A histogram of response size for requests.",
-					Buckets: []float64{200, 500, 900, 1500},
-				},
-				[]string{"server", "scheme", "host", "method", "path", "status"},
-			)
+			options.MetricsHttpServerRequestsResponseSizes = []prometheus.Collector{
+				prometheus.NewHistogramVec(
+					prometheus.HistogramOpts{
+						Name:    "http_server_requests_response_size_bytes",
+						Help:    "A histogram of response size for requests.",
+						Buckets: []float64{200, 500, 900, 1500},
+					},
+					[]string{"server", "server_addr", "host", "method", "path", "status"},
+				),
+				prometheus.NewSummaryVec(
+					prometheus.SummaryOpts{
+						Name:    "http_server_requests_response_size_bytes",
+						Help:    "A summary of response size for requests.",
+						Objectives: map[float64]float64{0.9: 0, 0.95: 0, 0.99: 0, 0.999: 0, 0.9999: 0},
+					},
+					[]string{"server", "server_addr", "host", "method", "path", "status"},
+				),
+			}
 		}
-		prometheus.MustRegister(options.MetricsHandlerResponseSize)
+		prometheus.MustRegister(options.MetricsHttpServerRequestsResponseSizes...)
 	}
 }
-func ServerEnableMetricsHandlerRequestSize(handlers ...*prometheus.HistogramVec) ServerOption {
+func ServerEnableMetricsHttpServerRequestsRequestSize(handlers ...prometheus.Collector) ServerOption {
 	return func(options *ServerOptions) {
-		options.EnableMetricsHandlerRequestSize = true
+		options.EnableMetricsHttpServerRequestsRequestSize = true
 		if len(handlers) > 0 {
-			options.MetricsHandlerRequestSize = handlers[0]
+			options.MetricsHttpServerRequestsRequestSizes = handlers
 		} else {
-			options.MetricsHandlerRequestSize = prometheus.NewHistogramVec(
-				prometheus.HistogramOpts{
-					Name:    "http_server_requests_request_size_bytes",
-					Help:    "A histogram of request size for requests.",
-					Buckets: []float64{200, 500, 900, 1500},
-				},
-				[]string{"server", "scheme", "host", "method", "path", "status"},
-			)
+			options.MetricsHttpServerRequestsRequestSizes = []prometheus.Collector{
+				prometheus.NewHistogramVec(
+					prometheus.HistogramOpts{
+						Name:    "http_server_requests_request_size_bytes",
+						Help:    "A histogram of request size for requests.",
+						Buckets: []float64{200, 500, 900, 1500},
+					},
+					[]string{"server", "server_addr", "host", "method", "path", "status"},
+				),
+				prometheus.NewSummaryVec(
+					prometheus.SummaryOpts{
+						Name:    "http_server_requests_request_size_bytes",
+						Help:    "A summary of request size for requests.",
+						Objectives: map[float64]float64{0.9: 0, 0.95: 0, 0.99: 0, 0.999: 0, 0.9999: 0},
+					},
+					[]string{"server", "server_addr", "host", "method", "path", "status"},
+				),
+			}
 		}
-		prometheus.MustRegister(options.MetricsHandlerRequestSize)
+		prometheus.MustRegister(options.MetricsHttpServerRequestsRequestSizes...)
 	}
 }
 func ServerLogWriter(logWriter io.Writer) ServerOption {
@@ -545,7 +575,7 @@ func (s *Server) Metrics(host []string, group string, basicAuth *ServerBasicAuth
 }
 
 type metricsHandler struct {
-	basicAuth       *ServerBasicAuth
+	basicAuth *ServerBasicAuth
 }
 
 func (h metricsHandler) Serve(ctx *api.Context) error {

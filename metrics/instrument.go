@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ltick/tick-framework/utility"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 )
@@ -14,7 +15,7 @@ import (
 // magicString is used for the hacky label test in checkLabels. Remove once fixed.
 const magicString = "zZgWfBxLqvG8kc8IMv3POi2Bb0tZI3vAnBx+gBaFi9FyPzB/CzKUer1yufDa"
 
-// InstrumentHandlerDuration is a middleware that wraps the provided
+// InstrumentHttpServerRequestsDuration is a middleware that wraps the provided
 // http.Handler to observe the request duration with the provided ObserverVec.
 // The ObserverVec must have zero, one, or two non-const non-curried labels. For
 // those, the only allowed label names are "status" and "method". The function
@@ -31,8 +32,8 @@ const magicString = "zZgWfBxLqvG8kc8IMv3POi2Bb0tZI3vAnBx+gBaFi9FyPzB/CzKUer1yufD
 //
 // Note that this method is only guaranteed to never observe negative durations
 // if used with Go1.9+.
-func InstrumentHandlerDuration(obs prometheus.ObserverVec, next http.Handler) http.HandlerFunc {
-	scheme, host, method, path, status := checkLabels(obs)
+func InstrumentHttpServerRequestsDuration(obs prometheus.ObserverVec, next http.Handler) http.HandlerFunc {
+	serverAddr, host, method, path, status := checkLabels(obs)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		now := time.Now()
 		d := newDelegator(w, nil)
@@ -45,11 +46,12 @@ func InstrumentHandlerDuration(obs prometheus.ObserverVec, next http.Handler) ht
 		if reqPath == "" {
 			reqPath = r.URL.RawPath
 		}
-		obs.With(labels(scheme, host, method, path, status, r.URL.Scheme, reqHost, r.Method, reqPath, d.Status())).Observe(time.Since(now).Seconds())
+		reqServerAddr, _ := utility.GetServerAddress()
+		obs.With(labels(serverAddr, host, method, path, status, reqServerAddr, reqHost, r.Method, reqPath, d.Status())).Observe(time.Since(now).Seconds())
 	})
 }
 
-// InstrumentHandlerRequestSize is a middleware that wraps the provided
+// InstrumentHttpServerRequestsRequestSize is a middleware that wraps the provided
 // http.Handler to observe the request size with the provided ObserverVec.  The
 // ObserverVec must have zero, one, or two non-const non-curried labels. For
 // those, the only allowed label names are "status" and "method". The function
@@ -64,9 +66,9 @@ func InstrumentHandlerDuration(obs prometheus.ObserverVec, next http.Handler) ht
 //
 // If the wrapped Handler panics, no values are reported.
 //
-// See the example for InstrumentHandlerDuration for example usage.
-func InstrumentHandlerRequestSize(obs prometheus.ObserverVec, next http.Handler) http.HandlerFunc {
-	scheme, host, method, path, status := checkLabels(obs)
+// See the example for InstrumentHttpServerRequestsDuration for example usage.
+func InstrumentHttpServerRequestsRequestSize(obs prometheus.ObserverVec, next http.Handler) http.HandlerFunc {
+	serverAddr, host, method, path, status := checkLabels(obs)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		d := newDelegator(w, nil)
 		next.ServeHTTP(d, r)
@@ -79,11 +81,12 @@ func InstrumentHandlerRequestSize(obs prometheus.ObserverVec, next http.Handler)
 		if reqPath == "" {
 			reqPath = r.URL.RawPath
 		}
-		obs.With(labels(scheme, host, method, path, status, r.URL.Scheme, reqHost, r.Method, reqPath, d.Status())).Observe(float64(size))
+		reqServerAddr, _ := utility.GetServerAddress()
+		obs.With(labels(serverAddr, host, method, path, status, reqServerAddr, reqHost, r.Method, reqPath, d.Status())).Observe(float64(size))
 	})
 }
 
-// InstrumentHandlerResponseSize is a middleware that wraps the provided
+// InstrumentHttpServerRequestsResponseSize is a middleware that wraps the provided
 // http.Handler to observe the response size with the provided ObserverVec.  The
 // ObserverVec must have zero, one, or two non-const non-curried labels. For
 // those, the only allowed label names are "status" and "method". The function
@@ -98,9 +101,9 @@ func InstrumentHandlerRequestSize(obs prometheus.ObserverVec, next http.Handler)
 //
 // If the wrapped Handler panics, no values are reported.
 //
-// See the example for InstrumentHandlerDuration for example usage.
-func InstrumentHandlerResponseSize(obs prometheus.ObserverVec, next http.Handler) http.Handler {
-	scheme, host, method, path, status := checkLabels(obs)
+// See the example for InstrumentHttpServerRequestsDuration for example usage.
+func InstrumentHttpServerRequestsResponseSize(obs prometheus.ObserverVec, next http.Handler) http.Handler {
+	serverAddr, host, method, path, status := checkLabels(obs)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		d := newDelegator(w, nil)
 		next.ServeHTTP(d, r)
@@ -112,7 +115,8 @@ func InstrumentHandlerResponseSize(obs prometheus.ObserverVec, next http.Handler
 		if reqPath == "" {
 			reqPath = r.URL.RawPath
 		}
-		obs.With(labels(scheme, host, method, path, status, r.URL.Scheme, reqHost, r.Method, reqPath, d.Status())).Observe(float64(d.Written()))
+		reqServerAddr, _ := utility.GetServerAddress()
+		obs.With(labels(serverAddr, host, method, path, status, reqServerAddr, reqHost, r.Method, reqPath, d.Status())).Observe(float64(d.Written()))
 	})
 }
 
@@ -120,10 +124,10 @@ func InstrumentHandlerResponseSize(obs prometheus.ObserverVec, next http.Handler
 // unnecessary allocations on each request.
 var emptyLabels = prometheus.Labels{}
 
-func labels(scheme, host, method, path, status bool, reqScheme string, reqHost string, reqMethod string, reqPath string, repStatus int) prometheus.Labels {
+func labels(serverAddr, host, method, path, status bool, reqScheme string, reqHost string, reqMethod string, reqPath string, repStatus int) prometheus.Labels {
 	labels := prometheus.Labels{}
-	if scheme {
-		labels["scheme"] = reqScheme
+	if serverAddr {
+		labels["serverAddr"] = reqScheme
 	}
 	if host {
 		labels["host"] = reqHost
@@ -291,7 +295,7 @@ func sanitizeStatus(s int) string {
 	}
 }
 
-func checkLabels(c prometheus.Collector) (scheme, host, method, path, status bool) {
+func checkLabels(c prometheus.Collector) (serverAddr, host, method, path, status bool) {
 	// TODO(beorn7): Remove this hacky way to check for instance labels
 	// once Descriptors can have their dimensionality queried.
 	var (
@@ -337,8 +341,8 @@ func checkLabels(c prometheus.Collector) (scheme, host, method, path, status boo
 			continue
 		}
 		switch name {
-		case "scheme":
-			scheme = true
+		case "server_addr":
+			serverAddr = true
 		case "host":
 			host = true
 		case "method":
