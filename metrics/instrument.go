@@ -77,7 +77,7 @@ func InstrumentHttpServerRequestsDuration(observers []prometheus.ObserverVec, ne
 		d := newDelegator(w, nil)
 		next.ServeHTTP(d, r)
 		serverRequestLabelFunc := defaultHttpServerRequestLabelFunc
-		if len(serverRequestLabelFuncs) == 0 {
+		if len(serverRequestLabelFuncs) > 0 {
 			serverRequestLabelFunc = serverRequestLabelFuncs[0]
 		}
 		for _, obs := range observers {
@@ -109,7 +109,7 @@ func InstrumentHttpServerRequestsRequestSize(observers []prometheus.ObserverVec,
 		next.ServeHTTP(d, r)
 		size := computeApproximateRequestSize(r)
 		serverRequestLabelFunc := defaultHttpServerRequestLabelFunc
-		if len(serverRequestLabelFuncs) == 0 {
+		if len(serverRequestLabelFuncs) > 0 {
 			serverRequestLabelFunc = serverRequestLabelFuncs[0]
 		}
 		for _, obs := range observers {
@@ -140,7 +140,7 @@ func InstrumentHttpServerRequestsResponseSize(observers []prometheus.ObserverVec
 		d := newDelegator(w, nil)
 		next.ServeHTTP(d, r)
 		serverRequestLabelFunc := defaultHttpServerRequestLabelFunc
-		if len(serverRequestLabelFuncs) == 0 {
+		if len(serverRequestLabelFuncs) > 0 {
 			serverRequestLabelFunc = serverRequestLabelFuncs[0]
 		}
 		for _, obs := range observers {
@@ -167,7 +167,7 @@ func InstrumentHttpClientRequestCounter(counter *prometheus.CounterVec, next htt
 		resp, err := next.RoundTrip(r)
 		if err == nil {
 			clientRequestLabelFunc := defaultHttpClientRequestLabelFunc
-			if len(clientRequestLabelFuncs) == 0 {
+			if len(clientRequestLabelFuncs) > 0 {
 				clientRequestLabelFunc = clientRequestLabelFuncs[0]
 			}
 			labels := clientRequestLabelFunc(counter, r, resp)
@@ -199,7 +199,7 @@ func InstrumentHttpClientRequestDuration(observers []prometheus.ObserverVec, nex
 		resp, err := next.RoundTrip(r)
 		if err == nil {
 			clientRequestLabelFunc := defaultHttpClientRequestLabelFunc
-			if len(clientRequestLabelFuncs) == 0 {
+			if len(clientRequestLabelFuncs) > 0 {
 				clientRequestLabelFunc = clientRequestLabelFuncs[0]
 			}
 			for _, obs := range observers {
@@ -249,7 +249,7 @@ func InstrumentHttpClientRequestTrace(observers map[string][]prometheus.Observer
 	return promhttp.RoundTripperFunc(func(r *http.Request) (*http.Response, error) {
 		start := time.Now()
 		clientRequestLabelFunc := defaultHttpClientRequestLabelFunc
-		if len(clientRequestLabelFuncs) == 0 {
+		if len(clientRequestLabelFuncs) > 0 {
 			clientRequestLabelFunc = clientRequestLabelFuncs[0]
 		}
 		// Define functions for the available httptrace.ClientTrace hook
