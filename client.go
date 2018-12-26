@@ -134,7 +134,7 @@ func ClientMetricsHttpClientRequestsDuration(histogram *prometheus.HistogramVec,
 	if summary == nil {
 		summary = prometheus.NewSummaryVec(
 			prometheus.SummaryOpts{
-				Name:       "http_client_requests_duration_seconds",
+				Name:       "http_client_requests_duration_seconds_summary",
 				Help:       "A summary of request latencies for requests.",
 				Objectives: map[float64]float64{0.9: 0.001, 0.95: 0.001, 0.99: 0.001, 0.999: 0.001, 0.9999: 0.001},
 			},
@@ -160,7 +160,7 @@ func ClientMetricsHttpClientRequestsTraceConnection(histogram *prometheus.Histog
 	if summary == nil {
 		summary = prometheus.NewSummaryVec(
 			prometheus.SummaryOpts{
-				Name:       "http_client_requests_connection_duration_seconds",
+				Name:       "http_client_requests_connection_duration_seconds_summary",
 				Help:       "A summary of request latencies for connection.",
 				Objectives: map[float64]float64{0.9: 0, 0.95: 0, 0.99: 0, 0.999: 0, 0.9999: 0},
 			},
@@ -186,7 +186,7 @@ func ClientMetricsHttpClientRequestsTraceDns(histogram *prometheus.HistogramVec,
 	if summary == nil {
 		summary = prometheus.NewSummaryVec(
 			prometheus.SummaryOpts{
-				Name:       "http_client_requests_dns_duration_seconds",
+				Name:       "http_client_requests_dns_duration_seconds_summary",
 				Help:       "A summary of request latencies for dns.",
 				Objectives: map[float64]float64{0.9: 0, 0.95: 0, 0.99: 0, 0.999: 0, 0.9999: 0},
 			},
@@ -212,7 +212,7 @@ func ClientMetricsHttpClientRequestsTraceConnect(histogram *prometheus.Histogram
 	if summary == nil {
 		summary = prometheus.NewSummaryVec(
 			prometheus.SummaryOpts{
-				Name:       "http_client_requests_connect_duration_seconds",
+				Name:       "http_client_requests_connect_duration_seconds_summary",
 				Help:       "A summary of request latencies for connect.",
 				Objectives: map[float64]float64{0.9: 0, 0.95: 0, 0.99: 0, 0.999: 0, 0.9999: 0},
 			},
@@ -238,7 +238,7 @@ func ClientMetricsHttpClientRequestsTraceTls(histogram *prometheus.HistogramVec,
 	if summary == nil {
 		summary = prometheus.NewSummaryVec(
 			prometheus.SummaryOpts{
-				Name:       "http_client_requests_tls_duration_seconds",
+				Name:       "http_client_requests_tls_duration_seconds_summary",
 				Help:       "A summary of request latencies for tls.",
 				Objectives: map[float64]float64{0.9: 0, 0.95: 0, 0.99: 0, 0.999: 0, 0.9999: 0},
 			},
@@ -264,7 +264,7 @@ func ClientMetricsHttpClientRequestsTraceRequest(histogram *prometheus.Histogram
 	if summary == nil {
 		summary = prometheus.NewSummaryVec(
 			prometheus.SummaryOpts{
-				Name:       "http_client_requests_request_duration_seconds",
+				Name:       "http_client_requests_request_duration_seconds_summary",
 				Help:       "A summary of request latencies for request.",
 				Objectives: map[float64]float64{0.9: 0, 0.95: 0, 0.99: 0, 0.999: 0, 0.9999: 0},
 			},

@@ -140,7 +140,7 @@ func ServerMetricsHttpServerRequestsDuration(histogram *prometheus.HistogramVec,
 	if summary == nil {
 		summary = prometheus.NewSummaryVec(
 			prometheus.SummaryOpts{
-				Name:       "http_server_requests_duration_seconds",
+				Name:       "http_server_requests_duration_seconds_summary",
 				Help:       "A summary of request latencies for requests.",
 				Objectives: map[float64]float64{0.9: 0.001, 0.95: 0.001, 0.99: 0.001, 0.999: 0.001, 0.9999: 0.001},
 			},
@@ -166,7 +166,7 @@ func ServerMetricsHttpServerRequestsResponseSize(histogram *prometheus.Histogram
 	if summary == nil {
 		summary = prometheus.NewSummaryVec(
 			prometheus.SummaryOpts{
-				Name:       "http_server_requests_response_size_bytes",
+				Name:       "http_server_requests_response_size_bytes_summary",
 				Help:       "A summary of response size for requests.",
 				Objectives: map[float64]float64{0.9: 0, 0.95: 0, 0.99: 0, 0.999: 0, 0.9999: 0},
 			},
@@ -192,7 +192,7 @@ func ServerMetricsHttpServerRequestsRequestSize(histogram *prometheus.HistogramV
 	if summary == nil {
 		summary = prometheus.NewSummaryVec(
 			prometheus.SummaryOpts{
-				Name:       "http_server_requests_request_size_bytes",
+				Name:       "http_server_requests_request_size_bytes_summary",
 				Help:       "A summary of request size for requests.",
 				Objectives: map[float64]float64{0.9: 0, 0.95: 0, 0.99: 0, 0.999: 0, 0.9999: 0},
 			},
