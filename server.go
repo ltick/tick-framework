@@ -14,6 +14,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ltick/tick-framework/api"
+	"github.com/ltick/tick-framework/metrics"
 	"github.com/ltick/tick-framework/utility"
 	"github.com/ltick/tick-routing"
 	"github.com/ltick/tick-routing/access"
@@ -41,6 +42,7 @@ type (
 		MetricsHttpServerRequestsDurations     []prometheus.ObserverVec
 		MetricsHttpServerRequestsResponseSizes []prometheus.ObserverVec
 		MetricsHttpServerRequestsRequestSizes  []prometheus.ObserverVec
+		MetricsHttpServerRequestLabelFunc      metrics.HttpServerRequestLabelFunc
 	}
 	ServerBasicAuth struct {
 		Username string
@@ -222,6 +224,11 @@ func ServerMetricsHttpServerRequestsRequestSize(histogram *prometheus.HistogramV
 	}
 	return func(options *ServerOptions) {
 		options.MetricsHttpServerRequestsRequestSizes = []prometheus.ObserverVec{histogram, summary}
+	}
+}
+func ServerMetricsHttpServerRequestLabelFunc(httpServerRequestLabelFunc metrics.HttpServerRequestLabelFunc) ServerOption {
+	return func(options *ServerOptions) {
+		options.MetricsHttpServerRequestLabelFunc = httpServerRequestLabelFunc
 	}
 }
 func ServerLogWriter(logWriter io.Writer) ServerOption {

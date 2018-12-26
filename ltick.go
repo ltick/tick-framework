@@ -889,13 +889,25 @@ func (e *Engine) ServerListenAndServe(name string, server *Server) {
 	e.Log("ltick: Server start listen ", server.Port, "...")
 	var handler http.Handler = server.Router
 	if server.MetricsHttpServerRequestsDurations != nil {
-		handler = metrics.InstrumentHttpServerRequestsDuration(server.MetricsHttpServerRequestsDurations, handler)
+		if server.MetricsHttpServerRequestLabelFunc != nil {
+			handler = metrics.InstrumentHttpServerRequestsDuration(server.MetricsHttpServerRequestsDurations, handler, server.MetricsHttpServerRequestLabelFunc)
+		} else {
+			handler = metrics.InstrumentHttpServerRequestsDuration(server.MetricsHttpServerRequestsDurations, handler)
+		}
 	}
 	if server.MetricsHttpServerRequestsResponseSizes != nil {
-		handler = metrics.InstrumentHttpServerRequestsResponseSize(server.MetricsHttpServerRequestsResponseSizes, handler)
+		if server.MetricsHttpServerRequestLabelFunc != nil {
+			handler = metrics.InstrumentHttpServerRequestsResponseSize(server.MetricsHttpServerRequestsResponseSizes, handler, server.MetricsHttpServerRequestLabelFunc)
+		} else {
+			handler = metrics.InstrumentHttpServerRequestsResponseSize(server.MetricsHttpServerRequestsResponseSizes, handler)
+		}
 	}
 	if server.MetricsHttpServerRequestsRequestSizes != nil {
-		handler = metrics.InstrumentHttpServerRequestsRequestSize(server.MetricsHttpServerRequestsRequestSizes, handler)
+		if server.MetricsHttpServerRequestLabelFunc != nil {
+			handler = metrics.InstrumentHttpServerRequestsRequestSize(server.MetricsHttpServerRequestsRequestSizes, handler, server.MetricsHttpServerRequestLabelFunc)
+		} else {
+			handler = metrics.InstrumentHttpServerRequestsRequestSize(server.MetricsHttpServerRequestsRequestSizes, handler)
+		}
 	}
 	handler = promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handler)
 	g := graceful.New().Server(

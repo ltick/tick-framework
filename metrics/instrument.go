@@ -16,10 +16,10 @@ import (
 	dto "github.com/prometheus/client_model/go"
 )
 
-type ClientRequestLabelFunc func(obs prometheus.Collector, r *http.Request, rsp *http.Response, customLabels ...prometheus.Labels) prometheus.Labels
-type ServerRequestLabelFunc func(obs prometheus.Collector, d delegator, r *http.Request, customLabels ...prometheus.Labels) prometheus.Labels
+type HttpClientRequestLabelFunc func(obs prometheus.Collector, r *http.Request, rsp *http.Response, customLabels ...prometheus.Labels) prometheus.Labels
+type HttpServerRequestLabelFunc func(obs prometheus.Collector, d delegator, r *http.Request, customLabels ...prometheus.Labels) prometheus.Labels
 
-func defaultClientRequestLabelFunc(obs prometheus.Collector, r *http.Request, rsp *http.Response, customLabels ...prometheus.Labels) prometheus.Labels {
+func defaultHttpClientRequestLabelFunc(obs prometheus.Collector, r *http.Request, rsp *http.Response, customLabels ...prometheus.Labels) prometheus.Labels {
 	serverAddr, host, method, path, status := checkLabels(obs)
 	reqHost := r.Host
 	if reqHost == "" {
@@ -37,7 +37,7 @@ func defaultClientRequestLabelFunc(obs prometheus.Collector, r *http.Request, rs
 	}
 }
 
-func defaultServerRequestLabelFunc(obs prometheus.Collector, d delegator, r *http.Request, customLabels ...prometheus.Labels) prometheus.Labels {
+func defaultHttpServerRequestLabelFunc(obs prometheus.Collector, d delegator, r *http.Request, customLabels ...prometheus.Labels) prometheus.Labels {
 	serverAddr, host, method, path, status := checkLabels(obs)
 	reqHost := r.Host
 	if reqHost == "" {
@@ -71,12 +71,12 @@ const magicString = "zZgWfBxLqvG8kc8IMv3POi2Bb0tZI3vAnBx+gBaFi9FyPzB/CzKUer1yufD
 //
 // Note that this method is only guaranteed to never observe negative durations
 // if used with Go1.9+.
-func InstrumentHttpServerRequestsDuration(observers []prometheus.ObserverVec, next http.Handler, serverRequestLabelFuncs ...ServerRequestLabelFunc) http.HandlerFunc {
+func InstrumentHttpServerRequestsDuration(observers []prometheus.ObserverVec, next http.Handler, serverRequestLabelFuncs ...HttpServerRequestLabelFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		now := time.Now()
 		d := newDelegator(w, nil)
 		next.ServeHTTP(d, r)
-		serverRequestLabelFunc := defaultServerRequestLabelFunc
+		serverRequestLabelFunc := defaultHttpServerRequestLabelFunc
 		if len(serverRequestLabelFuncs) == 0 {
 			serverRequestLabelFunc = serverRequestLabelFuncs[0]
 		}
@@ -103,12 +103,12 @@ func InstrumentHttpServerRequestsDuration(observers []prometheus.ObserverVec, ne
 // If the wrapped Handler panics, no values are reported.
 //
 // See the example for InstrumentHttpServerRequestsDuration for example usage.
-func InstrumentHttpServerRequestsRequestSize(observers []prometheus.ObserverVec, next http.Handler, serverRequestLabelFuncs ...ServerRequestLabelFunc) http.HandlerFunc {
+func InstrumentHttpServerRequestsRequestSize(observers []prometheus.ObserverVec, next http.Handler, serverRequestLabelFuncs ...HttpServerRequestLabelFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		d := newDelegator(w, nil)
 		next.ServeHTTP(d, r)
 		size := computeApproximateRequestSize(r)
-		serverRequestLabelFunc := defaultServerRequestLabelFunc
+		serverRequestLabelFunc := defaultHttpServerRequestLabelFunc
 		if len(serverRequestLabelFuncs) == 0 {
 			serverRequestLabelFunc = serverRequestLabelFuncs[0]
 		}
@@ -135,11 +135,11 @@ func InstrumentHttpServerRequestsRequestSize(observers []prometheus.ObserverVec,
 // If the wrapped Handler panics, no values are reported.
 //
 // See the example for InstrumentHttpServerRequestsDuration for example usage.
-func InstrumentHttpServerRequestsResponseSize(observers []prometheus.ObserverVec, next http.Handler, serverRequestLabelFuncs ...ServerRequestLabelFunc) http.Handler {
+func InstrumentHttpServerRequestsResponseSize(observers []prometheus.ObserverVec, next http.Handler, serverRequestLabelFuncs ...HttpServerRequestLabelFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		d := newDelegator(w, nil)
 		next.ServeHTTP(d, r)
-		serverRequestLabelFunc := defaultServerRequestLabelFunc
+		serverRequestLabelFunc := defaultHttpServerRequestLabelFunc
 		if len(serverRequestLabelFuncs) == 0 {
 			serverRequestLabelFunc = serverRequestLabelFuncs[0]
 		}
@@ -162,11 +162,11 @@ func InstrumentHttpServerRequestsResponseSize(observers []prometheus.ObserverVec
 // is not incremented.
 //
 // See the example for ExampleInstrumentHttpClientRequestDuration for example usage.
-func InstrumentHttpClientRequestCounter(counter *prometheus.CounterVec, next http.RoundTripper, clientRequestLabelFuncs ...ClientRequestLabelFunc) promhttp.RoundTripperFunc {
+func InstrumentHttpClientRequestCounter(counter *prometheus.CounterVec, next http.RoundTripper, clientRequestLabelFuncs ...HttpClientRequestLabelFunc) promhttp.RoundTripperFunc {
 	return promhttp.RoundTripperFunc(func(r *http.Request) (*http.Response, error) {
 		resp, err := next.RoundTrip(r)
 		if err == nil {
-			clientRequestLabelFunc := defaultClientRequestLabelFunc
+			clientRequestLabelFunc := defaultHttpClientRequestLabelFunc
 			if len(clientRequestLabelFuncs) == 0 {
 				clientRequestLabelFunc = clientRequestLabelFuncs[0]
 			}
@@ -193,12 +193,12 @@ func InstrumentHttpClientRequestCounter(counter *prometheus.CounterVec, next htt
 //
 // Note that this method is only guaranteed to never observe negative durations
 // if used with Go1.9+.
-func InstrumentHttpClientRequestDuration(observers []prometheus.ObserverVec, next http.RoundTripper, clientRequestLabelFuncs ...ClientRequestLabelFunc) promhttp.RoundTripperFunc {
+func InstrumentHttpClientRequestDuration(observers []prometheus.ObserverVec, next http.RoundTripper, clientRequestLabelFuncs ...HttpClientRequestLabelFunc) promhttp.RoundTripperFunc {
 	return promhttp.RoundTripperFunc(func(r *http.Request) (*http.Response, error) {
 		start := time.Now()
 		resp, err := next.RoundTrip(r)
 		if err == nil {
-			clientRequestLabelFunc := defaultClientRequestLabelFunc
+			clientRequestLabelFunc := defaultHttpClientRequestLabelFunc
 			if len(clientRequestLabelFuncs) == 0 {
 				clientRequestLabelFunc = clientRequestLabelFuncs[0]
 			}
@@ -245,10 +245,10 @@ type InstrumentTrace struct {
 // made in the event of a non-nil error value.
 //
 // See the example for ExampleInstrumentRoundTripperDuration for example usage.
-func InstrumentHttpClientRequestTrace(observers map[string][]prometheus.ObserverVec, next http.RoundTripper, clientRequestLabelFuncs ...ClientRequestLabelFunc) promhttp.RoundTripperFunc {
+func InstrumentHttpClientRequestTrace(observers map[string][]prometheus.ObserverVec, next http.RoundTripper, clientRequestLabelFuncs ...HttpClientRequestLabelFunc) promhttp.RoundTripperFunc {
 	return promhttp.RoundTripperFunc(func(r *http.Request) (*http.Response, error) {
 		start := time.Now()
-		clientRequestLabelFunc := defaultClientRequestLabelFunc
+		clientRequestLabelFunc := defaultHttpClientRequestLabelFunc
 		if len(clientRequestLabelFuncs) == 0 {
 			clientRequestLabelFunc = clientRequestLabelFuncs[0]
 		}

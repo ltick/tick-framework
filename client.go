@@ -45,6 +45,7 @@ type (
 		MetricsHttpClientRequestsTraceTls []prometheus.ObserverVec
 		// observer of send request
 		MetricsHttpClientRequestsTraceRequest []prometheus.ObserverVec
+		MetricsHttpClientRequestLabelFunc     metrics.HttpClientRequestLabelFunc
 	}
 
 	Client struct {
@@ -247,7 +248,6 @@ func ClientMetricsHttpClientRequestsCounter(counter *prometheus.CounterVec) Clie
 		}
 	}
 }
-
 func ClientMetricsHttpClientRequestsDuration(histogram *prometheus.HistogramVec, summary *prometheus.SummaryVec) ClientOption {
 	if histogram == nil {
 		histogram = defaultHttpClientRequestsDurationHistogram
@@ -259,7 +259,6 @@ func ClientMetricsHttpClientRequestsDuration(histogram *prometheus.HistogramVec,
 		options.MetricsHttpClientRequestsDurations = []prometheus.ObserverVec{histogram, summary}
 	}
 }
-
 func ClientMetricsHttpClientRequestsTraceConnection(histogram *prometheus.HistogramVec, summary *prometheus.SummaryVec) ClientOption {
 	if histogram == nil {
 		histogram = defaultHttpClientRequestsTraceConnectionHistogram
@@ -271,7 +270,6 @@ func ClientMetricsHttpClientRequestsTraceConnection(histogram *prometheus.Histog
 		options.MetricsHttpClientRequestsTraceConnection = []prometheus.ObserverVec{histogram, summary}
 	}
 }
-
 func ClientMetricsHttpClientRequestsTraceDns(histogram *prometheus.HistogramVec, summary *prometheus.SummaryVec) ClientOption {
 	if histogram == nil {
 		histogram = defaultHttpClientRequestsTraceDnsHistogram
@@ -283,7 +281,6 @@ func ClientMetricsHttpClientRequestsTraceDns(histogram *prometheus.HistogramVec,
 		options.MetricsHttpClientRequestsTraceDns = []prometheus.ObserverVec{histogram, summary}
 	}
 }
-
 func ClientMetricsHttpClientRequestsTraceConnect(histogram *prometheus.HistogramVec, summary *prometheus.SummaryVec) ClientOption {
 	if histogram == nil {
 		histogram = defaultHttpClientRequestsTraceConnectHistogram
@@ -295,7 +292,6 @@ func ClientMetricsHttpClientRequestsTraceConnect(histogram *prometheus.Histogram
 		options.MetricsHttpClientRequestsTraceConnect = []prometheus.ObserverVec{histogram, summary}
 	}
 }
-
 func ClientMetricsHttpClientRequestsTraceTls(histogram *prometheus.HistogramVec, summary *prometheus.SummaryVec) ClientOption {
 	if histogram == nil {
 		histogram = defaultHttpClientRequestsTraceTlsHistogram
@@ -307,7 +303,6 @@ func ClientMetricsHttpClientRequestsTraceTls(histogram *prometheus.HistogramVec,
 		options.MetricsHttpClientRequestsTraceTls = []prometheus.ObserverVec{histogram, summary}
 	}
 }
-
 func ClientMetricsHttpClientRequestsTraceRequest(histogram *prometheus.HistogramVec, summary *prometheus.SummaryVec) ClientOption {
 	if histogram == nil {
 		histogram = defaultHttpClientRequestsTraceRequestHistogram
@@ -319,7 +314,11 @@ func ClientMetricsHttpClientRequestsTraceRequest(histogram *prometheus.Histogram
 		options.MetricsHttpClientRequestsTraceRequest = []prometheus.ObserverVec{histogram, summary}
 	}
 }
-
+func ClientMetricsHttpClientRequestLabelFunc(httpClientRequestLabelFunc metrics.HttpClientRequestLabelFunc) ClientOption {
+	return func(options *ClientOptions) {
+		options.MetricsHttpClientRequestLabelFunc = httpClientRequestLabelFunc
+	}
+}
 func NewHttpClient(setters ...ClientOption) *http.Client {
 	c := Client{
 		&ClientOptions{},
@@ -371,7 +370,11 @@ func NewHttpClient(setters ...ClientOption) *http.Client {
 
 	// Wrap the default RoundTripper with middleware.
 	if c.MetricsHttpClientRequestsDurations != nil {
-		httpClient.Transport = metrics.InstrumentHttpClientRequestDuration(c.MetricsHttpClientRequestsDurations, httpClient.Transport)
+		if c.MetricsHttpClientRequestLabelFunc != nil {
+			httpClient.Transport = metrics.InstrumentHttpClientRequestDuration(c.MetricsHttpClientRequestsDurations, httpClient.Transport, c.MetricsHttpClientRequestLabelFunc)
+		} else {
+			httpClient.Transport = metrics.InstrumentHttpClientRequestDuration(c.MetricsHttpClientRequestsDurations, httpClient.Transport)
+		}
 	}
 	observers := map[string][]prometheus.ObserverVec{}
 	if c.MetricsHttpClientRequestsTraceConnection != nil {
@@ -389,9 +392,18 @@ func NewHttpClient(setters ...ClientOption) *http.Client {
 	if c.MetricsHttpClientRequestsTraceRequest != nil {
 		observers["request"] = c.MetricsHttpClientRequestsTraceRequest
 	}
-	httpClient.Transport = metrics.InstrumentHttpClientRequestTrace(observers, httpClient.Transport)
+	if c.MetricsHttpClientRequestLabelFunc != nil {
+		httpClient.Transport = metrics.InstrumentHttpClientRequestTrace(observers, httpClient.Transport, c.MetricsHttpClientRequestLabelFunc)
+	} else {
+		httpClient.Transport = metrics.InstrumentHttpClientRequestTrace(observers, httpClient.Transport)
+	}
+
 	if c.MetricsHttpClientRequestsCounter != nil {
-		httpClient.Transport = metrics.InstrumentHttpClientRequestCounter(c.MetricsHttpClientRequestsCounter, httpClient.Transport)
+		if c.MetricsHttpClientRequestLabelFunc != nil {
+			httpClient.Transport = metrics.InstrumentHttpClientRequestCounter(c.MetricsHttpClientRequestsCounter, httpClient.Transport, c.MetricsHttpClientRequestLabelFunc)
+		} else {
+			httpClient.Transport = metrics.InstrumentHttpClientRequestCounter(c.MetricsHttpClientRequestsCounter, httpClient.Transport)
+		}
 	}
 	if c.MetricsHttpClientRequestsInFlight != nil {
 		httpClient.Transport = promhttp.InstrumentRoundTripperInFlight(c.MetricsHttpClientRequestsInFlight, httpClient.Transport)
