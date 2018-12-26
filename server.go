@@ -153,7 +153,7 @@ func ServerMetricsHttpServerRequestsDuration(histogram *prometheus.HistogramVec,
 	}
 }
 func ServerMetricsHttpServerRequestsResponseSize(histogram *prometheus.HistogramVec, summary *prometheus.SummaryVec) ServerOption {
-	if histogram != nil {
+	if histogram == nil {
 		histogram = prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Name:    "http_server_requests_response_size_bytes",
