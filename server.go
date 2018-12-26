@@ -128,94 +128,79 @@ func ServerPort(port uint) ServerOption {
 	}
 }
 func ServerMetricsHttpServerRequestsDuration(histogram *prometheus.HistogramVec, summary *prometheus.SummaryVec) ServerOption {
-	metricsHttpServerRequestsDurations := []prometheus.ObserverVec{}
-	if histogram != nil {
-		metricsHttpServerRequestsDurations = append(metricsHttpServerRequestsDurations, histogram)
-	} else {
-		metricsHttpServerRequestsDurations = append(metricsHttpServerRequestsDurations, prometheus.NewHistogramVec(prometheus.HistogramOpts{
+	if histogram == nil {
+		histogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    "http_server_requests_duration_seconds",
 			Help:    "A histogram of request latencies for requests.",
 			Buckets: prometheus.DefBuckets,
 		},
 			[]string{"server_addr", "host", "method", "path", "status"},
-		))
+		)
 	}
-	if summary != nil {
-		metricsHttpServerRequestsDurations = append(metricsHttpServerRequestsDurations, summary)
-	} else {
-		metricsHttpServerRequestsDurations = append(metricsHttpServerRequestsDurations, prometheus.NewSummaryVec(
+	if summary == nil {
+		summary = prometheus.NewSummaryVec(
 			prometheus.SummaryOpts{
 				Name:       "http_server_requests_duration_seconds",
 				Help:       "A summary of request latencies for requests.",
 				Objectives: map[float64]float64{0.9: 0.001, 0.95: 0.001, 0.99: 0.001, 0.999: 0.001, 0.9999: 0.001},
 			},
 			[]string{"server_addr", "host", "method", "path", "status"},
-		))
+		)
 	}
 	return func(options *ServerOptions) {
-		options.MetricsHttpServerRequestsDurations = metricsHttpServerRequestsDurations
+		options.MetricsHttpServerRequestsDurations = []prometheus.ObserverVec{histogram, summary}
 		prometheus.MustRegister(histogram, summary)
 	}
 }
 func ServerMetricsHttpServerRequestsResponseSize(histogram *prometheus.HistogramVec, summary *prometheus.SummaryVec) ServerOption {
-	metricsHttpServerRequestsResponseSizes := []prometheus.ObserverVec{}
 	if histogram != nil {
-		metricsHttpServerRequestsResponseSizes = append(metricsHttpServerRequestsResponseSizes, histogram)
-	} else {
-		metricsHttpServerRequestsResponseSizes = append(metricsHttpServerRequestsResponseSizes, prometheus.NewHistogramVec(
+		histogram = prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Name:    "http_server_requests_response_size_bytes",
 				Help:    "A histogram of response size for requests.",
 				Buckets: []float64{200, 500, 900, 1500},
 			},
 			[]string{"server_addr", "host", "method", "path", "status"},
-		))
+		)
 	}
-	if summary != nil {
-		metricsHttpServerRequestsResponseSizes = append(metricsHttpServerRequestsResponseSizes, summary)
-	} else {
-		metricsHttpServerRequestsResponseSizes = append(metricsHttpServerRequestsResponseSizes, prometheus.NewSummaryVec(
+	if summary == nil {
+		summary = prometheus.NewSummaryVec(
 			prometheus.SummaryOpts{
 				Name:       "http_server_requests_response_size_bytes",
 				Help:       "A summary of response size for requests.",
 				Objectives: map[float64]float64{0.9: 0, 0.95: 0, 0.99: 0, 0.999: 0, 0.9999: 0},
 			},
 			[]string{"server_addr", "host", "method", "path", "status"},
-		))
+		)
 	}
 	return func(options *ServerOptions) {
-		options.MetricsHttpServerRequestsResponseSizes = metricsHttpServerRequestsResponseSizes
+		options.MetricsHttpServerRequestsResponseSizes = []prometheus.ObserverVec{histogram, summary}
 		prometheus.MustRegister(histogram, summary)
 	}
 }
 func ServerMetricsHttpServerRequestsRequestSize(histogram *prometheus.HistogramVec, summary *prometheus.SummaryVec) ServerOption {
-	metricsHttpServerRequestsRequestSize := []prometheus.ObserverVec{}
-	if histogram != nil {
-		metricsHttpServerRequestsRequestSize = append(metricsHttpServerRequestsRequestSize, histogram)
-	} else {
-		metricsHttpServerRequestsRequestSize = append(metricsHttpServerRequestsRequestSize, prometheus.NewHistogramVec(
+	if histogram == nil {
+		histogram = prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Name:    "http_server_requests_request_size_bytes",
 				Help:    "A histogram of request size for requests.",
 				Buckets: []float64{200, 500, 900, 1500},
 			},
 			[]string{"server_addr", "host", "method", "path", "status"},
-		))
+		)
 	}
-	if summary != nil {
-		metricsHttpServerRequestsRequestSize = append(metricsHttpServerRequestsRequestSize, summary)
-	} else {
-		metricsHttpServerRequestsRequestSize = append(metricsHttpServerRequestsRequestSize, prometheus.NewSummaryVec(
+	if summary == nil {
+		summary = prometheus.NewSummaryVec(
 			prometheus.SummaryOpts{
 				Name:       "http_server_requests_request_size_bytes",
 				Help:       "A summary of request size for requests.",
 				Objectives: map[float64]float64{0.9: 0, 0.95: 0, 0.99: 0, 0.999: 0, 0.9999: 0},
 			},
 			[]string{"server_addr", "host", "method", "path", "status"},
-		))
+		)
 	}
 	return func(options *ServerOptions) {
-		options.MetricsHttpServerRequestsRequestSizes = metricsHttpServerRequestsRequestSize
+		options.MetricsHttpServerRequestsRequestSizes = []prometheus.ObserverVec{histogram, summary}
 		prometheus.MustRegister(histogram, summary)
 	}
 }

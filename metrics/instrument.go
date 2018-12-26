@@ -14,6 +14,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	dto "github.com/prometheus/client_model/go"
+	"fmt"
 )
 
 // magicString is used for the hacky label test in checkLabels. Remove once fixed.
@@ -130,7 +131,7 @@ func InstrumentHttpServerRequestsResponseSize(observers []prometheus.ObserverVec
 	})
 }
 
-// InstrumentHttpClientRoundTripperCounter is a middleware that wraps the provided
+// InstrumentHttpClientRequestCounter is a middleware that wraps the provided
 // http.RoundTripper to observe the request result with the provided CounterVec.
 // The CounterVec must have zero, one, or two non-const non-curried labels. For
 // those, the only allowed label names are "code" and "method". The function
@@ -141,8 +142,8 @@ func InstrumentHttpServerRequestsResponseSize(observers []prometheus.ObserverVec
 // If the wrapped RoundTripper panics or returns a non-nil error, the Counter
 // is not incremented.
 //
-// See the example for ExampleInstrumentHttpClientRoundTripperDuration for example usage.
-func InstrumentHttpClientRoundTripperCounter(counter *prometheus.CounterVec, next http.RoundTripper) promhttp.RoundTripperFunc {
+// See the example for ExampleInstrumentHttpClientRequestDuration for example usage.
+func InstrumentHttpClientRequestCounter(counter *prometheus.CounterVec, next http.RoundTripper) promhttp.RoundTripperFunc {
 	serverAddr, host, method, path, status := checkLabels(counter)
 
 	return promhttp.RoundTripperFunc(func(r *http.Request) (*http.Response, error) {
@@ -163,7 +164,7 @@ func InstrumentHttpClientRoundTripperCounter(counter *prometheus.CounterVec, nex
 	})
 }
 
-// InstrumentHttpClientRoundTripperDuration is a middleware that wraps the provided
+// InstrumentHttpClientRequestDuration is a middleware that wraps the provided
 // http.RoundTripper to observe the request duration with the provided
 // ObserverVec.  The ObserverVec must have zero, one, or two non-const
 // non-curried labels. For those, the only allowed label names are "code" and
@@ -179,7 +180,7 @@ func InstrumentHttpClientRoundTripperCounter(counter *prometheus.CounterVec, nex
 //
 // Note that this method is only guaranteed to never observe negative durations
 // if used with Go1.9+.
-func InstrumentHttpClientRoundTripperDuration(observers []prometheus.ObserverVec, next http.RoundTripper) promhttp.RoundTripperFunc {
+func InstrumentHttpClientRequestDuration(observers []prometheus.ObserverVec, next http.RoundTripper) promhttp.RoundTripperFunc {
 	return promhttp.RoundTripperFunc(func(r *http.Request) (*http.Response, error) {
 		start := time.Now()
 		resp, err := next.RoundTrip(r)
@@ -195,6 +196,7 @@ func InstrumentHttpClientRoundTripperDuration(observers []prometheus.ObserverVec
 			reqServerAddr, _ := utility.GetServerAddress()
 			for _, obs := range observers {
 				serverAddr, host, method, path, status := checkLabels(obs)
+				fmt.Println(labels(serverAddr, host, method, path, status, reqServerAddr, reqHost, r.Method, reqPath, resp.StatusCode))
 				obs.With(labels(serverAddr, host, method, path, status, reqServerAddr, reqHost, r.Method, reqPath, resp.StatusCode)).Observe(time.Since(start).Seconds())
 			}
 		}
@@ -223,7 +225,7 @@ type InstrumentTrace struct {
 	WroteRequest         func(float64, *http.Request)
 }
 
-// InstrumentHttpClientRoundTripperTrace is a middleware that wraps the provided
+// InstrumentHttpClientRequestTrace is a middleware that wraps the provided
 // RoundTripper and reports times to hook functions provided in the
 // InstrumentTrace struct. Hook functions that are not present in the provided
 // InstrumentTrace struct are ignored. Times reported to the hook functions are
@@ -236,7 +238,7 @@ type InstrumentTrace struct {
 // made in the event of a non-nil error value.
 //
 // See the example for ExampleInstrumentRoundTripperDuration for example usage.
-func InstrumentHttpClientRoundTripperTrace(observers map[string][]prometheus.ObserverVec, next http.RoundTripper) promhttp.RoundTripperFunc {
+func InstrumentHttpClientRequestTrace(observers map[string][]prometheus.ObserverVec, next http.RoundTripper) promhttp.RoundTripperFunc {
 	return promhttp.RoundTripperFunc(func(r *http.Request) (*http.Response, error) {
 		start := time.Now()
 		reqHost := r.Host
