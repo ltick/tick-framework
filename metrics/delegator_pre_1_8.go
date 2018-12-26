@@ -20,7 +20,7 @@ import (
 	"net/http"
 )
 
-func newDelegator(w http.ResponseWriter, observeWriteHeaderFunc func(int)) delegator {
+func newDelegator(w http.ResponseWriter, observeWriteHeaderFunc func(int)) Delegator {
 	d := &responseWriterDelegator{
 		ResponseWriter:     w,
 		observeWriteHeader: observeWriteHeaderFunc,

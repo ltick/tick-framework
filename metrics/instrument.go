@@ -17,7 +17,7 @@ import (
 )
 
 type HttpClientRequestLabelFunc func(obs prometheus.Collector, r *http.Request, rsp *http.Response, customLabels ...prometheus.Labels) prometheus.Labels
-type HttpServerRequestLabelFunc func(obs prometheus.Collector, d delegator, r *http.Request, customLabels ...prometheus.Labels) prometheus.Labels
+type HttpServerRequestLabelFunc func(obs prometheus.Collector, d Delegator, r *http.Request, customLabels ...prometheus.Labels) prometheus.Labels
 
 func defaultHttpClientRequestLabelFunc(obs prometheus.Collector, r *http.Request, rsp *http.Response, customLabels ...prometheus.Labels) prometheus.Labels {
 	serverAddr, host, method, path, status := checkLabels(obs)
@@ -37,7 +37,7 @@ func defaultHttpClientRequestLabelFunc(obs prometheus.Collector, r *http.Request
 	}
 }
 
-func defaultHttpServerRequestLabelFunc(obs prometheus.Collector, d delegator, r *http.Request, customLabels ...prometheus.Labels) prometheus.Labels {
+func defaultHttpServerRequestLabelFunc(obs prometheus.Collector, d Delegator, r *http.Request, customLabels ...prometheus.Labels) prometheus.Labels {
 	serverAddr, host, method, path, status := checkLabels(obs)
 	reqHost := r.Host
 	if reqHost == "" {

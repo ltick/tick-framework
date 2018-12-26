@@ -27,24 +27,24 @@ func (d pusherDelegator) Push(target string, opts *http.PushOptions) error {
 }
 
 func init() {
-	pickDelegator[pusher] = func(d *responseWriterDelegator) delegator { // 16
+	pickDelegator[pusher] = func(d *responseWriterDelegator) Delegator { // 16
 		return pusherDelegator{d}
 	}
-	pickDelegator[pusher+closeNotifier] = func(d *responseWriterDelegator) delegator { // 17
+	pickDelegator[pusher+closeNotifier] = func(d *responseWriterDelegator) Delegator { // 17
 		return struct {
 			*responseWriterDelegator
 			http.Pusher
 			http.CloseNotifier
 		}{d, pusherDelegator{d}, closeNotifierDelegator{d}}
 	}
-	pickDelegator[pusher+flusher] = func(d *responseWriterDelegator) delegator { // 18
+	pickDelegator[pusher+flusher] = func(d *responseWriterDelegator) Delegator { // 18
 		return struct {
 			*responseWriterDelegator
 			http.Pusher
 			http.Flusher
 		}{d, pusherDelegator{d}, flusherDelegator{d}}
 	}
-	pickDelegator[pusher+flusher+closeNotifier] = func(d *responseWriterDelegator) delegator { // 19
+	pickDelegator[pusher+flusher+closeNotifier] = func(d *responseWriterDelegator) Delegator { // 19
 		return struct {
 			*responseWriterDelegator
 			http.Pusher
@@ -52,14 +52,14 @@ func init() {
 			http.CloseNotifier
 		}{d, pusherDelegator{d}, flusherDelegator{d}, closeNotifierDelegator{d}}
 	}
-	pickDelegator[pusher+hijacker] = func(d *responseWriterDelegator) delegator { // 20
+	pickDelegator[pusher+hijacker] = func(d *responseWriterDelegator) Delegator { // 20
 		return struct {
 			*responseWriterDelegator
 			http.Pusher
 			http.Hijacker
 		}{d, pusherDelegator{d}, hijackerDelegator{d}}
 	}
-	pickDelegator[pusher+hijacker+closeNotifier] = func(d *responseWriterDelegator) delegator { // 21
+	pickDelegator[pusher+hijacker+closeNotifier] = func(d *responseWriterDelegator) Delegator { // 21
 		return struct {
 			*responseWriterDelegator
 			http.Pusher
@@ -67,7 +67,7 @@ func init() {
 			http.CloseNotifier
 		}{d, pusherDelegator{d}, hijackerDelegator{d}, closeNotifierDelegator{d}}
 	}
-	pickDelegator[pusher+hijacker+flusher] = func(d *responseWriterDelegator) delegator { // 22
+	pickDelegator[pusher+hijacker+flusher] = func(d *responseWriterDelegator) Delegator { // 22
 		return struct {
 			*responseWriterDelegator
 			http.Pusher
@@ -75,7 +75,7 @@ func init() {
 			http.Flusher
 		}{d, pusherDelegator{d}, hijackerDelegator{d}, flusherDelegator{d}}
 	}
-	pickDelegator[pusher+hijacker+flusher+closeNotifier] = func(d *responseWriterDelegator) delegator { //23
+	pickDelegator[pusher+hijacker+flusher+closeNotifier] = func(d *responseWriterDelegator) Delegator { //23
 		return struct {
 			*responseWriterDelegator
 			http.Pusher
@@ -84,14 +84,14 @@ func init() {
 			http.CloseNotifier
 		}{d, pusherDelegator{d}, hijackerDelegator{d}, flusherDelegator{d}, closeNotifierDelegator{d}}
 	}
-	pickDelegator[pusher+readerFrom] = func(d *responseWriterDelegator) delegator { // 24
+	pickDelegator[pusher+readerFrom] = func(d *responseWriterDelegator) Delegator { // 24
 		return struct {
 			*responseWriterDelegator
 			http.Pusher
 			io.ReaderFrom
 		}{d, pusherDelegator{d}, readerFromDelegator{d}}
 	}
-	pickDelegator[pusher+readerFrom+closeNotifier] = func(d *responseWriterDelegator) delegator { // 25
+	pickDelegator[pusher+readerFrom+closeNotifier] = func(d *responseWriterDelegator) Delegator { // 25
 		return struct {
 			*responseWriterDelegator
 			http.Pusher
@@ -99,7 +99,7 @@ func init() {
 			http.CloseNotifier
 		}{d, pusherDelegator{d}, readerFromDelegator{d}, closeNotifierDelegator{d}}
 	}
-	pickDelegator[pusher+readerFrom+flusher] = func(d *responseWriterDelegator) delegator { // 26
+	pickDelegator[pusher+readerFrom+flusher] = func(d *responseWriterDelegator) Delegator { // 26
 		return struct {
 			*responseWriterDelegator
 			http.Pusher
@@ -107,7 +107,7 @@ func init() {
 			http.Flusher
 		}{d, pusherDelegator{d}, readerFromDelegator{d}, flusherDelegator{d}}
 	}
-	pickDelegator[pusher+readerFrom+flusher+closeNotifier] = func(d *responseWriterDelegator) delegator { // 27
+	pickDelegator[pusher+readerFrom+flusher+closeNotifier] = func(d *responseWriterDelegator) Delegator { // 27
 		return struct {
 			*responseWriterDelegator
 			http.Pusher
@@ -116,7 +116,7 @@ func init() {
 			http.CloseNotifier
 		}{d, pusherDelegator{d}, readerFromDelegator{d}, flusherDelegator{d}, closeNotifierDelegator{d}}
 	}
-	pickDelegator[pusher+readerFrom+hijacker] = func(d *responseWriterDelegator) delegator { // 28
+	pickDelegator[pusher+readerFrom+hijacker] = func(d *responseWriterDelegator) Delegator { // 28
 		return struct {
 			*responseWriterDelegator
 			http.Pusher
@@ -124,7 +124,7 @@ func init() {
 			http.Hijacker
 		}{d, pusherDelegator{d}, readerFromDelegator{d}, hijackerDelegator{d}}
 	}
-	pickDelegator[pusher+readerFrom+hijacker+closeNotifier] = func(d *responseWriterDelegator) delegator { // 29
+	pickDelegator[pusher+readerFrom+hijacker+closeNotifier] = func(d *responseWriterDelegator) Delegator { // 29
 		return struct {
 			*responseWriterDelegator
 			http.Pusher
@@ -133,7 +133,7 @@ func init() {
 			http.CloseNotifier
 		}{d, pusherDelegator{d}, readerFromDelegator{d}, hijackerDelegator{d}, closeNotifierDelegator{d}}
 	}
-	pickDelegator[pusher+readerFrom+hijacker+flusher] = func(d *responseWriterDelegator) delegator { // 30
+	pickDelegator[pusher+readerFrom+hijacker+flusher] = func(d *responseWriterDelegator) Delegator { // 30
 		return struct {
 			*responseWriterDelegator
 			http.Pusher
@@ -142,7 +142,7 @@ func init() {
 			http.Flusher
 		}{d, pusherDelegator{d}, readerFromDelegator{d}, hijackerDelegator{d}, flusherDelegator{d}}
 	}
-	pickDelegator[pusher+readerFrom+hijacker+flusher+closeNotifier] = func(d *responseWriterDelegator) delegator { // 31
+	pickDelegator[pusher+readerFrom+hijacker+flusher+closeNotifier] = func(d *responseWriterDelegator) Delegator { // 31
 		return struct {
 			*responseWriterDelegator
 			http.Pusher
@@ -154,7 +154,7 @@ func init() {
 	}
 }
 
-func newDelegator(w http.ResponseWriter, observeWriteHeaderFunc func(int)) delegator {
+func newDelegator(w http.ResponseWriter, observeWriteHeaderFunc func(int)) Delegator {
 	d := &responseWriterDelegator{
 		ResponseWriter:     w,
 		observeWriteHeader: observeWriteHeaderFunc,
