@@ -104,7 +104,7 @@ func init() {
 	defaultHttpClientRequestsTraceConnectionHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "http_client_requests_connection_duration_seconds",
 		Help:    "A histogram of request latencies for connection.",
-		Buckets: []float64{.005, .01, .025, .05},
+		Buckets: []float64{.005, .01, .02, .03},
 	},
 		[]string{"event", "server_addr", "host", "method", "path"},
 	)
@@ -117,13 +117,15 @@ func init() {
 		},
 		[]string{"event", "server_addr", "host", "method", "path"},
 	)
+	prometheus.MustRegister(defaultHttpClientRequestsTraceConnectionSummary)
 	defaultHttpClientRequestsTraceConnectHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "http_client_requests_connect_duration_seconds",
 		Help:    "A histogram of request latencies for connect.",
-		Buckets: []float64{.005, .01, .025, .05},
+		Buckets: []float64{.005, .01, .02, .03},
 	},
 		[]string{"event", "server_addr", "host", "method", "path"},
 	)
+	prometheus.MustRegister(defaultHttpClientRequestsTraceConnectHistogram)
 	defaultHttpClientRequestsTraceConnectSummary = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
 			Name:       "http_client_requests_connect_duration_seconds_summary",
@@ -132,11 +134,11 @@ func init() {
 		},
 		[]string{"event", "server_addr", "host", "method", "path"},
 	)
-	prometheus.MustRegister(defaultHttpClientRequestsTraceConnectionSummary)
+	prometheus.MustRegister(defaultHttpClientRequestsTraceConnectSummary)
 	defaultHttpClientRequestsTraceDnsHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "http_client_requests_dns_duration_seconds",
 		Help:    "A histogram of request latencies for dns.",
-		Buckets: []float64{.005, .01, .025, .05},
+		Buckets: []float64{.005, .01, .02, .03},
 	},
 		[]string{"event", "server_addr", "host", "method", "path"},
 	)
@@ -155,11 +157,11 @@ func init() {
 	defaultHttpClientRequestsTraceTlsHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "http_client_requests_tls_duration_seconds",
 		Help:    "A histogram of request latencies for tls.",
-		Buckets: []float64{.005, .01, .025, .05},
+		Buckets: []float64{.005, .01, .02, .03},
 	},
 		[]string{"event", "server_addr", "host", "method", "path"},
 	)
-
+	prometheus.MustRegister(defaultHttpClientRequestsTraceTlsHistogram)
 	defaultHttpClientRequestsTraceTlsSummary = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
 			Name:       "http_client_requests_tls_duration_seconds_summary",
@@ -168,15 +170,15 @@ func init() {
 		},
 		[]string{"event", "server_addr", "host", "method", "path"},
 	)
-
+	prometheus.MustRegister(defaultHttpClientRequestsTraceTlsSummary)
 	defaultHttpClientRequestsTraceRequestHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "http_client_requests_request_duration_seconds",
 		Help:    "A histogram of request latencies for request.",
-		Buckets: []float64{.005, .01, .025, .05},
+		Buckets: []float64{.005, .01, .02, .03},
 	},
 		[]string{"event", "server_addr", "host", "method", "path"},
 	)
-
+	prometheus.MustRegister(defaultHttpClientRequestsTraceRequestHistogram)
 	defaultHttpClientRequestsTraceRequestSummary = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
 			Name:       "http_client_requests_request_duration_seconds_summary",
@@ -185,7 +187,7 @@ func init() {
 		},
 		[]string{"event", "server_addr", "host", "method", "path"},
 	)
-
+	prometheus.MustRegister(defaultHttpClientRequestsTraceRequestSummary)
 }
 
 func ClientTimeout(timeout time.Duration) ClientOption {
@@ -397,7 +399,6 @@ func NewHttpClient(setters ...ClientOption) *http.Client {
 	} else {
 		httpClient.Transport = metrics.InstrumentHttpClientRequestTrace(observers, httpClient.Transport)
 	}
-
 	if c.MetricsHttpClientRequestsCounter != nil {
 		if c.MetricsHttpClientRequestLabelFunc != nil {
 			httpClient.Transport = metrics.InstrumentHttpClientRequestCounter(c.MetricsHttpClientRequestsCounter, httpClient.Transport, c.MetricsHttpClientRequestLabelFunc)
