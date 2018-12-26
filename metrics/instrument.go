@@ -196,7 +196,6 @@ func InstrumentHttpClientRequestDuration(observers []prometheus.ObserverVec, nex
 			reqServerAddr, _ := utility.GetServerAddress()
 			for _, obs := range observers {
 				serverAddr, host, method, path, status := checkLabels(obs)
-				fmt.Println(labels(serverAddr, host, method, path, status, reqServerAddr, reqHost, r.Method, reqPath, resp.StatusCode))
 				obs.With(labels(serverAddr, host, method, path, status, reqServerAddr, reqHost, r.Method, reqPath, resp.StatusCode)).Observe(time.Since(start).Seconds())
 			}
 		}
@@ -671,6 +670,7 @@ func checkLabels(c prometheus.Collector) (serverAddr, host, method, path, status
 			path = true
 		case "status":
 			status = true
+		case "event":
 		default:
 			panic("metric partitioned with non-supported labels")
 		}

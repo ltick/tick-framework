@@ -154,7 +154,7 @@ func ClientMetricsHttpClientRequestsTraceConnection(histogram *prometheus.Histog
 			Help:    "A histogram of request latencies for connection.",
 			Buckets: []float64{.005, .01, .025, .05},
 		},
-			[]string{"event", "server_addr", "host", "method", "path", "status"},
+			[]string{"event", "server_addr", "host", "method", "path"},
 		)
 	}
 	if summary == nil {
@@ -164,7 +164,7 @@ func ClientMetricsHttpClientRequestsTraceConnection(histogram *prometheus.Histog
 				Help:       "A summary of request latencies for connection.",
 				Objectives: map[float64]float64{0.9: 0, 0.95: 0, 0.99: 0, 0.999: 0, 0.9999: 0},
 			},
-			[]string{"event", "server_addr", "host", "method", "path", "status"},
+			[]string{"event", "server_addr", "host", "method", "path"},
 		)
 	}
 	return func(options *ClientOptions) {
@@ -180,7 +180,7 @@ func ClientMetricsHttpClientRequestsTraceDns(histogram *prometheus.HistogramVec,
 			Help:    "A histogram of request latencies for dns.",
 			Buckets: []float64{.005, .01, .025, .05},
 		},
-			[]string{"event", "server_addr", "host", "method", "path", "status"},
+			[]string{"event", "server_addr", "host", "method", "path"},
 		)
 	}
 	if summary == nil {
@@ -190,7 +190,7 @@ func ClientMetricsHttpClientRequestsTraceDns(histogram *prometheus.HistogramVec,
 				Help:       "A summary of request latencies for dns.",
 				Objectives: map[float64]float64{0.9: 0, 0.95: 0, 0.99: 0, 0.999: 0, 0.9999: 0},
 			},
-			[]string{"event", "server_addr", "host", "method", "path", "status"},
+			[]string{"event", "server_addr", "host", "method", "path"},
 		)
 	}
 	return func(options *ClientOptions) {
@@ -206,7 +206,7 @@ func ClientMetricsHttpClientRequestsTraceConnect(histogram *prometheus.Histogram
 			Help:    "A histogram of request latencies for connect.",
 			Buckets: []float64{.005, .01, .025, .05},
 		},
-			[]string{"event", "server_addr", "host", "method", "path", "status"},
+			[]string{"event", "server_addr", "host", "method", "path"},
 		)
 	}
 	if summary == nil {
@@ -216,7 +216,7 @@ func ClientMetricsHttpClientRequestsTraceConnect(histogram *prometheus.Histogram
 				Help:       "A summary of request latencies for connect.",
 				Objectives: map[float64]float64{0.9: 0, 0.95: 0, 0.99: 0, 0.999: 0, 0.9999: 0},
 			},
-			[]string{"event", "server_addr", "host", "method", "path", "status"},
+			[]string{"event", "server_addr", "host", "method", "path"},
 		)
 	}
 	return func(options *ClientOptions) {
@@ -232,7 +232,7 @@ func ClientMetricsHttpClientRequestsTraceTls(histogram *prometheus.HistogramVec,
 			Help:    "A histogram of request latencies for tls.",
 			Buckets: []float64{.005, .01, .025, .05},
 		},
-			[]string{"event", "server_addr", "host", "method", "path", "status"},
+			[]string{"event", "server_addr", "host", "method", "path"},
 		)
 	}
 	if summary == nil {
@@ -242,7 +242,7 @@ func ClientMetricsHttpClientRequestsTraceTls(histogram *prometheus.HistogramVec,
 				Help:       "A summary of request latencies for tls.",
 				Objectives: map[float64]float64{0.9: 0, 0.95: 0, 0.99: 0, 0.999: 0, 0.9999: 0},
 			},
-			[]string{"event", "server_addr", "host", "method", "path", "status"},
+			[]string{"event", "server_addr", "host", "method", "path"},
 		)
 	}
 	return func(options *ClientOptions) {
@@ -258,7 +258,7 @@ func ClientMetricsHttpClientRequestsTraceRequest(histogram *prometheus.Histogram
 			Help:    "A histogram of request latencies for request.",
 			Buckets: []float64{.005, .01, .025, .05},
 		},
-			[]string{"event", "server_addr", "host", "method", "path", "status"},
+			[]string{"event", "server_addr", "host", "method", "path"},
 		)
 	}
 	if summary == nil {
@@ -268,7 +268,7 @@ func ClientMetricsHttpClientRequestsTraceRequest(histogram *prometheus.Histogram
 				Help:       "A summary of request latencies for request.",
 				Objectives: map[float64]float64{0.9: 0, 0.95: 0, 0.99: 0, 0.999: 0, 0.9999: 0},
 			},
-			[]string{"event", "server_addr", "host", "method", "path", "status"},
+			[]string{"event", "server_addr", "host", "method", "path"},
 		)
 	}
 	return func(options *ClientOptions) {
