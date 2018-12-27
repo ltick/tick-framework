@@ -53,81 +53,6 @@ type (
 	}
 )
 
-var (
-	defaultHttpClientRequestsInFlight                 prometheus.Gauge
-	defaultHttpClientRequestsCounter                  *prometheus.CounterVec
-	defaultHttpClientRequestsDurationHistogram        *prometheus.HistogramVec
-	defaultHttpClientRequestsTraceConnectionHistogram *prometheus.HistogramVec
-	defaultHttpClientRequestsTraceConnectHistogram    *prometheus.HistogramVec
-	defaultHttpClientRequestsTraceDnsHistogram        *prometheus.HistogramVec
-	defaultHttpClientRequestsTraceTlsHistogram        *prometheus.HistogramVec
-	defaultHttpClientRequestsTraceRequestHistogram    *prometheus.HistogramVec
-)
-
-func init() {
-	defaultHttpClientRequestsInFlight = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "http_client_requests_in_flight",
-		Help: "A gauge of in-flight requests for the wrapped client.",
-	})
-	prometheus.MustRegister(defaultHttpClientRequestsInFlight)
-	defaultHttpClientRequestsCounter = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "http_client_requests_total",
-			Help: "A counter of requests from the wrapped client.",
-		},
-		[]string{"server_addr", "host", "method", "path", "status"},
-	)
-	prometheus.MustRegister(defaultHttpClientRequestsCounter)
-	defaultHttpClientRequestsDurationHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "http_client_requests_duration_seconds",
-		Help:    "A histogram of request latencies for requests.",
-		Buckets: []float64{.25, .5, 1, 2.5, 5, 10},
-	},
-		[]string{"server_addr", "host", "method", "path", "status"},
-	)
-	prometheus.MustRegister(defaultHttpClientRequestsDurationHistogram)
-	defaultHttpClientRequestsTraceConnectionHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "http_client_requests_connection_duration_seconds",
-		Help:    "A histogram of request latencies for connection.",
-		Buckets: []float64{.005, .01, .02, .03},
-	},
-		[]string{"event", "server_addr", "host", "method", "path"},
-	)
-	prometheus.MustRegister(defaultHttpClientRequestsTraceConnectionHistogram)
-	defaultHttpClientRequestsTraceConnectHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "http_client_requests_connect_duration_seconds",
-		Help:    "A histogram of request latencies for connect.",
-		Buckets: []float64{.005, .01, .02, .03},
-	},
-		[]string{"event", "server_addr", "host", "method", "path"},
-	)
-	prometheus.MustRegister(defaultHttpClientRequestsTraceConnectHistogram)
-	defaultHttpClientRequestsTraceDnsHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "http_client_requests_dns_duration_seconds",
-		Help:    "A histogram of request latencies for dns.",
-		Buckets: []float64{.005, .01, .02, .03},
-	},
-		[]string{"event", "server_addr", "host", "method", "path"},
-	)
-	prometheus.MustRegister(defaultHttpClientRequestsTraceDnsHistogram)
-	defaultHttpClientRequestsTraceTlsHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "http_client_requests_tls_duration_seconds",
-		Help:    "A histogram of request latencies for tls.",
-		Buckets: []float64{.005, .01, .02, .03},
-	},
-		[]string{"event", "server_addr", "host", "method", "path"},
-	)
-	prometheus.MustRegister(defaultHttpClientRequestsTraceTlsHistogram)
-	defaultHttpClientRequestsTraceRequestHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "http_client_requests_request_duration_seconds",
-		Help:    "A histogram of request latencies for request.",
-		Buckets: []float64{.005, .01, .02, .03},
-	},
-		[]string{"event", "server_addr", "host", "method", "path"},
-	)
-	prometheus.MustRegister(defaultHttpClientRequestsTraceRequestHistogram)
-}
-
 func ClientTimeout(timeout time.Duration) ClientOption {
 	return func(options *ClientOptions) {
 		options.Timeout = timeout
@@ -173,7 +98,7 @@ func ClientMetricsHttpClientRequestsInFlight(gauge prometheus.Gauge) ClientOptio
 		if gauge != nil {
 			options.MetricsHttpClientRequestsInFlight = gauge
 		} else {
-			options.MetricsHttpClientRequestsInFlight = defaultHttpClientRequestsInFlight
+			options.MetricsHttpClientRequestsInFlight = defaultMetricsHttpClientRequestsInFlight
 		}
 
 	}
@@ -183,13 +108,13 @@ func ClientMetricsHttpClientRequestsCounter(counter *prometheus.CounterVec) Clie
 		if counter != nil {
 			options.MetricsHttpClientRequestsCounter = counter
 		} else {
-			options.MetricsHttpClientRequestsCounter = defaultHttpClientRequestsCounter
+			options.MetricsHttpClientRequestsCounter = defaultMetricsHttpClientRequestsCounter
 		}
 	}
 }
 func ClientMetricsHttpClientRequestsDuration(histogram *prometheus.HistogramVec) ClientOption {
 	if histogram == nil {
-		histogram = defaultHttpClientRequestsDurationHistogram
+		histogram = defaultMetricsHttpClientRequestsDurationHistogram
 	}
 	return func(options *ClientOptions) {
 		options.MetricsHttpClientRequestsDurations = []prometheus.ObserverVec{histogram}
@@ -197,7 +122,7 @@ func ClientMetricsHttpClientRequestsDuration(histogram *prometheus.HistogramVec)
 }
 func ClientMetricsHttpClientRequestsTraceConnection(histogram *prometheus.HistogramVec) ClientOption {
 	if histogram == nil {
-		histogram = defaultHttpClientRequestsTraceConnectionHistogram
+		histogram = defaultMetricsHttpClientRequestsTraceConnectionHistogram
 	}
 	return func(options *ClientOptions) {
 		options.MetricsHttpClientRequestsTraceConnection = []prometheus.ObserverVec{histogram}
@@ -205,7 +130,7 @@ func ClientMetricsHttpClientRequestsTraceConnection(histogram *prometheus.Histog
 }
 func ClientMetricsHttpClientRequestsTraceDns(histogram *prometheus.HistogramVec) ClientOption {
 	if histogram == nil {
-		histogram = defaultHttpClientRequestsTraceDnsHistogram
+		histogram = defaultMetricsHttpClientRequestsTraceDnsHistogram
 	}
 	return func(options *ClientOptions) {
 		options.MetricsHttpClientRequestsTraceDns = []prometheus.ObserverVec{histogram}
@@ -213,7 +138,7 @@ func ClientMetricsHttpClientRequestsTraceDns(histogram *prometheus.HistogramVec)
 }
 func ClientMetricsHttpClientRequestsTraceConnect(histogram *prometheus.HistogramVec) ClientOption {
 	if histogram == nil {
-		histogram = defaultHttpClientRequestsTraceConnectHistogram
+		histogram = defaultMetricsHttpClientRequestsTraceConnectHistogram
 	}
 	return func(options *ClientOptions) {
 		options.MetricsHttpClientRequestsTraceConnect = []prometheus.ObserverVec{histogram}
@@ -221,7 +146,7 @@ func ClientMetricsHttpClientRequestsTraceConnect(histogram *prometheus.Histogram
 }
 func ClientMetricsHttpClientRequestsTraceTls(histogram *prometheus.HistogramVec) ClientOption {
 	if histogram == nil {
-		histogram = defaultHttpClientRequestsTraceTlsHistogram
+		histogram = defaultMetricsHttpClientRequestsTraceTlsHistogram
 	}
 	return func(options *ClientOptions) {
 		options.MetricsHttpClientRequestsTraceTls = []prometheus.ObserverVec{histogram}
@@ -229,7 +154,7 @@ func ClientMetricsHttpClientRequestsTraceTls(histogram *prometheus.HistogramVec)
 }
 func ClientMetricsHttpClientRequestsTraceRequest(histogram *prometheus.HistogramVec) ClientOption {
 	if histogram == nil {
-		histogram = defaultHttpClientRequestsTraceRequestHistogram
+		histogram = defaultMetricsHttpClientRequestsTraceRequestHistogram
 	}
 	return func(options *ClientOptions) {
 		options.MetricsHttpClientRequestsTraceRequest = []prometheus.ObserverVec{histogram}

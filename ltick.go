@@ -126,8 +126,6 @@ var defaultConfigs map[string]config.Option = map[string]config.Option{
 	"SYSTEM_LOG_FORMATTER": config.Option{Type: config.String, Default: "sys", EnvironmentKey: "SYSTEM_LOG_FORMATTER"},
 }
 
-var defaultlogWriter io.Writer = os.Stdout
-
 func EngineConfigFile(configFile string) EngineOption {
 	return func(options *EngineOptions) {
 		configFile, err := filepath.Abs(configFile)

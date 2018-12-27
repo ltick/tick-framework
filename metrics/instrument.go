@@ -19,7 +19,7 @@ import (
 type HttpClientRequestLabelFunc func(obs prometheus.Collector, r *http.Request, rsp *http.Response, customLabels ...prometheus.Labels) prometheus.Labels
 type HttpServerRequestLabelFunc func(obs prometheus.Collector, d Delegator, r *http.Request, customLabels ...prometheus.Labels) prometheus.Labels
 
-func defaultHttpClientRequestLabelFunc(obs prometheus.Collector, r *http.Request, rsp *http.Response, customLabels ...prometheus.Labels) prometheus.Labels {
+func defaultMetricsHttpClientRequestLabelFunc(obs prometheus.Collector, r *http.Request, rsp *http.Response, customLabels ...prometheus.Labels) prometheus.Labels {
 	serverAddr, host, method, path, status := checkLabels(obs)
 	reqHost := r.Host
 	if reqHost == "" {
@@ -37,7 +37,7 @@ func defaultHttpClientRequestLabelFunc(obs prometheus.Collector, r *http.Request
 	}
 }
 
-func defaultHttpServerRequestLabelFunc(obs prometheus.Collector, d Delegator, r *http.Request, customLabels ...prometheus.Labels) prometheus.Labels {
+func defaultMetricsHttpServerRequestLabelFunc(obs prometheus.Collector, d Delegator, r *http.Request, customLabels ...prometheus.Labels) prometheus.Labels {
 	serverAddr, host, method, path, status := checkLabels(obs)
 	reqHost := r.Host
 	if reqHost == "" {
@@ -76,7 +76,7 @@ func InstrumentHttpServerRequestsDuration(observers []prometheus.ObserverVec, ne
 		now := time.Now()
 		d := newDelegator(w, nil)
 		next.ServeHTTP(d, r)
-		serverRequestLabelFunc := defaultHttpServerRequestLabelFunc
+		serverRequestLabelFunc := defaultMetricsHttpServerRequestLabelFunc
 		if len(serverRequestLabelFuncs) > 0 {
 			serverRequestLabelFunc = serverRequestLabelFuncs[0]
 		}
@@ -108,7 +108,7 @@ func InstrumentHttpServerRequestsRequestSize(observers []prometheus.ObserverVec,
 		d := newDelegator(w, nil)
 		next.ServeHTTP(d, r)
 		size := computeApproximateRequestSize(r)
-		serverRequestLabelFunc := defaultHttpServerRequestLabelFunc
+		serverRequestLabelFunc := defaultMetricsHttpServerRequestLabelFunc
 		if len(serverRequestLabelFuncs) > 0 {
 			serverRequestLabelFunc = serverRequestLabelFuncs[0]
 		}
@@ -139,7 +139,7 @@ func InstrumentHttpServerRequestsResponseSize(observers []prometheus.ObserverVec
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		d := newDelegator(w, nil)
 		next.ServeHTTP(d, r)
-		serverRequestLabelFunc := defaultHttpServerRequestLabelFunc
+		serverRequestLabelFunc := defaultMetricsHttpServerRequestLabelFunc
 		if len(serverRequestLabelFuncs) > 0 {
 			serverRequestLabelFunc = serverRequestLabelFuncs[0]
 		}
@@ -166,7 +166,7 @@ func InstrumentHttpClientRequestCounter(counter *prometheus.CounterVec, next htt
 	return promhttp.RoundTripperFunc(func(r *http.Request) (*http.Response, error) {
 		resp, err := next.RoundTrip(r)
 		if err == nil {
-			clientRequestLabelFunc := defaultHttpClientRequestLabelFunc
+			clientRequestLabelFunc := defaultMetricsHttpClientRequestLabelFunc
 			if len(clientRequestLabelFuncs) > 0 {
 				clientRequestLabelFunc = clientRequestLabelFuncs[0]
 			}
@@ -198,7 +198,7 @@ func InstrumentHttpClientRequestDuration(observers []prometheus.ObserverVec, nex
 		start := time.Now()
 		resp, err := next.RoundTrip(r)
 		if err == nil {
-			clientRequestLabelFunc := defaultHttpClientRequestLabelFunc
+			clientRequestLabelFunc := defaultMetricsHttpClientRequestLabelFunc
 			if len(clientRequestLabelFuncs) > 0 {
 				clientRequestLabelFunc = clientRequestLabelFuncs[0]
 			}
@@ -247,8 +247,7 @@ type InstrumentTrace struct {
 // See the example for ExampleInstrumentRoundTripperDuration for example usage.
 func InstrumentHttpClientRequestTrace(observers map[string][]prometheus.ObserverVec, next http.RoundTripper, clientRequestLabelFuncs ...HttpClientRequestLabelFunc) promhttp.RoundTripperFunc {
 	return promhttp.RoundTripperFunc(func(r *http.Request) (*http.Response, error) {
-		start := time.Now()
-		clientRequestLabelFunc := defaultHttpClientRequestLabelFunc
+		clientRequestLabelFunc := defaultMetricsHttpClientRequestLabelFunc
 		if len(clientRequestLabelFuncs) > 0 {
 			clientRequestLabelFunc = clientRequestLabelFuncs[0]
 		}
@@ -259,13 +258,13 @@ func InstrumentHttpClientRequestTrace(observers map[string][]prometheus.Observer
 			it.GotConn = func(t float64, r *http.Request) {
 				for _, obs := range observers["connection"] {
 					labels := clientRequestLabelFunc(obs, r, nil, prometheus.Labels{"event": "got_conn"})
-					obs.With(labels)
+					obs.With(labels).Observe(t)
 				}
 			}
 			it.PutIdleConn = func(t float64, r *http.Request) {
 				for _, obs := range observers["connection"] {
 					labels := clientRequestLabelFunc(obs, r, nil, prometheus.Labels{"event": "put_idle_conn"})
-					obs.With(labels)
+					obs.With(labels).Observe(t)
 				}
 			}
 		}
@@ -273,13 +272,13 @@ func InstrumentHttpClientRequestTrace(observers map[string][]prometheus.Observer
 			it.DNSStart = func(t float64, r *http.Request) {
 				for _, obs := range observers["dns"] {
 					labels := clientRequestLabelFunc(obs, r, nil, prometheus.Labels{"event": "dns_start"})
-					obs.With(labels)
+					obs.With(labels).Observe(t)
 				}
 			}
 			it.DNSDone = func(t float64, r *http.Request) {
 				for _, obs := range observers["dns"] {
 					labels := clientRequestLabelFunc(obs, r, nil, prometheus.Labels{"event": "dns_done"})
-					obs.With(labels)
+					obs.With(labels).Observe(t)
 				}
 			}
 		}
@@ -287,13 +286,13 @@ func InstrumentHttpClientRequestTrace(observers map[string][]prometheus.Observer
 			it.ConnectStart = func(t float64, r *http.Request) {
 				for _, obs := range observers["connect"] {
 					labels := clientRequestLabelFunc(obs, r, nil, prometheus.Labels{"event": "connect_start"})
-					obs.With(labels)
+					obs.With(labels).Observe(t)
 				}
 			}
 			it.ConnectDone = func(t float64, r *http.Request) {
 				for _, obs := range observers["connect"] {
 					labels := clientRequestLabelFunc(obs, r, nil, prometheus.Labels{"event": "connect_done"})
-					obs.With(labels)
+					obs.With(labels).Observe(t)
 				}
 			}
 		}
@@ -301,13 +300,13 @@ func InstrumentHttpClientRequestTrace(observers map[string][]prometheus.Observer
 			it.TLSHandshakeStart = func(t float64, r *http.Request) {
 				for _, obs := range observers["tls"] {
 					labels := clientRequestLabelFunc(obs, r, nil, prometheus.Labels{"event": "tls_handshake_start"})
-					obs.With(labels)
+					obs.With(labels).Observe(t)
 				}
 			}
 			it.TLSHandshakeDone = func(t float64, r *http.Request) {
 				for _, obs := range observers["tls"] {
 					labels := clientRequestLabelFunc(obs, r, nil, prometheus.Labels{"event": "tls_handshake_done"})
-					obs.With(labels)
+					obs.With(labels).Observe(t)
 				}
 			}
 		}
@@ -315,34 +314,36 @@ func InstrumentHttpClientRequestTrace(observers map[string][]prometheus.Observer
 			it.WroteHeaders = func(t float64, r *http.Request) {
 				for _, obs := range observers["request"] {
 					labels := clientRequestLabelFunc(obs, r, nil, prometheus.Labels{"event": "wrote_headers"})
-					obs.With(labels)
+					obs.With(labels).Observe(t)
 				}
 			}
 			it.WroteRequest = func(t float64, r *http.Request) {
 				for _, obs := range observers["request"] {
 					labels := clientRequestLabelFunc(obs, r, nil, prometheus.Labels{"event": "wrote_request"})
-					obs.With(labels)
+					obs.With(labels).Observe(t)
 				}
 			}
 			it.GotFirstResponseByte = func(t float64, r *http.Request) {
 				for _, obs := range observers["request"] {
 					labels := clientRequestLabelFunc(obs, r, nil, prometheus.Labels{"event": "got_first_response_byte"})
-					obs.With(labels)
+					obs.With(labels).Observe(t)
 				}
 			}
 			it.Got100Continue = func(t float64, r *http.Request) {
 				for _, obs := range observers["request"] {
 					labels := clientRequestLabelFunc(obs, r, nil, prometheus.Labels{"event": "got_100_continue"})
-					obs.With(labels)
+					obs.With(labels).Observe(t)
 				}
 			}
 			it.Wait100Continue = func(t float64, r *http.Request) {
 				for _, obs := range observers["request"] {
 					labels := clientRequestLabelFunc(obs, r, nil, prometheus.Labels{"event": "wait_100_continue"})
-					obs.With(labels)
+					obs.With(labels).Observe(t)
 				}
 			}
 		}
+		start := time.Now()
+
 		trace := &httptrace.ClientTrace{
 			GotConn: func(_ httptrace.GotConnInfo) {
 				if it.GotConn != nil {

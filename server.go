@@ -27,12 +27,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-var (
-	defaultServerPort                        uint          = 80
-	defaultServerLogWriter                   io.Writer     = os.Stdout
-	defaultServerGracefulStopTimeoutDuration time.Duration = 120 * time.Second
-)
-
 type (
 	ServerOptions struct {
 		logWriter                              io.Writer
@@ -124,42 +118,6 @@ type (
 	}
 )
 
-var (
-	defaultHttpServerRequestsDurationHistogram     *prometheus.HistogramVec
-	defaultHttpServerRequestsResponseSizeHistogram *prometheus.HistogramVec
-	defaultHttpServerRequestsResponseSizeSummary   *prometheus.SummaryVec
-	defaultHttpServerRequestsRequestSizeHistogram  *prometheus.HistogramVec
-	defaultHttpServerRequestsRequestSizeSummary    *prometheus.SummaryVec
-)
-
-func init() {
-	defaultHttpServerRequestsDurationHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "http_server_requests_duration_seconds",
-		Help:    "A histogram of request latencies for requests.",
-		Buckets: prometheus.DefBuckets,
-	},
-		[]string{"server_addr", "host", "method", "path", "status"},
-	)
-	prometheus.MustRegister(defaultHttpServerRequestsDurationHistogram)
-	defaultHttpServerRequestsResponseSizeHistogram = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "http_server_requests_response_size_bytes",
-			Help:    "A histogram of response size for requests.",
-			Buckets: []float64{200, 500, 900, 1500},
-		},
-		[]string{"server_addr", "host", "method", "path", "status"},
-	)
-	prometheus.MustRegister(defaultHttpServerRequestsResponseSizeHistogram)
-	defaultHttpServerRequestsRequestSizeHistogram = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "http_server_requests_request_size_bytes",
-			Help:    "A histogram of request size for requests.",
-			Buckets: []float64{200, 500, 900, 1500},
-		},
-		[]string{"server_addr", "host", "method", "path", "status"},
-	)
-	prometheus.MustRegister(defaultHttpServerRequestsRequestSizeHistogram)
-}
 func ServerPort(port uint) ServerOption {
 	return func(options *ServerOptions) {
 		options.Port = port
@@ -167,7 +125,7 @@ func ServerPort(port uint) ServerOption {
 }
 func ServerMetricsHttpServerRequestsDuration(histogram *prometheus.HistogramVec) ServerOption {
 	if histogram == nil {
-		histogram = defaultHttpServerRequestsDurationHistogram
+		histogram = defaultMetricsHttpServerRequestsDurationHistogram
 	}
 	return func(options *ServerOptions) {
 		options.MetricsHttpServerRequestsDurations = []prometheus.ObserverVec{histogram}
@@ -175,7 +133,7 @@ func ServerMetricsHttpServerRequestsDuration(histogram *prometheus.HistogramVec)
 }
 func ServerMetricsHttpServerRequestsResponseSize(histogram *prometheus.HistogramVec) ServerOption {
 	if histogram == nil {
-		histogram = defaultHttpServerRequestsResponseSizeHistogram
+		histogram = defaultMetricsHttpServerRequestsResponseSizeHistogram
 	}
 	return func(options *ServerOptions) {
 		options.MetricsHttpServerRequestsResponseSizes = []prometheus.ObserverVec{histogram}
@@ -183,7 +141,7 @@ func ServerMetricsHttpServerRequestsResponseSize(histogram *prometheus.Histogram
 }
 func ServerMetricsHttpServerRequestsRequestSize(histogram *prometheus.HistogramVec) ServerOption {
 	if histogram == nil {
-		histogram = defaultHttpServerRequestsRequestSizeHistogram
+		histogram = defaultMetricsHttpServerRequestsRequestSizeHistogram
 	}
 	return func(options *ServerOptions) {
 		options.MetricsHttpServerRequestsRequestSizes = []prometheus.ObserverVec{histogram}
