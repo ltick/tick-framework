@@ -681,17 +681,19 @@ func (e *Engine) Startup() (err error) {
 					}
 				}
 			}
-			server.Router.Routes = append([]*ServerRouterRoute{&ServerRouterRoute{
-				Method: []string{"GET"},
-				Host:   server.Router.Metrics.Host,
-				Group:  server.Router.Metrics.Group,
-				Path:   "",
-				Handlers: []api.Handler{
-					metricsHandler{
-						basicAuth: server.Router.Metrics.BasicAuth,
+			if server.Router.Metrics != nil {
+				server.Router.Routes = append([]*ServerRouterRoute{&ServerRouterRoute{
+					Method: []string{"GET"},
+					Host:   server.Router.Metrics.Host,
+					Group:  server.Router.Metrics.Group,
+					Path:   "",
+					Handlers: []api.Handler{
+						metricsHandler{
+							basicAuth: server.Router.Metrics.BasicAuth,
+						},
 					},
-				},
-			}}, server.Router.Routes...)
+				}}, server.Router.Routes...)
+			}
 			if server.Router.Pprof != nil {
 				server.Router.Routes = append([]*ServerRouterRoute{&ServerRouterRoute{
 					Method: []string{"ANY"},
