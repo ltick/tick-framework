@@ -776,7 +776,7 @@ func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes
 				for _, host := range route.Host {
 					if utility.WildcardMatch(host, requestHost) {
 						// Jump After NotFoundHandler
-						ctx.Jump(routeCnt + 1)
+						ctx.Jump(routeCnt)
 						if route.BasicAuth != nil {
 							ctx.Request.SetBasicAuth(route.BasicAuth.Username, route.BasicAuth.Password)
 						}
