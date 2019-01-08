@@ -800,6 +800,11 @@ func (e *Engine) Startup() (err error) {
 			e.Log(fmt.Sprintf("ltick: new server [serverOptions:'%+v', serverRouterOptions:'%+v', handlerTimeout:'%.fs']", server.ServerOptions, server.Router.Options, server.Router.TimeoutDuration.Seconds()))
 		}
 	}
+	// 注入模块
+	err = e.Registry.InjectComponent()
+	if err != nil {
+		return errors.Annotatef(err, errStartupInjectComponent)
+	}
 	sortedComponenetName := e.Registry.GetSortedComponentName()
 	sortedComponents := e.Registry.GetSortedComponents()
 	// 模块初始化
@@ -829,11 +834,6 @@ func (e *Engine) Startup() (err error) {
 				return errors.Annotatef(err, errStartupComponentStartup, sortedComponenetName[index])
 			}
 		}
-	}
-	// 注入模块
-	err = e.Registry.InjectComponent()
-	if err != nil {
-		return errors.Annotatef(err, errStartupInjectComponent)
 	}
 	e.state = STATE_STARTUP
 	return nil
