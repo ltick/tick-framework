@@ -99,11 +99,11 @@ type (
 )
 
 var defaultConfigs map[string]config.Option = map[string]config.Option{
-	"APP_ENV":           config.Option{Type: config.String, Default: "local", EnvironmentKey: "APP_ENV"},
-	"PREFIX_PATH":       config.Option{Type: config.String, EnvironmentKey: "PREFIX_PATH"},
-	"TMP_PATH":          config.Option{Type: config.String, Default: "/tmp", EnvironmentKey: "TMP_PATH"},
-	"DEBUG":             config.Option{Type: config.String, Default: false},
-	"CONFIG_CACHE_FILE": config.Option{Type: config.String, EnvironmentKey: "CONFIG_CACHE_FILE"},
+	"APP_ENV":             config.Option{Type: config.String, Default: "local", EnvironmentKey: "APP_ENV"},
+	"PREFIX_PATH":         config.Option{Type: config.String, EnvironmentKey: "PREFIX_PATH"},
+	"TMP_PATH":            config.Option{Type: config.String, Default: "/tmp", EnvironmentKey: "TMP_PATH"},
+	"DEBUG":               config.Option{Type: config.String, Default: false},
+	"CONFIG_CACHE_FOLDER": config.Option{Type: config.String, EnvironmentKey: "CONFIG_CACHE_FOLDER"},
 
 	"ACCESS_LOG_TYPE":              config.Option{Type: config.String, Default: "console", EnvironmentKey: "ACCESS_LOG_TYPE"},
 	"ACCESS_LOG_FILE_NAME":         config.Option{Type: config.String, Default: "/tmp/access.log", EnvironmentKey: "ACCESS_LOG_FILE_NAME"},
@@ -418,15 +418,12 @@ func (e *Engine) loadConfig(setters ...EngineOption) *Engine {
 	}
 	// 生成配置缓存文件
 	fileExtension := filepath.Ext(e.EngineOptions.EngineConfigOptions.configFile)
-	configCacheFileName := strings.Replace(e.EngineOptions.EngineConfigOptions.configFile, fileExtension, "", -1) + ".cached" + fileExtension
-	configCacheFile := e.configer.GetString("CONFIG_CACHE_FILE")
-	if configCacheFile != "" {
-		f, err := filepath.Abs(configCacheFile)
-		if err == nil {
-			configCacheFileName = f
-		}
+	configCacheFile := strings.Replace(e.EngineOptions.EngineConfigOptions.configFile, fileExtension, "", -1) + ".cached" + fileExtension
+	configCacheFolder := e.configer.GetString("CONFIG_CACHE_FOLDER")
+	if configCacheFolder != "" {
+		configCacheFile = strings.Replace(configCacheFile, filepath.Dir(configCacheFile), configCacheFolder, -1)
 	}
-	configCachedFile, err := e.openCacheConfigFile(configCacheFileName)
+	configCachedFile, err := e.openCacheConfigFile(configCacheFile)
 	if err != nil {
 		err = errors.Annotate(err, errLoadSystemConfig)
 		e.Log(errors.ErrorStack(err))
