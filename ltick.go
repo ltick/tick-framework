@@ -86,11 +86,11 @@ type (
 		state       State
 		executeFile string
 
-		cachedConfigFileName string
-		configer             *config.Config
-		Registry             *Registry
-		Context              context.Context
-		ServerMap            map[string]*Server
+		cachedConfigFile string
+		configer         *config.Config
+		Registry         *Registry
+		Context          context.Context
+		ServerMap        map[string]*Server
 	}
 	Callback interface {
 		OnStartup(*Engine) error  // Execute On After All Engine Component OnStartup
@@ -423,20 +423,13 @@ func (e *Engine) loadConfig(setters ...EngineOption) *Engine {
 	if configCacheFolder != "" {
 		configCacheFile = strings.Replace(configCacheFile, filepath.Dir(configCacheFile), configCacheFolder, -1)
 	}
-	configCachedFile, err := e.openCacheConfigFile(configCacheFile)
-	if err != nil {
-		err = errors.Annotate(err, errLoadSystemConfig)
-		e.Log(errors.ErrorStack(err))
-		os.Exit(1)
-	}
-	defer configCachedFile.Close()
-	e.cachedConfigFileName = configCachedFile.Name()
+	e.cachedConfigFile = configCacheFile
 	// 读取配置缓存文件
-	e.loadCachedFileConfig(e.EngineOptions.EngineConfigOptions.configFile, e.cachedConfigFileName)
+	e.loadCachedFileConfig(e.EngineOptions.EngineConfigOptions.configFile, e.cachedConfigFile)
 	go func() {
 		// 刷新缓存
 		for {
-			cachedConfigFileInfo, err := os.Stat(e.cachedConfigFileName)
+			cachedConfigFileInfo, err := os.Stat(e.cachedConfigFile)
 			if err != nil {
 				err = errors.Annotate(err, errLoadSystemConfig)
 				e.Log(errors.ErrorStack(err))
@@ -451,7 +444,7 @@ func (e *Engine) loadConfig(setters ...EngineOption) *Engine {
 				}
 				if cachedConfigFileInfo.ModTime().Before(dotenvFileInfo.ModTime()) {
 					e.LoadEnvFile(e.EngineOptions.EngineConfigOptions.envPrefix, e.EngineOptions.EngineConfigOptions.dotenvFile)
-					e.loadCachedFileConfig(e.EngineOptions.EngineConfigOptions.configFile, e.cachedConfigFileName)
+					e.loadCachedFileConfig(e.EngineOptions.EngineConfigOptions.configFile, e.cachedConfigFile)
 				}
 			}
 			configFileInfo, err := os.Stat(e.EngineOptions.EngineConfigOptions.configFile)
@@ -461,7 +454,7 @@ func (e *Engine) loadConfig(setters ...EngineOption) *Engine {
 				return
 			}
 			if cachedConfigFileInfo.ModTime().Before(configFileInfo.ModTime()) {
-				e.loadCachedFileConfig(e.EngineOptions.EngineConfigOptions.configFile, e.cachedConfigFileName)
+				e.loadCachedFileConfig(e.EngineOptions.EngineConfigOptions.configFile, e.cachedConfigFile)
 			}
 			time.Sleep(defaultConfigReloadTime)
 		}
@@ -469,27 +462,7 @@ func (e *Engine) loadConfig(setters ...EngineOption) *Engine {
 	return e
 }
 
-func (e *Engine) openCacheConfigFile(cacheFile string) (file *os.File, err error) {
-	_, err = os.Stat(cacheFile)
-	if err != nil {
-		if os.IsNotExist(err) {
-			file, err = utility.NewFile(cacheFile, 0644, bytes.NewReader([]byte{}), 0)
-			if err != nil {
-				return nil, errors.New(errGetCacheFile + ": " + err.Error())
-			}
-		} else {
-			return nil, errors.New(errGetCacheFile + ": " + err.Error())
-		}
-	} else {
-		file, err = os.OpenFile(cacheFile, os.O_RDWR, 0644)
-		if err != nil {
-			return nil, errors.New(errGetCacheFile + ": " + err.Error())
-		}
-	}
-	return file, err
-}
-
-func (e *Engine) loadCachedFileConfig(configPath string, cachedConfigFileName string) {
+func (e *Engine) loadCachedFileConfig(configPath string, cachedConfigFile string) {
 	configFile, err := os.OpenFile(configPath, os.O_RDONLY, 0644)
 	if err != nil {
 		err = errors.Annotate(err, errLoadCachedConfig)
@@ -509,28 +482,33 @@ func (e *Engine) loadCachedFileConfig(configPath string, cachedConfigFileName st
 		replaceConfigKey := strings.Trim(replaceKey, "%")
 		cachedFileByte = bytes.Replace(cachedFileByte, []byte(replaceKey), []byte(e.configer.GetString(replaceConfigKey)), -1)
 	}
-	err = ioutil.WriteFile(cachedConfigFileName, cachedFileByte, 0644)
+	err = ioutil.WriteFile(cachedConfigFile, cachedFileByte, 0644)
 	if err != nil {
 		err = errors.Annotate(err, errLoadCachedConfig)
 		e.Log(errors.ErrorStack(err))
 		return
 	}
-	e.loadFileConfig(filepath.Dir(cachedConfigFileName), strings.Replace(filepath.Base(cachedConfigFileName), filepath.Ext(cachedConfigFileName), "", 1))
+	e.loadFileConfig(filepath.Dir(cachedConfigFile), strings.Replace(filepath.Base(cachedConfigFile), filepath.Ext(cachedConfigFile), "", 1))
 }
 func (e *Engine) loadFileConfig(configPath string, configName string) *Engine {
 	var err error
 	if configPath == "" || configName == "" {
-		err = errors.Annotatef(errors.Errorf("configPath or configName is empty"), errLoadConfig, configPath, configPath)
+		err = errors.Annotatef(errors.Errorf("configPath or configName is empty"), errLoadConfig, configPath, configName)
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
 	if !strings.HasPrefix(configPath, "/") {
-		configPath = strings.TrimRight(configPath, "/") + "/" + configPath
+		configPath, err = filepath.Abs(configPath)
+		if err != nil {
+			err := errors.Annotatef(err, errLoadConfig, configPath, configName)
+			e.Log(errors.ErrorStack(err))
+			os.Exit(1)
+		}
 	}
 	_, err = os.Stat(configPath)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			err := errors.Annotatef(err, errLoadConfig, configPath, configPath)
+			err := errors.Annotatef(err, errLoadConfig, configPath, configName)
 			e.Log(errors.ErrorStack(err))
 			os.Exit(1)
 		}
@@ -539,7 +517,7 @@ func (e *Engine) loadFileConfig(configPath string, configName string) *Engine {
 	e.configer.AddConfigPath(configPath)
 	err = e.configer.LoadFromConfigPath(configName)
 	if err != nil {
-		err := errors.Annotatef(err, errLoadConfig, configPath, configPath)
+		err := errors.Annotatef(err, errLoadConfig, configPath, configName)
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
@@ -576,8 +554,8 @@ func (e *Engine) WithCallback(callback Callback) *Engine {
 	}
 	return e
 }
-func (e *Engine) GetConfigCachedFileName() string {
-	return e.cachedConfigFileName
+func (e *Engine) GetConfigCachedFile() string {
+	return e.cachedConfigFile
 }
 
 func (e *Engine) GetLogger(name string) (*libLog.Logger, error) {

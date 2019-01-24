@@ -364,7 +364,7 @@ func (e *Engine) RegisterServer(name string, server *Server) {
 	}
 	e.ServerMap[name] = server
 	// configure
-	err := e.ConfigureServerFromFile(server, e.GetConfigCachedFileName(), server.Router.Options.RouteProviders, "servers."+name)
+	err := e.ConfigureServerFromFile(server, e.GetConfigCachedFile(), server.Router.Options.RouteProviders, "servers."+name)
 	if err != nil {
 		err = errors.Annotate(err, errStartup)
 		e.Log(errors.ErrorStack(err))

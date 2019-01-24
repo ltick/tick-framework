@@ -295,7 +295,7 @@ func (suite *TestServerSuite) TestConfigureServer() {
 	providers["TestHandler"] = func() api.Handler {
 		return &TestHandler{}
 	}
-	err := suite.engine.ConfigureServerFromFile(suite.defaultServer, suite.engine.GetConfigCachedFileName(), providers, "server")
+	err := suite.engine.ConfigureServerFromFile(suite.defaultServer, suite.engine.GetConfigCachedFile(), providers, "server")
 	assert.Nil(suite.T(), err)
 	if err == nil {
 		err = suite.engine.Startup()
