@@ -27,10 +27,16 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+const (
+	DEFAULT_MAX_REQUEST_TIMEOUT_DURATION time.Duration = 120 * time.Second
+)
+
 type (
 	ServerOptions struct {
 		logWriter                              io.Writer
 		Port                                   uint
+		MaxRequestTimeout                      string
+		MaxRequestTimeoutDuration              time.Duration
 		GracefulStopTimeout                    string
 		GracefulStopTimeoutDuration            time.Duration
 		MetricsHttpServerRequestsDurations     []prometheus.ObserverVec
@@ -82,20 +88,20 @@ type (
 	}
 
 	ServerRouterOptions struct {
-		Timeout            string
-		TimeoutHandlers    []routing.Handler
-		Callbacks          []RouterCallback
-		AccessLogFunc      access.LogWriterFunc
-		ErrorLogFunc       fault.LogFunc
-		ErrorHandler       fault.ConvertErrorFunc
-		RecoveryLogFunc    fault.LogFunc
-		RecoveryHandler    fault.ConvertErrorFunc
-		PanicHandler       fault.LogFunc
-		TypeNegotiator     []string
-		SlashRemover       *int
-		LanguageNegotiator []string
-		Cors               *cors.Options
-		RouteProviders     map[string]interface{}
+		RequestTimeout         string
+		RequestTimeoutHandlers []routing.Handler
+		Callbacks              []RouterCallback
+		AccessLogFunc          access.LogWriterFunc
+		ErrorLogFunc           fault.LogFunc
+		ErrorHandler           fault.ConvertErrorFunc
+		RecoveryLogFunc        fault.LogFunc
+		RecoveryHandler        fault.ConvertErrorFunc
+		PanicHandler           fault.LogFunc
+		TypeNegotiator         []string
+		SlashRemover           *int
+		LanguageNegotiator     []string
+		Cors                   *cors.Options
+		RouteProviders         map[string]interface{}
 	}
 
 	ServerRouterOption func(*ServerRouterOptions)
@@ -111,6 +117,7 @@ type (
 	}
 	ServerRouteGroup struct {
 		*routing.RouteGroup
+		MaxRequestTimeoutDuration time.Duration
 	}
 	RouterCallback interface {
 		OnRequestStartup(*routing.Context) error
@@ -157,6 +164,16 @@ func ServerLogWriter(logWriter io.Writer) ServerOption {
 		options.logWriter = logWriter
 	}
 }
+func ServerMaxRequestTimeout(maxRequestTimeout string) ServerOption {
+	return func(options *ServerOptions) {
+		options.MaxRequestTimeout = maxRequestTimeout
+	}
+}
+func ServerMaxRequestTimeoutDuration(maxRequestTimeoutDuration time.Duration) ServerOption {
+	return func(options *ServerOptions) {
+		options.MaxRequestTimeoutDuration = maxRequestTimeoutDuration
+	}
+}
 func ServerGracefulStopTimeout(gracefulStopTimeout string) ServerOption {
 	return func(options *ServerOptions) {
 		options.GracefulStopTimeout = gracefulStopTimeout
@@ -167,14 +184,14 @@ func ServerGracefulStopTimeoutDuration(gracefulStopTimeoutDuration time.Duration
 		options.GracefulStopTimeoutDuration = gracefulStopTimeoutDuration
 	}
 }
-func ServerRouterTimeoutHandlers(timeoutHandlers []routing.Handler) ServerRouterOption {
+func ServerRouterRequestTimeoutHandlers(requestTimeoutHandlers []routing.Handler) ServerRouterOption {
 	return func(options *ServerRouterOptions) {
-		options.TimeoutHandlers = timeoutHandlers
+		options.RequestTimeoutHandlers = requestTimeoutHandlers
 	}
 }
-func ServerRouterTimeout(timeout string) ServerRouterOption {
+func ServerRouterRequestTimeout(requestTimeout string) ServerRouterOption {
 	return func(options *ServerRouterOptions) {
-		options.Timeout = timeout
+		options.RequestTimeout = requestTimeout
 	}
 }
 
@@ -255,8 +272,8 @@ func (e *Engine) NewServerRouter(setters ...ServerRouterOption) (router *ServerR
 }
 
 func (r *ServerRouter) Resolve() {
-	if r.Options.Timeout != "" {
-		handlerTimeoutDuration, err := time.ParseDuration(r.Options.Timeout)
+	if r.Options.RequestTimeout != "" {
+		handlerTimeoutDuration, err := time.ParseDuration(r.Options.RequestTimeout)
 		if err == nil {
 			r.TimeoutDuration = handlerTimeoutDuration
 		}
@@ -404,6 +421,12 @@ func (s *Server) Resolve() {
 		gracefulStopTimeoutDuration, err := time.ParseDuration(s.GracefulStopTimeout)
 		if err == nil {
 			s.GracefulStopTimeoutDuration = gracefulStopTimeoutDuration
+		}
+	}
+	if s.MaxRequestTimeout != "" {
+		maxRequestTimeoutDuration, err := time.ParseDuration(s.MaxRequestTimeout)
+		if err == nil {
+			s.MaxRequestTimeoutDuration = maxRequestTimeoutDuration
 		}
 	}
 }
@@ -556,6 +579,7 @@ func (s *Server) SetServerReuqestCors(corsOptions *cors.Options) *Server {
 func (s *Server) AddRouteGroup(group string) *ServerRouteGroup {
 	// Router Handlers (Global)
 	s.RouteGroups[group] = s.Router.AddRouteGroup(group)
+	s.RouteGroups[group].MaxRequestTimeoutDuration = s.MaxRequestTimeoutDuration
 	return s.RouteGroups[group]
 }
 func (s *Server) AddRoute(method string, path string, handlers ...routing.Handler) *Server {
@@ -733,7 +757,8 @@ func (r *ServerRouter) NewFileHandler(pathMap file.PathMap, opts ...file.ServerO
 
 func (r *ServerRouter) AddRouteGroup(groupName string) *ServerRouteGroup {
 	g := &ServerRouteGroup{
-		RouteGroup: r.Group(groupName),
+		RouteGroup:                r.Group(groupName),
+		MaxRequestTimeoutDuration: DEFAULT_MAX_REQUEST_TIMEOUT_DURATION,
 	}
 	for _, m := range r.Middlewares {
 		g.AppendAnteriorHandler(m.OnRequestStartup)
@@ -758,36 +783,43 @@ func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes
 	for index, handlerRoute := range handlerRoutes {
 		route := handlerRoute
 		routeHandlers[index] = func(ctx *routing.Context) error {
-			select {
-			case <-ctx.Context.Done():
-				ctx.Abort()
-				switch ctx.Context.Err() {
-				case context.DeadlineExceeded:
-					return routing.NewHTTPError(http.StatusRequestTimeout, http.StatusText(http.StatusRequestTimeout))
-				case context.Canceled:
-					return routing.NewHTTPError(http.StatusNoContent, http.StatusText(http.StatusNoContent))
-				}
-				return routing.NewHTTPError(http.StatusNoContent, http.StatusText(http.StatusNoContent))
-			default:
-				requestHost := ctx.Request.Host
-				if requestHost == "" {
-					requestHost = ctx.Request.URL.Host
-				}
-				for _, host := range route.Host {
-					if utility.WildcardMatch(host, requestHost) {
-						// Jump After NotFoundHandler
-						ctx.Jump(routeCnt)
-						if route.BasicAuth != nil {
-							ctx.Request.SetBasicAuth(route.BasicAuth.Username, route.BasicAuth.Password)
+			requestHost := ctx.Request.Host
+			if requestHost == "" {
+				requestHost = ctx.Request.URL.Host
+			}
+			for _, host := range route.Host {
+				if utility.WildcardMatch(host, requestHost) {
+					// Jump After NotFoundHandler
+					ctx.Jump(routeCnt)
+					if route.BasicAuth != nil {
+						ctx.Request.SetBasicAuth(route.BasicAuth.Username, route.BasicAuth.Password)
+					}
+					apiCtx := &api.Context{
+						Context:  ctx,
+						Response: api.NewResponse(ctx.ResponseWriter),
+					}
+					var handlerError error
+					var handlerErrorChan chan error = make(chan error, 1)
+					go func(ctx *routing.Context, handlerErrorChan chan error) {
+						handlerErrorChan <- route.Handler.Serve(apiCtx)
+					}(ctx, handlerErrorChan)
+					select {
+					case <-time.After(g.MaxRequestTimeoutDuration):
+						ctx.Abort()
+						return routing.NewHTTPError(http.StatusRequestTimeout, http.StatusText(http.StatusRequestTimeout))
+					case <-ctx.Context.Done():
+						ctx.Abort()
+						switch ctx.Context.Err() {
+						case context.DeadlineExceeded:
+							return routing.NewHTTPError(http.StatusRequestTimeout, http.StatusText(http.StatusRequestTimeout))
+						case context.Canceled:
+							return routing.NewHTTPError(http.StatusNoContent, http.StatusText(http.StatusNoContent))
 						}
-						apiCtx := &api.Context{
-							Context:  ctx,
-							Response: api.NewResponse(ctx.ResponseWriter),
-						}
-						return route.Handler.Serve(apiCtx)
+						return routing.NewHTTPError(http.StatusNoContent, http.StatusText(http.StatusNoContent))
+					case handlerError = <-handlerErrorChan:
+						return handlerError
 					}
 				}
-				return nil
 			}
 			return nil
 		}

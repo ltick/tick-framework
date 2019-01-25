@@ -231,7 +231,7 @@ func (suite *TestServerSuite) SetupTest() {
 		}
 	}
 	router := suite.engine.NewServerRouter(
-		ServerRouterTimeout("3s"),
+		ServerRouterRequestTimeout("3s"),
 		ServerRouterAccessLogFunc(accessLogFunc),
 		ServerRouterErrorLogFunc(systemLogger.Error),
 		ServerRouterErrorHandler(errorLogHandler),
