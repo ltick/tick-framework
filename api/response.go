@@ -166,6 +166,9 @@ func (r *Response) Header() http.Header {
 // Content-Type line, Write adds a Content-Type set to the result of passing
 // the initial 512 bytes of written data to DetectContentType.
 func (r *Response) Write(data interface{}) (n int, err error) {
+	if r.wrote == false {
+		return 0, nil
+	}
 	if r.responseWriter != nil {
 		n, err = r.responseWriter.Write(r.httpResponseWriter, data)
 	} else {
