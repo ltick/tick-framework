@@ -1,20 +1,21 @@
 package ltick
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/pprof"
 	"net/url"
 	"os"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
-	"context"
 
 	"github.com/juju/errors"
 	"github.com/ltick/tick-framework/api"
+	"github.com/ltick/tick-framework/metrics"
+	"github.com/ltick/tick-framework/utility"
 	"github.com/ltick/tick-routing"
 	"github.com/ltick/tick-routing/access"
 	"github.com/ltick/tick-routing/content"
@@ -22,25 +23,24 @@ import (
 	"github.com/ltick/tick-routing/fault"
 	"github.com/ltick/tick-routing/file"
 	"github.com/ltick/tick-routing/slash"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-)
-
-var (
-	defaultServerPort                      uint          = 80
-	defaultServerLogWriter                 io.Writer     = os.Stdout
-	defaultServerRouterGracefulStopTimeout time.Duration = 120 * time.Second
-	defaultServerRouterHandlerTimeout      time.Duration = 3 * time.Second
 )
 
 type (
 	ServerOptions struct {
-		logWriter io.Writer
-		Port      uint
+		logWriter                              io.Writer
+		Port                                   uint
+		GracefulStopTimeout                    string
+		GracefulStopTimeoutDuration            time.Duration
+		MetricsHttpServerRequestsDurations     []prometheus.ObserverVec
+		MetricsHttpServerRequestsResponseSizes []prometheus.ObserverVec
+		MetricsHttpServerRequestsRequestSizes  []prometheus.ObserverVec
+		MetricsHttpServerRequestLabelFunc      metrics.HttpServerRequestLabelFunc
 	}
-
 	ServerBasicAuth struct {
-		username string
-		password string
+		Username string
+		Password string
 	}
 
 	ServerOption func(*ServerOptions)
@@ -52,34 +52,60 @@ type (
 		mutex       sync.RWMutex
 	}
 	ServerRouterProxy struct {
-		Host     string
+		Host     []string
 		Group    string
 		Path     string
 		Upstream string
 	}
+	ServerRouterMetrics struct {
+		Host      []string
+		Group     string
+		BasicAuth *ServerBasicAuth
+	}
+	ServerRouterPprof struct {
+		Host      []string
+		Group     string
+		BasicAuth *ServerBasicAuth
+	}
 	ServerRouterRoute struct {
-		Host     string
-		Group    string
-		Method   string
-		Path     string
-		Handlers []api.Handler
+		Host      []string
+		Group     string
+		Method    []string
+		Path      string
+		BasicAuth *ServerBasicAuth
+		Handlers  []api.Handler
+	}
+	routeHandler struct {
+		Host      []string
+		BasicAuth *ServerBasicAuth
+		Handler   api.Handler
 	}
 
 	ServerRouterOptions struct {
-		HandlerTimeout              string
-		GracefulStopTimeout         string
-		handlerTimeoutDuration      time.Duration
-		gracefulStopTimeoutDuration time.Duration
-		TimeoutHandler              routing.Handler
-		Callbacks                   []RouterCallback
+		RequestTimeout         string
+		RequestTimeoutHandlers []routing.Handler
+		Callbacks              []RouterCallback
+		AccessLogFunc          access.LogWriterFunc
+		ErrorLogFunc           fault.LogFunc
+		ErrorHandler           fault.ConvertErrorFunc
+		RecoveryLogFunc        fault.LogFunc
+		RecoveryHandler        fault.ConvertErrorFunc
+		PanicHandler           fault.LogFunc
+		TypeNegotiator         []string
+		SlashRemover           *int
+		LanguageNegotiator     []string
+		Cors                   *cors.Options
+		RouteProviders         map[string]interface{}
 	}
 
 	ServerRouterOption func(*ServerRouterOptions)
 
 	ServerRouter struct {
 		*routing.Router
-		*ServerRouterOptions
+		Options     *ServerRouterOptions
 		Middlewares []MiddlewareInterface
+		Metrics     *ServerRouterMetrics
+		Pprof       *ServerRouterPprof
 		Proxys      []*ServerRouterProxy
 		Routes      []*ServerRouterRoute
 	}
@@ -97,86 +123,196 @@ func ServerPort(port uint) ServerOption {
 		options.Port = port
 	}
 }
+func ServerMetricsHttpServerRequestsDuration(histogram *prometheus.HistogramVec) ServerOption {
+	if histogram == nil {
+		histogram = defaultMetricsHttpServerRequestsDurationHistogram
+	}
+	return func(options *ServerOptions) {
+		options.MetricsHttpServerRequestsDurations = []prometheus.ObserverVec{histogram}
+	}
+}
+func ServerMetricsHttpServerRequestsResponseSize(histogram *prometheus.HistogramVec) ServerOption {
+	if histogram == nil {
+		histogram = defaultMetricsHttpServerRequestsResponseSizeHistogram
+	}
+	return func(options *ServerOptions) {
+		options.MetricsHttpServerRequestsResponseSizes = []prometheus.ObserverVec{histogram}
+	}
+}
+func ServerMetricsHttpServerRequestsRequestSize(histogram *prometheus.HistogramVec) ServerOption {
+	if histogram == nil {
+		histogram = defaultMetricsHttpServerRequestsRequestSizeHistogram
+	}
+	return func(options *ServerOptions) {
+		options.MetricsHttpServerRequestsRequestSizes = []prometheus.ObserverVec{histogram}
+	}
+}
+func ServerMetricsHttpServerRequestLabelFunc(httpServerRequestLabelFunc metrics.HttpServerRequestLabelFunc) ServerOption {
+	return func(options *ServerOptions) {
+		options.MetricsHttpServerRequestLabelFunc = httpServerRequestLabelFunc
+	}
+}
 func ServerLogWriter(logWriter io.Writer) ServerOption {
 	return func(options *ServerOptions) {
 		options.logWriter = logWriter
 	}
 }
+func ServerGracefulStopTimeout(gracefulStopTimeout string) ServerOption {
+	return func(options *ServerOptions) {
+		options.GracefulStopTimeout = gracefulStopTimeout
+	}
+}
+func ServerGracefulStopTimeoutDuration(gracefulStopTimeoutDuration time.Duration) ServerOption {
+	return func(options *ServerOptions) {
+		options.GracefulStopTimeoutDuration = gracefulStopTimeoutDuration
+	}
+}
+func ServerRouterRequestTimeoutHandlers(requestTimeoutHandlers []routing.Handler) ServerRouterOption {
+	return func(options *ServerRouterOptions) {
+		options.RequestTimeoutHandlers = requestTimeoutHandlers
+	}
+}
+func ServerRouterRequestTimeout(requestTimeout string) ServerRouterOption {
+	return func(options *ServerRouterOptions) {
+		options.RequestTimeout = requestTimeout
+	}
+}
+
 func ServerRouterCallback(callbacks []RouterCallback) ServerRouterOption {
 	return func(options *ServerRouterOptions) {
 		options.Callbacks = callbacks
 	}
 }
-func ServerRouterHandlerTimeout(handlerTimeout time.Duration) ServerRouterOption {
+func ServerRouterAccessLogFunc(accessLogFunc access.LogWriterFunc) ServerRouterOption {
 	return func(options *ServerRouterOptions) {
-		options.handlerTimeoutDuration = handlerTimeout
+		options.AccessLogFunc = accessLogFunc
 	}
 }
-func ServerRouterTimeoutHandler(timeoutHandler routing.Handler) ServerRouterOption {
+func ServerRouterErrorLogFunc(faultLogFunc fault.LogFunc) ServerRouterOption {
 	return func(options *ServerRouterOptions) {
-		options.TimeoutHandler = timeoutHandler
+		options.ErrorLogFunc = faultLogFunc
 	}
 }
-func ServerRouterGracefulStopTimeout(gracefulStopTimeout time.Duration) ServerRouterOption {
+func ServerRouterErrorHandler(errorHandler fault.ConvertErrorFunc) ServerRouterOption {
 	return func(options *ServerRouterOptions) {
-		options.gracefulStopTimeoutDuration = gracefulStopTimeout
+		options.ErrorHandler = errorHandler
 	}
 }
-func NewServerRouter(ctx context.Context, setters ...ServerRouterOption) (router *ServerRouter) {
-	serverRouterOptions := &ServerRouterOptions{
-		handlerTimeoutDuration:      defaultServerRouterHandlerTimeout,
-		gracefulStopTimeoutDuration: defaultServerRouterGracefulStopTimeout,
-		TimeoutHandler:              defaultTimeoutHandler,
+func ServerRouterPanicHandler(panicLogFunc fault.LogFunc) ServerRouterOption {
+	return func(options *ServerRouterOptions) {
+		options.PanicHandler = panicLogFunc
 	}
+}
+func ServerRouterRecoveryLogFunc(faultLogFunc fault.LogFunc) ServerRouterOption {
+	return func(options *ServerRouterOptions) {
+		options.RecoveryLogFunc = faultLogFunc
+	}
+}
+func ServerRouterRecoveryHandler(errorHandler fault.ConvertErrorFunc) ServerRouterOption {
+	return func(options *ServerRouterOptions) {
+		options.RecoveryHandler = errorHandler
+	}
+}
+func ServerRouterTypeNegotiator(typeNegotiator ...string) ServerRouterOption {
+	return func(options *ServerRouterOptions) {
+		options.TypeNegotiator = typeNegotiator
+	}
+}
+func ServerRouterSlashRemover(slashRemover *int) ServerRouterOption {
+	return func(options *ServerRouterOptions) {
+		options.SlashRemover = slashRemover
+	}
+}
+func ServerRouterLanguageNegotiator(languageNegotiator ...string) ServerRouterOption {
+	return func(options *ServerRouterOptions) {
+		options.LanguageNegotiator = languageNegotiator
+	}
+}
+func ServerRouterCors(cors *cors.Options) ServerRouterOption {
+	return func(options *ServerRouterOptions) {
+		if cors != nil {
+			options.Cors = cors
+		}
+	}
+}
+func ServerRouterRouteProviders(routeProviders map[string]interface{}) ServerRouterOption {
+	return func(options *ServerRouterOptions) {
+		options.RouteProviders = routeProviders
+	}
+}
+func (e *Engine) NewServerRouter(setters ...ServerRouterOption) (router *ServerRouter) {
+	serverRouterOptions := &ServerRouterOptions{}
 	for _, setter := range setters {
 		setter(serverRouterOptions)
 	}
 	router = &ServerRouter{
-		Router:              routing.New(ctx),
-		ServerRouterOptions: serverRouterOptions,
-		Routes:              make([]*ServerRouterRoute, 0),
-		Proxys:              make([]*ServerRouterProxy, 0),
+		Router:  routing.New(e.Context),
+		Options: serverRouterOptions,
+		Routes:  make([]*ServerRouterRoute, 0),
+		Proxys:  make([]*ServerRouterProxy, 0),
 	}
-	router.Resolve()
 	return
 }
 
 func (r *ServerRouter) Resolve() {
-	if r.ServerRouterOptions.HandlerTimeout != "" {
-		handlerTimeoutDuration, err := time.ParseDuration(r.ServerRouterOptions.HandlerTimeout)
+	if r.Options.RequestTimeout != "" {
+		handlerTimeoutDuration, err := time.ParseDuration(r.Options.RequestTimeout)
 		if err == nil {
-			r.ServerRouterOptions.handlerTimeoutDuration = handlerTimeoutDuration
+			r.TimeoutDuration = handlerTimeoutDuration
 		}
 	}
-	if r.ServerRouterOptions.GracefulStopTimeout != "" {
-		gracefulStopTimeoutDuration, err := time.ParseDuration(r.ServerRouterOptions.GracefulStopTimeout)
-		if err == nil {
-			r.ServerRouterOptions.gracefulStopTimeoutDuration = gracefulStopTimeoutDuration
-		}
-	}
-	r.Timeout(r.ServerRouterOptions.handlerTimeoutDuration, r.ServerRouterOptions.TimeoutHandler)
-	if r.ServerRouterOptions.Callbacks != nil {
-		for _, c := range r.ServerRouterOptions.Callbacks {
+	r.Timeout(r.TimeoutDuration, r.TimeoutHandlers...)
+	if r.Options.Callbacks != nil {
+		for _, c := range r.Options.Callbacks {
 			r.AddCallback(c)
 		}
 	}
-}
-func NewServer(router *ServerRouter, setters ...ServerOption) (server *Server) {
-	serverOptions := &ServerOptions{
-		logWriter: defaultServerLogWriter,
-		Port:      defaultServerPort,
+	if r.Options.AccessLogFunc != nil {
+		r.WithAccessLogger(r.Options.AccessLogFunc)
+	} else {
+		r.WithAccessLogger(DefaultAccessLogFunc)
 	}
-	for _, setter := range setters {
-		setter(serverOptions)
+	if r.Options.ErrorLogFunc != nil {
+		if r.Options.ErrorHandler != nil {
+			r.WithErrorHandler(r.Options.ErrorLogFunc, r.Options.ErrorHandler)
+		} else {
+			r.WithErrorHandler(r.Options.ErrorLogFunc)
+		}
+	} else if r.Options.ErrorHandler != nil {
+		r.WithErrorHandler(DefaultErrorLogFunc(), r.Options.ErrorHandler)
 	}
-	server = &Server{
-		ServerOptions: serverOptions,
-		Router:        router,
-		RouteGroups:   map[string]*ServerRouteGroup{},
-		mutex:         sync.RWMutex{},
+	if r.Options.PanicHandler != nil {
+		r.WithPanicHandler(r.Options.PanicHandler)
+	} else {
+		r.WithPanicHandler(DefaultErrorLogFunc())
 	}
-	server.Log(fmt.Sprintf("ltick: new server [serverOptions:'%v', serverRouterOptions:'%v', handlerTimeout:'%.fs']", server.ServerOptions, server.Router.ServerRouterOptions, router.TimeoutDuration.Seconds()))
-	return server
+	if r.Options.RecoveryLogFunc != nil {
+		if r.Options.RecoveryHandler != nil {
+			r.WithRecoveryHandler(r.Options.RecoveryLogFunc, r.Options.RecoveryHandler)
+		} else {
+			r.WithRecoveryHandler(r.Options.RecoveryLogFunc)
+		}
+	} else if r.Options.RecoveryHandler != nil {
+		r.WithRecoveryHandler(DefaultErrorLogFunc(), r.Options.RecoveryHandler)
+	}
+	if r.Options.TypeNegotiator != nil {
+		r.WithTypeNegotiator(r.Options.TypeNegotiator...)
+	} else {
+		r.WithTypeNegotiator(JSON, XML, XML2, HTML)
+	}
+	if r.Options.SlashRemover != nil {
+		r.WithSlashRemover(*r.Options.SlashRemover)
+	} else {
+		r.WithSlashRemover(http.StatusMovedPermanently)
+	}
+	if r.Options.LanguageNegotiator != nil {
+		r.WithLanguageNegotiator(r.Options.LanguageNegotiator...)
+	} else {
+		r.WithLanguageNegotiator("en-US")
+	}
+	if r.Options.Cors != nil {
+		r.WithCors(*r.Options.Cors)
+	}
 }
 
 func (sp *ServerRouterProxy) Proxy(c *routing.Context) (*url.URL, error) {
@@ -190,10 +326,18 @@ func (sp *ServerRouterProxy) Proxy(c *routing.Context) (*url.URL, error) {
 		if i == 0 || name == "" {
 			continue
 		}
-		if name != "group" {
+		if name != "group" && name != "path" && name != "fragment" && name != "query" {
 			captures[name] = c.Param(name)
 		}
 	}
+	captures["group"] = sp.Group
+	path := c.Request.URL.Path
+	if path == "" {
+		path = c.Request.URL.RawPath
+	}
+	captures["fragment"] = c.Request.URL.Fragment
+	captures["query"] = c.Request.URL.RawQuery
+	captures["path"] = strings.TrimLeft(path, sp.Group)
 	captures["group"] = sp.Group
 	if len(captures) != 0 {
 		upstream := sp.Upstream
@@ -210,23 +354,22 @@ func (sp *ServerRouterProxy) Proxy(c *routing.Context) (*url.URL, error) {
 	return nil, nil
 }
 
-func (e *Engine) SetServer(name string, server *Server) {
+func (e *Engine) RegisterServer(name string, server *Server) {
 	if e.ServerMap == nil {
 		e.ServerMap = make(map[string]*Server, 0)
 	}
 	if _, ok := e.ServerMap[name]; ok {
-		fmt.Printf(errNewServer+": server '%s' already exists\r\n", name)
+		fmt.Printf(errRegisterServer+": server '%s' already exists\r\n", name)
 		os.Exit(1)
 	}
 	e.ServerMap[name] = server
-}
-
-func (e *Engine) SetServerLogFunc(name string, accessLogFunc access.LogWriterFunc, faultLogFunc fault.LogFunc, recoveryHandler ...fault.ConvertErrorFunc) *Engine {
-	server := e.GetServer(name)
-	if server != nil {
-		server.SetLogFunc(accessLogFunc, faultLogFunc, recoveryHandler...)
+	// configure
+	err := e.ConfigureServerFromFile(server, e.GetConfigCachedFile(), server.Router.Options.RouteProviders, "servers."+name)
+	if err != nil {
+		err = errors.Annotate(err, errStartup)
+		e.Log(errors.ErrorStack(err))
+		os.Exit(1)
 	}
-	return e
 }
 
 func (e *Engine) SetServerReuqestSlashRemover(name string, status int) *Engine {
@@ -236,14 +379,10 @@ func (e *Engine) SetServerReuqestSlashRemover(name string, status int) *Engine {
 	}
 	return e
 }
-func (e *Engine) SetServerReuqestCors(name string, corsOptions cors.Options) *Engine {
+func (e *Engine) SetServerReuqestCors(name string, corsOptions *cors.Options) *Engine {
 	server := e.GetServer(name)
 	if server != nil {
-		if &corsOptions != nil {
-			server.Router.WithCors(corsOptions)
-		} else {
-			server.Router.WithCors(CorsAllowAll)
-		}
+		server.SetServerReuqestCors(corsOptions)
 	}
 	return e
 }
@@ -260,12 +399,17 @@ func (e *Engine) GetServerMap() map[string]*Server {
 }
 
 /********** Server **********/
-func (s *Server) GetGracefulStopTimeout() time.Duration {
-	return s.Router.gracefulStopTimeoutDuration
+func (s *Server) Resolve() {
+	if s.GracefulStopTimeout != "" {
+		gracefulStopTimeoutDuration, err := time.ParseDuration(s.GracefulStopTimeout)
+		if err == nil {
+			s.GracefulStopTimeoutDuration = gracefulStopTimeoutDuration
+		}
+	}
 }
-func (s *Server) Get(host string, group string, path string, handlers ...api.Handler) *Server {
+func (s *Server) Get(host []string, group string, path string, handlers ...api.Handler) *Server {
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method:   "GET",
+		Method:   []string{"GET"},
 		Host:     host,
 		Group:    group,
 		Path:     path,
@@ -273,9 +417,9 @@ func (s *Server) Get(host string, group string, path string, handlers ...api.Han
 	})
 	return s
 }
-func (s *Server) Post(host string, group string, path string, handlers ...api.Handler) *Server {
+func (s *Server) Post(host []string, group string, path string, handlers ...api.Handler) *Server {
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method:   "POST",
+		Method:   []string{"POST"},
 		Host:     host,
 		Group:    group,
 		Path:     path,
@@ -283,9 +427,9 @@ func (s *Server) Post(host string, group string, path string, handlers ...api.Ha
 	})
 	return s
 }
-func (s *Server) Put(host string, group string, path string, handlers ...api.Handler) *Server {
+func (s *Server) Put(host []string, group string, path string, handlers ...api.Handler) *Server {
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method:   "PUT",
+		Method:   []string{"PUT"},
 		Host:     host,
 		Group:    group,
 		Path:     path,
@@ -293,9 +437,9 @@ func (s *Server) Put(host string, group string, path string, handlers ...api.Han
 	})
 	return s
 }
-func (s *Server) Patch(host string, group string, path string, handlers ...api.Handler) *Server {
+func (s *Server) Patch(host []string, group string, path string, handlers ...api.Handler) *Server {
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method:   "PATCH",
+		Method:   []string{"PATCH"},
 		Host:     host,
 		Group:    group,
 		Path:     path,
@@ -303,9 +447,9 @@ func (s *Server) Patch(host string, group string, path string, handlers ...api.H
 	})
 	return s
 }
-func (s *Server) Delete(host string, group string, path string, handlers ...api.Handler) *Server {
+func (s *Server) Delete(host []string, group string, path string, handlers ...api.Handler) *Server {
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method:   "DELETE",
+		Method:   []string{"DELETE"},
 		Host:     host,
 		Group:    group,
 		Path:     path,
@@ -313,9 +457,9 @@ func (s *Server) Delete(host string, group string, path string, handlers ...api.
 	})
 	return s
 }
-func (s *Server) Connect(host string, group string, path string, handlers ...api.Handler) *Server {
+func (s *Server) Connect(host []string, group string, path string, handlers ...api.Handler) *Server {
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method:   "CONNECT",
+		Method:   []string{"CONNECT"},
 		Host:     host,
 		Group:    group,
 		Path:     path,
@@ -323,9 +467,9 @@ func (s *Server) Connect(host string, group string, path string, handlers ...api
 	})
 	return s
 }
-func (s *Server) Options(host string, group string, path string, handlers ...api.Handler) *Server {
+func (s *Server) Options(host []string, group string, path string, handlers ...api.Handler) *Server {
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method:   "OPTIONS",
+		Method:   []string{"OPTIONS"},
 		Host:     host,
 		Group:    group,
 		Path:     path,
@@ -333,9 +477,9 @@ func (s *Server) Options(host string, group string, path string, handlers ...api
 	})
 	return s
 }
-func (s *Server) Trace(host string, group string, path string, handlers ...api.Handler) *Server {
+func (s *Server) Trace(host []string, group string, path string, handlers ...api.Handler) *Server {
 	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method:   "TRACE",
+		Method:   []string{"TRACE"},
 		Host:     host,
 		Group:    group,
 		Path:     path,
@@ -343,7 +487,7 @@ func (s *Server) Trace(host string, group string, path string, handlers ...api.H
 	})
 	return s
 }
-func (s *Server) Proxy(host string, group string, path string, upstream string) *Server {
+func (s *Server) Proxy(host []string, group string, path string, upstream string) *Server {
 	s.Router.Proxys = append(s.Router.Proxys, &ServerRouterProxy{
 		Host:     host,
 		Group:    group,
@@ -352,109 +496,48 @@ func (s *Server) Proxy(host string, group string, path string, upstream string) 
 	})
 	return s
 }
-
-type prometheusHandler struct {
-	httpHandler http.Handler
-	basicAuth *ServerBasicAuth
-}
-
-func (h prometheusHandler) Serve(ctx *api.Context) error {
-	if h.basicAuth != nil {
-		ctx.Request.SetBasicAuth(h.basicAuth.username, h.basicAuth.password)
+func (s *Server) Pprof(host []string, group string, basicAuth *ServerBasicAuth) *Server {
+	s.Router.Pprof = &ServerRouterPprof{
+		Host:      host,
+		Group:     group,
+		BasicAuth: basicAuth,
 	}
-	h.httpHandler.ServeHTTP(ctx.ResponseWriter, ctx.Request)
-	return nil
+	return s
 }
-
-func (s *Server) Prometheus(host string, basicAuth *ServerBasicAuth) *Server {
-	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method: "ANY",
-		Host:   host,
-		Group:  "/",
-		Path:   "metrics",
-		Handlers: []api.Handler{
-			prometheusHandler{
-				httpHandler: promhttp.Handler(),
-				basicAuth:basicAuth,
-			},
-		},
-	})
+func (s *Server) Metrics(host []string, group string, basicAuth *ServerBasicAuth) *Server {
+	s.Router.Metrics = &ServerRouterMetrics{
+		Host:      host,
+		Group:     group,
+		BasicAuth: basicAuth,
+	}
 	return s
 }
 
+type metricsHandler struct {
+	basicAuth *ServerBasicAuth
+}
+
+func (h metricsHandler) Serve(ctx *api.Context) error {
+	if h.basicAuth != nil {
+		ctx.Request.SetBasicAuth(h.basicAuth.Username, h.basicAuth.Username)
+	}
+	promhttp.Handler().ServeHTTP(ctx.ResponseWriter, ctx.Request)
+	return nil
+}
 
 type pprofHandler struct {
 	httpHandlerFunc http.HandlerFunc
+	basicAuth       *ServerBasicAuth
 }
 
 func (h pprofHandler) Serve(ctx *api.Context) error {
+	if h.basicAuth != nil {
+		ctx.Request.SetBasicAuth(h.basicAuth.Username, h.basicAuth.Username)
+	}
 	h.httpHandlerFunc(ctx.ResponseWriter, ctx.Request)
 	return nil
 }
 
-func (s *Server) Pprof(host string, group string) *Server {
-	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method: "ANY",
-		Host:   host,
-		Group:  group,
-		Path:   "pprof",
-		Handlers: []api.Handler{
-			pprofHandler{
-				httpHandlerFunc: pprof.Index,
-			},
-		},
-	})
-	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method: "ANY",
-		Host:   host,
-		Group:  group,
-		Path:   "pprof/cmdline",
-		Handlers: []api.Handler{
-			pprofHandler{
-				httpHandlerFunc: pprof.Cmdline,
-			},
-		},
-	})
-	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method: "ANY",
-		Host:   host,
-		Group:  group,
-		Path:   "pprof/profile",
-		Handlers: []api.Handler{
-			pprofHandler{
-				httpHandlerFunc: pprof.Profile,
-			},
-		},
-	})
-	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method: "ANY",
-		Host:   host,
-		Group:  group,
-		Path:   "pprof/symbol",
-		Handlers: []api.Handler{
-			pprofHandler{
-				httpHandlerFunc: pprof.Symbol,
-			},
-		},
-	})
-	s.Router.Routes = append(s.Router.Routes, &ServerRouterRoute{
-		Method: "ANY",
-		Host:   host,
-		Group:  group,
-		Path:   "pprof/trace",
-		Handlers: []api.Handler{
-			pprofHandler{
-				httpHandlerFunc: pprof.Trace,
-			},
-		},
-	})
-	return s
-}
-func (s *Server) SetLogFunc(accessLogFunc access.LogWriterFunc, faultLogFunc fault.LogFunc, recoveryHandler ...fault.ConvertErrorFunc) *Server {
-	s.Router.WithAccessLogger(accessLogFunc).
-		WithRecoveryHandler(faultLogFunc, recoveryHandler...)
-	return s
-}
 func (s *Server) SetReuqestSlashRemover(status int) *Server {
 	switch status {
 	case http.StatusMovedPermanently, http.StatusFound:
@@ -462,9 +545,9 @@ func (s *Server) SetReuqestSlashRemover(status int) *Server {
 	}
 	return s
 }
-func (s *Server) SetServerReuqestCors(corsOptions cors.Options) *Server {
-	if &corsOptions != nil {
-		s.Router.WithCors(corsOptions)
+func (s *Server) SetServerReuqestCors(corsOptions *cors.Options) *Server {
+	if corsOptions != nil {
+		s.Router.WithCors(*corsOptions)
 	} else {
 		s.Router.WithCors(CorsAllowAll)
 	}
@@ -472,9 +555,7 @@ func (s *Server) SetServerReuqestCors(corsOptions cors.Options) *Server {
 }
 func (s *Server) AddRouteGroup(group string) *ServerRouteGroup {
 	// Router Handlers (Global)
-	startupHandlers := combineHandlers(s.Router.GetStartupHandlers(), s.Router.GetAnteriorHandlers())
-	shutdownHandlers := combineHandlers(s.Router.GetPosteriorHandlers(), s.Router.GetShutdownHandlers())
-	s.RouteGroups[group] = s.Router.AddRouteGroup(group, startupHandlers, shutdownHandlers)
+	s.RouteGroups[group] = s.Router.AddRouteGroup(group)
 	return s.RouteGroups[group]
 }
 func (s *Server) AddRoute(method string, path string, handlers ...routing.Handler) *Server {
@@ -582,7 +663,7 @@ func (r *ServerRouter) WithTypeNegotiator(formats ...string) *ServerRouter {
 	return r
 }
 
-func (r *ServerRouter) WithPanicLogger(logf fault.LogFunc) *ServerRouter {
+func (r *ServerRouter) WithPanicHandler(logf fault.LogFunc) *ServerRouter {
 	r.AppendStartupHandler(fault.PanicHandler(logf))
 	return r
 }
@@ -650,9 +731,9 @@ func (r *ServerRouter) NewFileHandler(pathMap file.PathMap, opts ...file.ServerO
 	return file.Server(pathMap, opts...)
 }
 
-func (r *ServerRouter) AddRouteGroup(groupName string, startupHandlers []routing.Handler, shutdownHandlers []routing.Handler) *ServerRouteGroup {
+func (r *ServerRouter) AddRouteGroup(groupName string) *ServerRouteGroup {
 	g := &ServerRouteGroup{
-		RouteGroup: r.Group(groupName, startupHandlers, shutdownHandlers),
+		RouteGroup: r.Group(groupName),
 	}
 	for _, m := range r.Middlewares {
 		g.AppendAnteriorHandler(m.OnRequestStartup)
@@ -671,26 +752,56 @@ func (g *ServerRouteGroup) AddCallback(callback RouterCallback) *ServerRouteGrou
 
 // 添加API路由
 // 可进行参数校验
-func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlers ...api.Handler) {
-	routeHandlers := make([]routing.Handler, len(handlers))
-	for index, handler := range handlers {
+func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes []*routeHandler) {
+	routeHandlers := make([]routing.Handler, len(handlerRoutes))
+	routeCnt := len(handlerRoutes)
+	for index, handlerRoute := range handlerRoutes {
+		route := handlerRoute
 		routeHandlers[index] = func(ctx *routing.Context) error {
-			apiCtx := &api.Context{
-				Context:  ctx,
-				Response: api.NewResponse(ctx.ResponseWriter),
+			requestHost := ctx.Request.Host
+			if requestHost == "" {
+				requestHost = ctx.Request.URL.Host
 			}
-			err := handler.Serve(apiCtx)
-			if err != nil {
-				ctx.Abort()
-				if httpError, ok := err.(routing.HTTPError); ok {
-					return routing.NewHTTPError(httpError.StatusCode(), httpError.Error())
+			var handlerErrorChannels map[string]chan error = make(map[string]chan error, 0)
+			for _, host := range route.Host {
+				if utility.WildcardMatch(host, requestHost) {
+					if _, ok := handlerErrorChannels[host]; !ok {
+						handlerErrorChannels[host] = make(chan error, 1)
+					} else {
+						return nil
+					}
+					// Jump After NotFoundHandler
+					ctx.Jump(routeCnt)
+					if route.BasicAuth != nil {
+						ctx.Request.SetBasicAuth(route.BasicAuth.Username, route.BasicAuth.Password)
+					}
+					apiCtx := &api.Context{
+						Context:  ctx,
+						Response: api.NewResponse(ctx.ResponseWriter),
+					}
+					go func(ctx *routing.Context, handlerErrorChan chan error) {
+						handlerErrorChan <- route.Handler.Serve(apiCtx)
+					}(ctx, handlerErrorChannels[host])
+					select {
+					case <-ctx.Context.Done():
+						ctx.Abort()
+						switch ctx.Context.Err() {
+						case context.DeadlineExceeded:
+							return routing.NewHTTPError(http.StatusRequestTimeout, http.StatusText(http.StatusRequestTimeout))
+						case context.Canceled:
+							return routing.NewHTTPError(http.StatusNoContent, http.StatusText(http.StatusNoContent))
+						}
+						return routing.NewHTTPError(http.StatusNoContent, http.StatusText(http.StatusNoContent))
+					case handlerError := <-handlerErrorChannels[host]:
+						return handlerError
+					}
 				}
-				return err
 			}
 			return nil
 		}
 	}
-
+	// TODO custom NotFoundHandler
+	routeHandlers = combineHandlers(routeHandlers, []routing.Handler{routing.NotFoundHandler})
 	g.AddRoute(method, path, routeHandlers...)
 }
 

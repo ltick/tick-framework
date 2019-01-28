@@ -38,7 +38,7 @@
 
 [[constraint]]
   branch = "master"
-  name = "github.com/go-ozzo/ozzo-config"
+  name = "github.com/ltick/ltick-config"
 
 [[constraint]]
   name = "github.com/go-sql-driver/mysql"

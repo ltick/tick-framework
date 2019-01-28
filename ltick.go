@@ -9,29 +9,37 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"net/http/pprof"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/juju/errors"
+	"github.com/ltick/tick-framework/api"
 	"github.com/ltick/tick-framework/config"
 	"github.com/ltick/tick-framework/logger"
+	"github.com/ltick/tick-framework/metrics"
 	"github.com/ltick/tick-framework/utility"
 	"github.com/ltick/tick-graceful"
 	libLog "github.com/ltick/tick-log"
 	"github.com/ltick/tick-routing"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var (
 	errNew                       = "ltick: new error"
+	errStartup                   = "ltick: startup error"
 	errEngineOption              = "ltick: set engine option error"
 	errEngineConfigOption        = "ltick: set engine config option error"
 	errNewDefault                = "ltick: new classic error"
 	errNewServer                 = "ltick: new server error"
+	errRegisterServer            = "ltick: register server error"
 	errGetLogger                 = "ltick: get logger error"
 	errConfigureServer           = "ltick: configure server error"
 	errStartupCallback           = "ltick: startup callback error"
@@ -69,7 +77,8 @@ type (
 		configFile string
 		dotenvFile string
 		envPrefix  string
-		configs    map[string]config.Option
+
+		configs map[string]config.Option
 	}
 
 	Engine struct {
@@ -77,11 +86,11 @@ type (
 		state       State
 		executeFile string
 
-		cachedConfigFileName string
-		configer             *config.Config
-		Registry             *Registry
-		Context              context.Context
-		ServerMap            map[string]*Server
+		cachedConfigFile string
+		configer         *config.Config
+		Registry         *Registry
+		Context          context.Context
+		ServerMap        map[string]*Server
 	}
 	Callback interface {
 		OnStartup(*Engine) error  // Execute On After All Engine Component OnStartup
@@ -90,18 +99,19 @@ type (
 )
 
 var defaultConfigs map[string]config.Option = map[string]config.Option{
-	"APP_ENV":     config.Option{Type: config.String, Default: "local", EnvironmentKey: "APP_ENV"},
-	"PREFIX_PATH": config.Option{Type: config.String, EnvironmentKey: "PREFIX_PATH"},
-	"TMP_PATH":    config.Option{Type: config.String, Default: "/tmp", EnvironmentKey: "TMP_PATH"},
-	"DEBUG":       config.Option{Type: config.String, Default: false},
+	"APP_ENV":             config.Option{Type: config.String, Default: "local", EnvironmentKey: "APP_ENV"},
+	"PREFIX_PATH":         config.Option{Type: config.String, EnvironmentKey: "PREFIX_PATH"},
+	"TMP_PATH":            config.Option{Type: config.String, Default: "/tmp", EnvironmentKey: "TMP_PATH"},
+	"DEBUG":               config.Option{Type: config.String, Default: false},
+	"CONFIG_CACHE_FOLDER": config.Option{Type: config.String, EnvironmentKey: "CONFIG_CACHE_FOLDER"},
 
-	"ACCESS_LOG_TYPE":                    config.Option{Type: config.String, Default: "console", EnvironmentKey: "ACCESS_LOG_TYPE"},
-	"ACCESS_LOG_FILE_NAME":               config.Option{Type: config.String, Default: "/tmp/access.log", EnvironmentKey: "ACCESS_LOG_FILE_NAME"},
-	"LTICK_ACCESS_LOG_FILE_ROTATE":       config.Option{Type: config.Bool, Default: "true", EnvironmentKey: "LTICK_ACCESS_LOG_FILE_ROTATE"},
-	"LTICK_ACCESS_LOG_FILE_BACKUP_COUNT": config.Option{Type: config.Int, Default: "-1", EnvironmentKey: "LTICK_ACCESS_LOG_FILE_BACKUP_COUNT"},
-	"ACCESS_LOG_WRITER":                  config.Option{Type: config.String, Default: "discard", EnvironmentKey: "ACCESS_LOG_WRITER"},
-	"ACCESS_LOG_MAX_LEVEL":               config.Option{Type: config.String, Default: log.LevelInfo, EnvironmentKey: "ACCESS_LOG_MAX_LEVEL"},
-	"ACCESS_LOG_FORMATTER":               config.Option{Type: config.String, Default: "raw", EnvironmentKey: "ACCESS_LOG_FORMATTER"},
+	"ACCESS_LOG_TYPE":              config.Option{Type: config.String, Default: "console", EnvironmentKey: "ACCESS_LOG_TYPE"},
+	"ACCESS_LOG_FILE_NAME":         config.Option{Type: config.String, Default: "/tmp/access.log", EnvironmentKey: "ACCESS_LOG_FILE_NAME"},
+	"ACCESS_LOG_FILE_ROTATE":       config.Option{Type: config.Bool, Default: "true", EnvironmentKey: "LTICK_ACCESS_LOG_FILE_ROTATE"},
+	"ACCESS_LOG_FILE_BACKUP_COUNT": config.Option{Type: config.Int, Default: "-1", EnvironmentKey: "LTICK_ACCESS_LOG_FILE_BACKUP_COUNT"},
+	"ACCESS_LOG_WRITER":            config.Option{Type: config.String, Default: "discard", EnvironmentKey: "ACCESS_LOG_WRITER"},
+	"ACCESS_LOG_MAX_LEVEL":         config.Option{Type: config.String, Default: log.LevelInfo, EnvironmentKey: "ACCESS_LOG_MAX_LEVEL"},
+	"ACCESS_LOG_FORMATTER":         config.Option{Type: config.String, Default: "raw", EnvironmentKey: "ACCESS_LOG_FORMATTER"},
 
 	"DEBUG_LOG_TYPE":      config.Option{Type: config.String, Default: "console", EnvironmentKey: "DEBUG_LOG_TYPE"},
 	"DEBUG_LOG_FILENAME":  config.Option{Type: config.String, Default: "/tmp/debug.log", EnvironmentKey: "DEBUG_LOG_FILENAME"},
@@ -115,8 +125,6 @@ var defaultConfigs map[string]config.Option = map[string]config.Option{
 	"SYSTEM_LOG_MAX_LEVEL": config.Option{Type: config.String, Default: log.LevelInfo, EnvironmentKey: "SYSTEM_LOG_MAX_LEVEL"},
 	"SYSTEM_LOG_FORMATTER": config.Option{Type: config.String, Default: "sys", EnvironmentKey: "SYSTEM_LOG_FORMATTER"},
 }
-
-var defaultlogWriter io.Writer = os.Stdout
 
 func EngineConfigFile(configFile string) EngineOption {
 	return func(options *EngineOptions) {
@@ -305,7 +313,10 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 	}
 	e.loadConfig(setters...)
 	for _, component := range e.Registry.GetComponentMap() {
-		e.ConfigureComponentFileConfig(component, e.configer.ConfigFileUsed(), make(map[string]interface{}))
+		err = e.ConfigureComponentFileConfig(component, e.configer.ConfigFileUsed(), make(map[string]interface{}))
+		if err != nil {
+			e.Log(err.Error())
+		}
 		// ignore error
 		/*if err != nil {
 			err = errors.Annotate(err, errNew)
@@ -334,7 +345,7 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 }
 
 func (e *Engine) ConfigureServerFromFile(s *Server, configFile string, providers map[string]interface{}, configTag string) error {
-	err := e.configer.ConfigureFileConfig(s, configFile, providers, "server")
+	err := e.configer.ConfigureFileConfig(s, configFile, providers, configTag)
 	if err != nil {
 		return errors.Annotate(err, errConfigureServer)
 	}
@@ -342,14 +353,14 @@ func (e *Engine) ConfigureServerFromFile(s *Server, configFile string, providers
 }
 
 func (e *Engine) ConfigureServerFromJson(s *Server, configJson []byte, providers map[string]interface{}, configTag string) error {
-	err := e.configer.ConfigureJsonConfig(s, configJson, providers, "server")
+	err := e.configer.ConfigureJsonConfig(s, configJson, providers, configTag)
 	if err != nil {
 		return errors.Annotate(err, errConfigureServer)
 	}
 	return nil
 }
 
-func (e *Engine) NewDefaultServer(setters ...ServerOption) *Server {
+func (e *Engine) NewServer(router *ServerRouter, setters ...ServerOption) *Server {
 	middlewares := make([]MiddlewareInterface, 0)
 	for _, sortedMiddleware := range e.Registry.GetSortedMiddlewares() {
 		middleware, ok := sortedMiddleware.Middleware.(MiddlewareInterface)
@@ -358,18 +369,22 @@ func (e *Engine) NewDefaultServer(setters ...ServerOption) *Server {
 		}
 		middlewares = append(middlewares, middleware)
 	}
-	var router *ServerRouter = NewServerRouter(e.Context)
-	router.WithAccessLogger(DefaultAccessLogFunc).
-		WithErrorHandler(DefaultErrorLogFunc(), DefaultErrorHandler).
-		WithPanicLogger(DefaultErrorLogFunc()).
-		WithTypeNegotiator(JSON, XML, XML2, HTML).
-		WithSlashRemover(http.StatusMovedPermanently).
-		WithLanguageNegotiator("zh-CN", "en-US").
-		WithCors(CorsAllowAll).
-		WithMiddlewares(middlewares)
 	setters = append(setters, ServerLogWriter(e.logWriter))
-	server := NewServer(router, setters...)
-	server.AddRouteGroup("/")
+	serverOptions := &ServerOptions{
+		logWriter: defaultServerLogWriter,
+		Port:      defaultServerPort,
+		GracefulStopTimeoutDuration: defaultServerGracefulStopTimeoutDuration,
+	}
+	for _, setter := range setters {
+		setter(serverOptions)
+	}
+	router.WithMiddlewares(middlewares)
+	server := &Server{
+		ServerOptions: serverOptions,
+		Router:        router,
+		RouteGroups:   make(map[string]*ServerRouteGroup),
+		mutex:         sync.RWMutex{},
+	}
 	return server
 }
 
@@ -390,31 +405,31 @@ func (e *Engine) loadConfig(setters ...EngineOption) *Engine {
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
+	// 读取环境变量
 	if !path.IsAbs(e.EngineOptions.EngineConfigOptions.dotenvFile) {
 		err = errors.Annotate(fmt.Errorf("ltick: '%s' is not a valid dotenv path", e.EngineOptions.EngineConfigOptions.dotenvFile), errNew)
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
-	fileExtension := filepath.Ext(e.EngineOptions.EngineConfigOptions.configFile)
-	configCacheFileName := strings.Replace(e.EngineOptions.EngineConfigOptions.configFile, fileExtension, "", -1) + ".cached" + fileExtension
-	configCachedFile, err := e.openCacheConfigFile(configCacheFileName)
-	if err != nil {
-		err = errors.Annotate(err, errLoadSystemConfig)
-		e.Log(errors.ErrorStack(err))
-		os.Exit(1)
-	}
-	defer configCachedFile.Close()
-	e.cachedConfigFileName = configCachedFile.Name()
 	if e.EngineOptions.EngineConfigOptions.dotenvFile != "" {
 		e.LoadEnvFile(e.EngineOptions.EngineConfigOptions.envPrefix, e.EngineOptions.EngineConfigOptions.dotenvFile)
 	} else {
 		e.LoadEnv(e.EngineOptions.EngineConfigOptions.envPrefix)
 	}
-	e.loadCachedFileConfig(e.EngineOptions.EngineConfigOptions.configFile, e.cachedConfigFileName)
+	// 生成配置缓存文件
+	fileExtension := filepath.Ext(e.EngineOptions.EngineConfigOptions.configFile)
+	configCacheFile := strings.Replace(e.EngineOptions.EngineConfigOptions.configFile, fileExtension, "", -1) + ".cached" + fileExtension
+	configCacheFolder := e.configer.GetString("CONFIG_CACHE_FOLDER")
+	if configCacheFolder != "" {
+		configCacheFile = strings.Replace(configCacheFile, filepath.Dir(configCacheFile), configCacheFolder, -1)
+	}
+	e.cachedConfigFile = configCacheFile
+	// 读取配置缓存文件
+	e.loadCachedFileConfig(e.EngineOptions.EngineConfigOptions.configFile, e.cachedConfigFile)
 	go func() {
 		// 刷新缓存
 		for {
-			cachedConfigFileInfo, err := os.Stat(e.cachedConfigFileName)
+			cachedConfigFileInfo, err := os.Stat(e.cachedConfigFile)
 			if err != nil {
 				err = errors.Annotate(err, errLoadSystemConfig)
 				e.Log(errors.ErrorStack(err))
@@ -429,7 +444,7 @@ func (e *Engine) loadConfig(setters ...EngineOption) *Engine {
 				}
 				if cachedConfigFileInfo.ModTime().Before(dotenvFileInfo.ModTime()) {
 					e.LoadEnvFile(e.EngineOptions.EngineConfigOptions.envPrefix, e.EngineOptions.EngineConfigOptions.dotenvFile)
-					e.loadCachedFileConfig(e.EngineOptions.EngineConfigOptions.configFile, e.cachedConfigFileName)
+					e.loadCachedFileConfig(e.EngineOptions.EngineConfigOptions.configFile, e.cachedConfigFile)
 				}
 			}
 			configFileInfo, err := os.Stat(e.EngineOptions.EngineConfigOptions.configFile)
@@ -439,7 +454,7 @@ func (e *Engine) loadConfig(setters ...EngineOption) *Engine {
 				return
 			}
 			if cachedConfigFileInfo.ModTime().Before(configFileInfo.ModTime()) {
-				e.loadCachedFileConfig(e.EngineOptions.EngineConfigOptions.configFile, e.cachedConfigFileName)
+				e.loadCachedFileConfig(e.EngineOptions.EngineConfigOptions.configFile, e.cachedConfigFile)
 			}
 			time.Sleep(defaultConfigReloadTime)
 		}
@@ -447,27 +462,7 @@ func (e *Engine) loadConfig(setters ...EngineOption) *Engine {
 	return e
 }
 
-func (e *Engine) openCacheConfigFile(cacheFile string) (file *os.File, err error) {
-	_, err = os.Stat(cacheFile)
-	if err != nil {
-		if os.IsNotExist(err) {
-			file, err = utility.NewFile(cacheFile, 0644, bytes.NewReader([]byte{}), 0)
-			if err != nil {
-				return nil, errors.New(errGetCacheFile + ": " + err.Error())
-			}
-		} else {
-			return nil, errors.New(errGetCacheFile + ": " + err.Error())
-		}
-	} else {
-		file, err = os.OpenFile(cacheFile, os.O_RDWR, 0644)
-		if err != nil {
-			return nil, errors.New(errGetCacheFile + ": " + err.Error())
-		}
-	}
-	return file, err
-}
-
-func (e *Engine) loadCachedFileConfig(configPath string, cachedConfigFileName string) {
+func (e *Engine) loadCachedFileConfig(configPath string, cachedConfigFile string) {
 	configFile, err := os.OpenFile(configPath, os.O_RDONLY, 0644)
 	if err != nil {
 		err = errors.Annotate(err, errLoadCachedConfig)
@@ -487,28 +482,33 @@ func (e *Engine) loadCachedFileConfig(configPath string, cachedConfigFileName st
 		replaceConfigKey := strings.Trim(replaceKey, "%")
 		cachedFileByte = bytes.Replace(cachedFileByte, []byte(replaceKey), []byte(e.configer.GetString(replaceConfigKey)), -1)
 	}
-	err = ioutil.WriteFile(cachedConfigFileName, cachedFileByte, 0644)
+	err = ioutil.WriteFile(cachedConfigFile, cachedFileByte, 0644)
 	if err != nil {
 		err = errors.Annotate(err, errLoadCachedConfig)
 		e.Log(errors.ErrorStack(err))
 		return
 	}
-	e.loadFileConfig(filepath.Dir(cachedConfigFileName), strings.Replace(filepath.Base(cachedConfigFileName), filepath.Ext(cachedConfigFileName), "", 1))
+	e.loadFileConfig(filepath.Dir(cachedConfigFile), strings.Replace(filepath.Base(cachedConfigFile), filepath.Ext(cachedConfigFile), "", 1))
 }
 func (e *Engine) loadFileConfig(configPath string, configName string) *Engine {
 	var err error
 	if configPath == "" || configName == "" {
-		err = errors.Annotatef(errors.Errorf("configPath or configName is empty"), errLoadConfig, configPath, configPath)
+		err = errors.Annotatef(errors.Errorf("configPath or configName is empty"), errLoadConfig, configPath, configName)
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
 	if !strings.HasPrefix(configPath, "/") {
-		configPath = strings.TrimRight(configPath, "/") + "/" + configPath
+		configPath, err = filepath.Abs(configPath)
+		if err != nil {
+			err := errors.Annotatef(err, errLoadConfig, configPath, configName)
+			e.Log(errors.ErrorStack(err))
+			os.Exit(1)
+		}
 	}
 	_, err = os.Stat(configPath)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			err := errors.Annotatef(err, errLoadConfig, configPath, configPath)
+			err := errors.Annotatef(err, errLoadConfig, configPath, configName)
 			e.Log(errors.ErrorStack(err))
 			os.Exit(1)
 		}
@@ -517,7 +517,7 @@ func (e *Engine) loadFileConfig(configPath string, configName string) *Engine {
 	e.configer.AddConfigPath(configPath)
 	err = e.configer.LoadFromConfigPath(configName)
 	if err != nil {
-		err := errors.Annotatef(err, errLoadConfig, configPath, configPath)
+		err := errors.Annotatef(err, errLoadConfig, configPath, configName)
 		e.Log(errors.ErrorStack(err))
 		os.Exit(1)
 	}
@@ -554,8 +554,8 @@ func (e *Engine) WithCallback(callback Callback) *Engine {
 	}
 	return e
 }
-func (e *Engine) GetConfigCachedFileName() string {
-	return e.cachedConfigFileName
+func (e *Engine) GetConfigCachedFile() string {
+	return e.cachedConfigFile
 }
 
 func (e *Engine) GetLogger(name string) (*libLog.Logger, error) {
@@ -589,13 +589,13 @@ func (e *Engine) Startup() (err error) {
 	for _, m := range e.Registry.GetMiddlewareMap() {
 		mi, ok := m.Middleware.(MiddlewareInterface)
 		if !ok {
-			err = errors.Annotate(errors.Errorf("invalid type"), errNew)
+			err = errors.Annotate(errors.Errorf("invalid type"), errStartup)
 			e.Log(errors.ErrorStack(err))
 			os.Exit(1)
 		}
 		e.Context, err = mi.Initiate(e.Context)
 		if err != nil {
-			err = errors.Annotate(err, errNew)
+			err = errors.Annotate(err, errStartup)
 			e.Log(errors.ErrorStack(err))
 			os.Exit(1)
 		}
@@ -603,54 +603,182 @@ func (e *Engine) Startup() (err error) {
 	if e.EngineOptions.callback != nil {
 		err = e.Registry.InjectComponentTo([]interface{}{e.EngineOptions.callback})
 		if err != nil {
-			return errors.Annotatef(err, errStartupCallback)
+			err = errors.Annotate(err, errStartup)
+			e.Log(errors.ErrorStack(err))
+			os.Exit(1)
 		}
 		err = e.EngineOptions.callback.OnStartup(e)
 		if err != nil {
-			return errors.Annotatef(err, errStartupCallback)
+			err = errors.Annotate(err, errStartup)
+			e.Log(errors.ErrorStack(err))
+			os.Exit(1)
 		}
 	}
 	if e.ServerMap != nil {
 		for _, server := range e.ServerMap {
-			if server.Router.Routes != nil && len(server.Router.Routes) > 0 {
-				for _, route := range server.Router.Routes {
-					if _, ok := server.RouteGroups[route.Group]; !ok {
-						server.RouteGroups[route.Group] = server.AddRouteGroup(route.Group)
-					}
-					server.RouteGroups[route.Group].AddApiRoute(route.Method, route.Path, route.Handlers...)
-				}
+			server.Resolve()
+			if server.Router == nil {
+				continue
 			}
+			server.Router.Resolve()
 			// proxy
+			proxyHandlers := make([]routing.Handler, 0)
 			if server.Router.Proxys != nil && len(server.Router.Proxys) > 0 {
 				for _, proxy := range server.Router.Proxys {
-					if _, ok := server.RouteGroups[proxy.Group]; !ok {
-						server.RouteGroups[proxy.Group] = server.AddRouteGroup(proxy.Group)
-					}
-					server.RouteGroups[proxy.Group].AddRoute("ANY", proxy.Path, func(c *routing.Context) error {
-						upstreamURL, err := proxy.Proxy(c)
-						e.Log(upstreamURL)
-						e.Log(err)
-						if err != nil {
-							return routing.NewHTTPError(http.StatusInternalServerError, err.Error())
-						}
-						if upstreamURL != nil {
-							e.Log("===")
-							e.Log(upstreamURL)
-							director := func(req *http.Request) {
-								req = c.Request
-								req.URL.Scheme = upstreamURL.Scheme
-								req.URL.Host = upstreamURL.Host
-								req.RequestURI = upstreamURL.RequestURI()
+					if proxy != nil {
+						proxyHandler := func(c *routing.Context) error {
+							requestHost := c.Request.Host
+							if requestHost == "" {
+								requestHost = c.Request.URL.Host
 							}
-							proxy := &httputil.ReverseProxy{Director: director}
-							proxy.ServeHTTP(c.ResponseWriter, c.Request)
-							c.Abort()
+							for _, host := range proxy.Host {
+								if utility.WildcardMatch(host, requestHost) {
+									upstreamURL, err := proxy.Proxy(c)
+									if err != nil {
+										return routing.NewHTTPError(http.StatusInternalServerError, err.Error())
+									}
+									if upstreamURL != nil {
+										director := func(req *http.Request) {
+											req.URL.Scheme = upstreamURL.Scheme
+											req.URL.Host = upstreamURL.Host
+											req.Host = upstreamURL.Host
+											req.RequestURI = upstreamURL.RequestURI()
+										}
+										proxy := &httputil.ReverseProxy{Director: director}
+										proxy.ServeHTTP(c.ResponseWriter, c.Request)
+										c.Abort()
+									}
+								}
+							}
+							return nil
 						}
-						return nil
-					})
+						proxyHandlers = append(proxyHandlers, proxyHandler)
+					}
 				}
 			}
+			if server.Router.Metrics != nil {
+				server.Router.Routes = append([]*ServerRouterRoute{&ServerRouterRoute{
+					Method: []string{"GET"},
+					Host:   server.Router.Metrics.Host,
+					Group:  server.Router.Metrics.Group,
+					Path:   "",
+					Handlers: []api.Handler{
+						metricsHandler{
+							basicAuth: server.Router.Metrics.BasicAuth,
+						},
+					},
+				}}, server.Router.Routes...)
+			}
+			if server.Router.Pprof != nil {
+				server.Router.Routes = append([]*ServerRouterRoute{&ServerRouterRoute{
+					Method: []string{"ANY"},
+					Host:   server.Router.Pprof.Host,
+					Group:  server.Router.Pprof.Group,
+					Path:   "",
+					Handlers: []api.Handler{
+						pprofHandler{
+							httpHandlerFunc: pprof.Index,
+							basicAuth:       server.Router.Pprof.BasicAuth,
+						},
+					},
+				}, &ServerRouterRoute{
+					Method: []string{"ANY"},
+					Host:   server.Router.Pprof.Host,
+					Group:  server.Router.Pprof.Group,
+					Path:   "/cmdline",
+					Handlers: []api.Handler{
+						pprofHandler{
+							httpHandlerFunc: pprof.Cmdline,
+							basicAuth:       server.Router.Pprof.BasicAuth,
+						},
+					},
+				}, &ServerRouterRoute{
+					Method: []string{"ANY"},
+					Host:   server.Router.Pprof.Host,
+					Group:  server.Router.Pprof.Group,
+					Path:   "/profile",
+					Handlers: []api.Handler{
+						pprofHandler{
+							httpHandlerFunc: pprof.Profile,
+							basicAuth:       server.Router.Pprof.BasicAuth,
+						},
+					},
+				}, &ServerRouterRoute{
+					Method: []string{"ANY"},
+					Host:   server.Router.Pprof.Host,
+					Group:  server.Router.Pprof.Group,
+					Path:   "/symbol",
+					Handlers: []api.Handler{
+						pprofHandler{
+							httpHandlerFunc: pprof.Symbol,
+							basicAuth:       server.Router.Pprof.BasicAuth,
+						},
+					},
+				}, &ServerRouterRoute{
+					Method: []string{"ANY"},
+					Host:   server.Router.Pprof.Host,
+					Group:  server.Router.Pprof.Group,
+					Path:   "/trace",
+					Handlers: []api.Handler{
+						pprofHandler{
+							httpHandlerFunc: pprof.Trace,
+							basicAuth:       server.Router.Pprof.BasicAuth,
+						},
+					},
+				}}, server.Router.Routes...)
+			}
+			sortedRouteHandlers := []string{}
+			routeHandlerMap := make(map[string][]*routeHandler)
+			if server.Router.Routes != nil && len(server.Router.Routes) > 0 {
+				for _, route := range server.Router.Routes {
+					if route == nil {
+						return errors.Annotatef(errors.New("ltick: route does not exists"), errStartup)
+					}
+					if _, ok := server.RouteGroups[route.Group]; !ok {
+						server.RouteGroups[route.Group] = server.AddRouteGroup(route.Group)
+					} else if server.RouteGroups[route.Group] == nil {
+						server.RouteGroups[route.Group] = server.AddRouteGroup(route.Group)
+					}
+					for index, method := range route.Method {
+						routeId := route.Group + "|" + method + "|" + route.Path
+						if _, ok := routeHandlerMap[routeId]; !ok {
+							sortedRouteHandlers = append(sortedRouteHandlers, routeId)
+							if route.Handlers[index] != nil {
+								routeHandlerMap[routeId] = []*routeHandler{
+									&routeHandler{
+										Handler: route.Handlers[index],
+										Host:    route.Host,
+									},
+								}
+							}
+						} else {
+							if route.Handlers[index] != nil {
+								routeHandlerMap[routeId] = append(routeHandlerMap[routeId], &routeHandler{
+									Handler: route.Handlers[index],
+									Host:    route.Host,
+								})
+							}
+						}
+					}
+				}
+			}
+			for _, routeId := range sortedRouteHandlers {
+				if routeHandlers, ok := routeHandlerMap[routeId]; ok {
+					routeIds := strings.SplitN(routeId, "|", 3)
+					routeGroup := routeIds[0]
+					routeMethod := routeIds[1]
+					routePath := routeIds[2]
+					server.RouteGroups[routeGroup].PrependAnteriorHandler(proxyHandlers...)
+					server.RouteGroups[routeGroup].AddApiRoute(routeMethod, routePath, routeHandlers)
+				}
+			}
+			e.Log(fmt.Sprintf("ltick: new server [serverOptions:'%+v', serverRouterOptions:'%+v', handlerTimeout:'%.fs']", server.ServerOptions, server.Router.Options, server.Router.TimeoutDuration.Seconds()))
 		}
+	}
+	// 注入模块
+	err = e.Registry.InjectComponent()
+	if err != nil {
+		return errors.Annotatef(err, errStartupInjectComponent)
 	}
 	sortedComponenetName := e.Registry.GetSortedComponentName()
 	sortedComponents := e.Registry.GetSortedComponents()
@@ -681,11 +809,6 @@ func (e *Engine) Startup() (err error) {
 				return errors.Annotatef(err, errStartupComponentStartup, sortedComponenetName[index])
 			}
 		}
-	}
-	// 注入模块
-	err = e.Registry.InjectComponent()
-	if err != nil {
-		return errors.Annotatef(err, errStartupInjectComponent)
 	}
 	e.state = STATE_STARTUP
 	return nil
@@ -724,12 +847,12 @@ func (e *Engine) ListenAndServe() {
 	// server
 	if e.ServerMap != nil {
 		serverCount := len(e.ServerMap)
-		for _, server := range e.ServerMap {
+		for name, server := range e.ServerMap {
 			serverCount--
 			if serverCount == 0 {
-				e.ServerListenAndServe(server)
+				e.ServerListenAndServe(name, server)
 			} else {
-				go e.ServerListenAndServe(server)
+				go e.ServerListenAndServe(name, server)
 			}
 		}
 	} else {
@@ -737,13 +860,36 @@ func (e *Engine) ListenAndServe() {
 	}
 }
 
-func (e *Engine) ServerListenAndServe(server *Server) {
+func (e *Engine) ServerListenAndServe(name string, server *Server) {
 	e.Log("ltick: Server start listen ", server.Port, "...")
+	var handler http.Handler = server.Router
+	if server.MetricsHttpServerRequestsDurations != nil {
+		if server.MetricsHttpServerRequestLabelFunc != nil {
+			handler = metrics.InstrumentHttpServerRequestsDuration(server.MetricsHttpServerRequestsDurations, handler, server.MetricsHttpServerRequestLabelFunc)
+		} else {
+			handler = metrics.InstrumentHttpServerRequestsDuration(server.MetricsHttpServerRequestsDurations, handler)
+		}
+	}
+	if server.MetricsHttpServerRequestsResponseSizes != nil {
+		if server.MetricsHttpServerRequestLabelFunc != nil {
+			handler = metrics.InstrumentHttpServerRequestsResponseSize(server.MetricsHttpServerRequestsResponseSizes, handler, server.MetricsHttpServerRequestLabelFunc)
+		} else {
+			handler = metrics.InstrumentHttpServerRequestsResponseSize(server.MetricsHttpServerRequestsResponseSizes, handler)
+		}
+	}
+	if server.MetricsHttpServerRequestsRequestSizes != nil {
+		if server.MetricsHttpServerRequestLabelFunc != nil {
+			handler = metrics.InstrumentHttpServerRequestsRequestSize(server.MetricsHttpServerRequestsRequestSizes, handler, server.MetricsHttpServerRequestLabelFunc)
+		} else {
+			handler = metrics.InstrumentHttpServerRequestsRequestSize(server.MetricsHttpServerRequestsRequestSizes, handler)
+		}
+	}
+	handler = promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handler)
 	g := graceful.New().Server(
 		&http.Server{
 			Addr:    fmt.Sprintf(":%d", server.Port),
-			Handler: server.Router,
-		}).Timeout(server.GetGracefulStopTimeout()).Build()
+			Handler: handler,
+		}).Timeout(server.GracefulStopTimeoutDuration).Build()
 	if err := g.ListenAndServe(); err != nil {
 		if opErr, ok := err.(*net.OpError); !ok || (ok && opErr.Op != "accept") {
 			e.Log("ltick: Server stop error: ", err.Error())

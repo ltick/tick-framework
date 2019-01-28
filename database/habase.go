@@ -22,7 +22,7 @@ var (
 	errHbaseAppend            = "database(hbase): append error"
 	errHbaseIncrement         = "database(hbase): increment error"
 	errHbaseCheckAndPut       = "database(hbase): check and put error"
-	errHbaseGetConnection     = "database(hbase): get connection error"
+	errHbaseGetHandler     = "database(hbase): get handler error"
 	errHbaseDatabaseNotExists = "database(hbase): database not exists"
 )
 
@@ -32,7 +32,7 @@ const (
 )
 
 type HbaseHandler struct {
-	// connection
+	// handler
 	databases map[string]*HbaseDatabaseHandler
 }
 type HbaseDatabaseHandler struct {
@@ -65,7 +65,7 @@ func (this *HbaseHandler) Initiate(ctx context.Context) error {
 	return nil
 }
 
-func (this *HbaseHandler) NewConnection(name string, config map[string]interface{}) (NosqlDatabaseHandler, error) {
+func (this *HbaseHandler) NewHandler(name string, config map[string]interface{}) (NosqlDatabaseHandler, error) {
 	db := &HbaseDatabaseHandler{}
 	db.MaxActive = DEFAULT_MAX_ACTIVE
 	db.Timeout = DEFAULT_TIMEOUT
@@ -123,7 +123,7 @@ func (this *HbaseHandler) NewConnection(name string, config map[string]interface
 }
 
 // 从连接池里取出连接
-func (this *HbaseHandler) GetConnection(name string) (NosqlDatabaseHandler, error) {
+func (this *HbaseHandler) GetHandler(name string) (NosqlDatabaseHandler, error) {
 	handlerDatabase, ok := this.databases[name]
 	if !ok {
 		return nil, errors.New(fmt.Sprintf(errHbaseDatabaseNotExists, name))
@@ -146,11 +146,11 @@ func (this *HbaseDatabaseScanner) Close() error {
 	return nil
 }
 
-func (this *HbaseDatabaseHandler) GetConnection() (client interface{}, err error) {
+func (this *HbaseDatabaseHandler) GetHandler() (client interface{}, err error) {
 	if len(this.Client) == 0 {
 		newClient := gohbase.NewClient(this.Host)
 		if newClient == nil {
-			return nil, errors.New(errHbaseGetConnection + ": new client error")
+			return nil, errors.New(errHbaseGetHandler + ": new client error")
 		}
 		this.Client <- newClient
 	}
@@ -159,7 +159,7 @@ func (this *HbaseDatabaseHandler) GetConnection() (client interface{}, err error
 }
 
 // 回收连接到连接池
-func (this *HbaseDatabaseHandler) ReleaseConnection(client interface{}) {
+func (this *HbaseDatabaseHandler) ReleaseHandler(client interface{}) {
 	hbaseClient, ok := client.(gohbase.Client)
 	if ok {
 		if len(this.Client) == this.MaxActive {
@@ -170,12 +170,12 @@ func (this *HbaseDatabaseHandler) ReleaseConnection(client interface{}) {
 	}
 }
 
-func (this *HbaseDatabaseHandler) GetConnectionPoolSize() int {
+func (this *HbaseDatabaseHandler) GetHandlerPoolSize() int {
 	return len(this.Client)
 }
 
 func (this *HbaseDatabaseHandler) Scan(ctx context.Context, table string) (NosqlDatabaseScanner, error) {
-	client, err := this.GetConnection()
+	client, err := this.GetHandler()
 	if err != nil {
 		return nil, errors.New(errHbaseScan + ": " + err.Error())
 	}
@@ -184,7 +184,7 @@ func (this *HbaseDatabaseHandler) Scan(ctx context.Context, table string) (Nosql
 		return nil, errors.New(errHbaseScan + ": invalid client type")
 	}
 	// 使用完把连接回收到连接池里
-	defer this.ReleaseConnection(hbaseClient)
+	defer this.ReleaseHandler(hbaseClient)
 	scanRequest, err := hrpc.NewScanStr(ctx, table)
 	if err != nil {
 		return nil, errors.New(errHbaseScan + ": " + err.Error())
@@ -193,7 +193,7 @@ func (this *HbaseDatabaseHandler) Scan(ctx context.Context, table string) (Nosql
 	return scanner, nil
 }
 func (this *HbaseDatabaseHandler) Get(ctx context.Context, table string, key string) ([]map[string]string, error) {
-	client, err := this.GetConnection()
+	client, err := this.GetHandler()
 	if err != nil {
 		return nil, errors.New(errHbaseScan + ": " + err.Error())
 	}
@@ -202,7 +202,7 @@ func (this *HbaseDatabaseHandler) Get(ctx context.Context, table string, key str
 		return nil, errors.New(errHbaseScan + ": invalid client type")
 	}
 	// 使用完把连接回收到连接池里
-	defer this.ReleaseConnection(hbaseClient)
+	defer this.ReleaseHandler(hbaseClient)
 	getRequest, err := hrpc.NewGetStr(ctx, table, key)
 	if err != nil {
 		return nil, errors.New(errHbaseGet + ": " + err.Error())
@@ -223,7 +223,7 @@ func (this *HbaseDatabaseHandler) Get(ctx context.Context, table string, key str
 	return cells, nil
 }
 func (this *HbaseDatabaseHandler) Put(ctx context.Context, table string, key string, values map[string]map[string][]byte) (err error) {
-	client, err := this.GetConnection()
+	client, err := this.GetHandler()
 	if err != nil {
 		return errors.New(errHbaseScan + ": " + err.Error())
 	}
@@ -232,7 +232,7 @@ func (this *HbaseDatabaseHandler) Put(ctx context.Context, table string, key str
 		return errors.New(errHbaseScan + ": invalid client type")
 	}
 	// 使用完把连接回收到连接池里
-	defer this.ReleaseConnection(hbaseClient)
+	defer this.ReleaseHandler(hbaseClient)
 	// Values maps a ColumnFamily -> Qualifiers -> Values.
 	putRequest, err := hrpc.NewPutStr(ctx, table, key, values)
 	if err != nil {
@@ -245,7 +245,7 @@ func (this *HbaseDatabaseHandler) Put(ctx context.Context, table string, key str
 	return nil
 }
 func (this *HbaseDatabaseHandler) Delete(ctx context.Context, table string, key string, values map[string]map[string][]byte) (err error) {
-	client, err := this.GetConnection()
+	client, err := this.GetHandler()
 	if err != nil {
 		return errors.New(errHbaseScan + ": " + err.Error())
 	}
@@ -254,7 +254,7 @@ func (this *HbaseDatabaseHandler) Delete(ctx context.Context, table string, key 
 		return errors.New(errHbaseScan + ": invalid client type")
 	}
 	// 使用完把连接回收到连接池里
-	defer this.ReleaseConnection(client)
+	defer this.ReleaseHandler(client)
 	deleteRequest, err := hrpc.NewDelStr(ctx, table, key, values)
 	if err != nil {
 		return errors.New(errHbaseDelete + ": " + err.Error())
@@ -266,7 +266,7 @@ func (this *HbaseDatabaseHandler) Delete(ctx context.Context, table string, key 
 	return nil
 }
 func (this *HbaseDatabaseHandler) Append(ctx context.Context, table string, key string, values map[string]map[string][]byte) error {
-	client, err := this.GetConnection()
+	client, err := this.GetHandler()
 	if err != nil {
 		return errors.New(errHbaseScan + ": " + err.Error())
 	}
@@ -275,7 +275,7 @@ func (this *HbaseDatabaseHandler) Append(ctx context.Context, table string, key 
 		return errors.New(errHbaseScan + ": invalid client type")
 	}
 	// 使用完把连接回收到连接池里
-	defer this.ReleaseConnection(client)
+	defer this.ReleaseHandler(client)
 	appendRequest, err := hrpc.NewAppStr(ctx, table, key, values)
 	if err != nil {
 		return errors.New(errHbaseAppend + ": " + err.Error())
@@ -287,7 +287,7 @@ func (this *HbaseDatabaseHandler) Append(ctx context.Context, table string, key 
 	return nil
 }
 func (this *HbaseDatabaseHandler) Increment(ctx context.Context, table string, key string, values map[string]map[string][]byte) (int64, error) {
-	client, err := this.GetConnection()
+	client, err := this.GetHandler()
 	if err != nil {
 		return 0, errors.New(errHbaseScan + ": " + err.Error())
 	}
@@ -296,7 +296,7 @@ func (this *HbaseDatabaseHandler) Increment(ctx context.Context, table string, k
 		return 0, errors.New(errHbaseScan + ": invalid client type")
 	}
 	// 使用完把连接回收到连接池里
-	defer this.ReleaseConnection(client)
+	defer this.ReleaseHandler(client)
 	incrementRequest, err := hrpc.NewIncStr(ctx, table, key, values)
 	if err != nil {
 		return 0, errors.New(errHbaseIncrement + ": " + err.Error())
@@ -308,7 +308,7 @@ func (this *HbaseDatabaseHandler) Increment(ctx context.Context, table string, k
 	return i, nil
 }
 func (this *HbaseDatabaseHandler) CheckAndPut(ctx context.Context, table string, key string, values map[string]map[string][]byte, family string, qualifier string, expectedValue []byte) (bool, error) {
-	client, err := this.GetConnection()
+	client, err := this.GetHandler()
 	if err != nil {
 		return false, errors.New(errHbaseScan + ": " + err.Error())
 	}
@@ -317,7 +317,7 @@ func (this *HbaseDatabaseHandler) CheckAndPut(ctx context.Context, table string,
 		return false, errors.New(errHbaseScan + ": invalid client type")
 	}
 	// 使用完把连接回收到连接池里
-	defer this.ReleaseConnection(client)
+	defer this.ReleaseHandler(client)
 	putRequest, err := hrpc.NewPutStr(ctx, table, key, values)
 	if err != nil {
 		return false, errors.New(errHbaseCheckAndPut + ": " + err.Error())
@@ -329,7 +329,7 @@ func (this *HbaseDatabaseHandler) CheckAndPut(ctx context.Context, table string,
 	return b, nil
 }
 func (this *HbaseDatabaseHandler) Close() {
-	client, _ := this.GetConnection()
+	client, _ := this.GetHandler()
 	for client != nil {
 		hbaseClient, ok := client.(gohbase.Client)
 		if !ok {
@@ -337,8 +337,8 @@ func (this *HbaseDatabaseHandler) Close() {
 		}
 		hbaseClient.Close()
 		// 使用完把连接回收到连接池里
-		this.ReleaseConnection(client)
-		client, _ = this.GetConnection()
+		this.ReleaseHandler(client)
+		client, _ = this.GetHandler()
 	}
 	return
 }

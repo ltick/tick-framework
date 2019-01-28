@@ -2,14 +2,16 @@ package queue
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
+	"github.com/juju/errors"
 	"github.com/ltick/tick-framework/config"
 )
 
 var (
-	errPrepare      = "queue: prepare '%s' error"
+	errRegister = "queue: register error"
+	errUse      = "queue: use error"
+	errPrepare  = "queue: prepare '%s' error"
 	errInitiate = "queue: initiate '%s' error"
 	errStartup  = "queue: startup '%s' error"
 	errNewQueue = "queue: new '%s' queue error"
@@ -23,6 +25,7 @@ func NewQueue() *Queue {
 
 type Queue struct {
 	Config   *config.Config `inject:"true"`
+	configs  map[string]interface{}
 	Provider string
 	handler  Handler
 }
@@ -36,17 +39,26 @@ func (q *Queue) Prepare(ctx context.Context) (context.Context, error) {
 	}
 	err := q.Config.SetOptions(configs)
 	if err != nil {
-		return ctx, fmt.Errorf(errPrepare+": %s", err.Error())
+		return ctx, errors.Annotate(err, errPrepare)
 	}
+	q.configs = make(map[string]interface{}, 0)
 	return ctx, nil
 }
 
 func (q *Queue) Initiate(ctx context.Context) (context.Context, error) {
 	err := Register("kafka", NewKafkaHandler)
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), q.Provider))
+		return ctx, errors.Annotate(err, fmt.Sprintf(errInitiate, q.Provider))
 	}
-
+	if _, ok := q.configs["QUEUE_KAFKA_BROKERS"]; !ok {
+		q.configs["QUEUE_KAFKA_BROKERS"] = q.Config.GetString("QUEUE_KAFKA_BROKERS")
+	}
+	if _, ok := q.configs["QUEUE_KAFKA_EVENT_GROUP"]; !ok {
+		q.configs["QUEUE_KAFKA_EVENT_GROUP"] = q.Config.GetString("QUEUE_KAFKA_EVENT_GROUP")
+	}
+	if _, ok := q.configs["QUEUE_KAFKA_EVENT_TOPIC"]; !ok {
+		q.configs["QUEUE_KAFKA_EVENT_TOPIC"] = q.Config.GetString("QUEUE_KAFKA_EVENT_TOPIC")
+	}
 	return ctx, nil
 }
 func (q *Queue) OnStartup(ctx context.Context) (context.Context, error) {
@@ -58,11 +70,11 @@ func (q *Queue) OnStartup(ctx context.Context) (context.Context, error) {
 		err = q.Use(ctx, "kafka")
 	}
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errStartup+": "+err.Error(), q.Provider))
+		return ctx, errors.Annotate(err, fmt.Sprintf(errStartup, q.Provider))
 	}
 	err = q.handler.Initiate(ctx)
 	if err != nil {
-		return ctx, errors.New(fmt.Sprintf(errInitiate+": "+err.Error(), q.Provider))
+		return ctx, errors.Annotate(err, fmt.Sprintf(errInitiate, q.Provider))
 	}
 	return ctx, nil
 }
@@ -88,7 +100,7 @@ var queueHandlers = make(map[string]queueHandler)
 
 func Register(name string, queueHandler queueHandler) error {
 	if queueHandler == nil {
-		return errors.New("queue: Register queue is nil")
+		return errors.Annotate(errors.New("queue: Register queue is nil"), errRegister)
 	}
 	if _, ok := queueHandlers[name]; !ok {
 		queueHandlers[name] = queueHandler
@@ -97,29 +109,39 @@ func Register(name string, queueHandler queueHandler) error {
 }
 func Use(name string) (queueHandler, error) {
 	if _, exist := queueHandlers[name]; !exist {
-		return nil, errors.New("queue: unknown queue " + name + " (forgotten register?)")
+		return nil, errors.Annotate(errors.New("queue: unknown queue "+name+" (forgotten register?)"), errUse)
 	}
 	return queueHandlers[name], nil
 }
 
-func (q *Queue) NewQueue(ctx context.Context, name string, config map[string]interface{}) (QueueHandler, error) {
+func (q *Queue) NewQueue(ctx context.Context, name string, configs ...map[string]interface{}) (QueueHandler, error) {
 	queueHandler, err := q.GetQueue(name)
 	if err == nil {
 		return queueHandler, nil
 	}
-	queueHandler, err = q.handler.NewQueue(ctx, name, config)
+	if len(configs) > 0 {
+		// merge
+		for key, value := range q.configs {
+			if _, ok := configs[0][key]; !ok {
+				configs[0][key] = value
+			}
+		}
+		queueHandler, err = q.handler.NewQueue(ctx, name, configs[0])
+	} else {
+		queueHandler, err = q.handler.NewQueue(ctx, name, q.configs)
+	}
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf(errNewQueue+": "+err.Error(), name))
+		return nil, errors.Annotate(err, fmt.Sprintf(errNewQueue, name))
 	}
 	if queueHandler == nil {
-		return nil, errors.New(fmt.Sprintf(errNewQueue+": empty pool", name))
+		return nil, errors.Annotate(err, fmt.Sprintf(errNewQueue+": empty pool", name))
 	}
 	return queueHandler, nil
 }
 func (q *Queue) GetQueue(name string) (QueueHandler, error) {
 	queueHandler, err := q.handler.GetQueue(name)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf(errGetQueue+": "+err.Error(), name))
+		return nil, errors.Annotate(err, fmt.Sprintf(errGetQueue, name))
 	}
 	return queueHandler, err
 }

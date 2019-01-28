@@ -40,6 +40,7 @@ var (
 	errInvalidKeyPrefix     = "session: invalid session key prefix"
 	errMissMaxAge           = "session: miss session max age"
 	errInvalidMaxAge        = "session: invalid session max age"
+	errMissSessionIDLength  = "session: miss session id length"
 	errMissKvstore          = "session: miss cache"
 	errMissDatabase         = "session: miss database"
 	errSessionNotExist      = "session: session does not exist"
@@ -87,6 +88,7 @@ func (s *Session) Prepare(ctx context.Context) (context.Context, error) {
 		"SESSION_COOKIE_NAME":      config.Option{Type: config.String, EnvironmentKey: "SESSION_COOKIE_NAME"},
 		"SESSION_MAX_AGE":          config.Option{Type: config.Int64, EnvironmentKey: "SESSION_MAX_AGE"},
 		"SESSION_MYSQL_DATABASE":   config.Option{Type: config.Int64, EnvironmentKey: "SESSION_MYSQL_DATABASE"},
+		"SESSION_ID_LENGTH":        config.Option{Type: config.Int64, Default: 16, EnvironmentKey: "SESSION_ID_LENGTH"},
 	}
 	err := s.Config.SetOptions(configs)
 	if err != nil {
@@ -134,6 +136,10 @@ func (s *Session) OnStartup(ctx context.Context) (context.Context, error) {
 	if s.MaxAge == 0 {
 		return ctx, errors.Annotate(errors.New(errMissMaxAge), fmt.Sprintf(errStartup, s.provider))
 	}
+	s.SessionIDLength = s.Config.GetInt64("SESSION_ID_LENGTH")
+	if s.SessionIDLength == 0 {
+		return ctx, errors.Annotate(errors.New(errMissSessionIDLength), fmt.Sprintf(errStartup, s.provider))
+	}
 	var err error
 	if s.provider != "" {
 		err = s.Use(ctx, s.provider)
@@ -161,13 +167,10 @@ func (s *Session) Use(ctx context.Context, provider string) error {
 	s.handler = handler()
 	switch s.provider {
 	case "redis":
-		redisDatabase := s.Config.GetString("SESSION_REDIS_DATABASE")
-		if redisDatabase == "" {
-			return errors.Annotate(errors.New(errMissRedisDatabase), fmt.Sprintf(errUseProvider, s.provider))
-		}
+		redisDatabase := s.Config.GetInt("SESSION_REDIS_DATABASE")
 		redisKeyPrefix := s.Config.GetString("SESSION_REDIS_KEY_PREFIX")
 		if redisKeyPrefix == "" {
-			return errors.New(errMissRedisKeyPrefix)
+			return errors.Annotate(errors.New(errMissRedisKeyPrefix), fmt.Sprintf(errUseProvider, s.provider))
 		}
 		err = s.handler.Initiate(ctx, s.MaxAge, map[string]interface{}{
 			"KVSTORE_INSTANCE":         s.Kvstore,

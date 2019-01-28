@@ -24,8 +24,8 @@ var (
 	errBindFields = "api: bind fields error"
 	errBindAt     = "api: bind at error"
 	errBindNew    = "api: bind new error"
-	errNewApi    = "api: new api error"
-	errAddFields    = "api: add fields error"
+	errNewApi     = "api: new api error"
+	errAddFields  = "api: add fields error"
 )
 
 type (
@@ -97,11 +97,6 @@ type (
 	Notes struct {
 		Note   string      `json:"note" xml:"note"`
 		Return interface{} `json:"return,omitempty" xml:"return,omitempty"`
-	}
-	// JSONMsg is commonly used to return JSON format response.
-	JSONMsg struct {
-		Code int         `json:"code" xml:"code"`                     // the status code of the business process (required)
-		Info interface{} `json:"info,omitempty" xml:"info,omitempty"` // response's apiMap and example value (optional)
 	}
 	// apiHandler is an intelligent Handler of binding parameters.
 	apiHandler struct {

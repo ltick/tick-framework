@@ -13,8 +13,8 @@ import (
 
 var (
 	errMysqlInitiate            = "database(mysql): initiate error"
-	errMysqlNewConnection       = "database(mysql): new connection error"
-	errMysqlConnectionNotExists = "database(mysql): '%s' connection not exists"
+	errMysqlNewHandler       = "database(mysql): new handler error"
+	errMysqlConnectionNotExists = "database(mysql): '%s' handler not exists"
 )
 
 type MysqlHandler struct {
@@ -30,7 +30,7 @@ func (this *MysqlHandler) Initiate(ctx context.Context) error {
 	return nil
 }
 
-func (this *MysqlHandler) NewConnection(name string, config map[string]interface{}) (DatabaseHandler, error) {
+func (this *MysqlHandler) NewHandler(name string, config map[string]interface{}) (DatabaseHandler, error) {
 	db := &MysqlDatabaseHandler{}
 	// Default
 	db.Port = "3306"
@@ -46,13 +46,13 @@ func (this *MysqlHandler) NewConnection(name string, config map[string]interface
 		if ok {
 			db.Host = host
 		} else {
-			return nil, errors.New(errMysqlNewConnection + ": invalid config DATABASE_MYSQL_HOST")
+			return nil, errors.New(errMysqlNewHandler + ": invalid config DATABASE_MYSQL_HOST")
 		}
 		if host == "" {
-			return nil, errors.New(errMysqlNewConnection + ": empty DATABASE_MYSQL_HOST")
+			return nil, errors.New(errMysqlNewHandler + ": empty DATABASE_MYSQL_HOST")
 		}
 	} else {
-		return nil, errors.New(errMysqlNewConnection + ": empty DATABASE_MYSQL_HOST")
+		return nil, errors.New(errMysqlNewHandler + ": empty DATABASE_MYSQL_HOST")
 	}
 	configPort, ok := config["DATABASE_MYSQL_PORT"]
 	if ok && configPort != nil {
@@ -60,7 +60,7 @@ func (this *MysqlHandler) NewConnection(name string, config map[string]interface
 		if ok {
 			db.Port = port
 		} else {
-			return nil, errors.New(errMysqlNewConnection + ": invalid config DATABASE_MYSQL_PORT")
+			return nil, errors.New(errMysqlNewHandler + ": invalid config DATABASE_MYSQL_PORT")
 		}
 	}
 	configUser, ok := config["DATABASE_MYSQL_USER"]
@@ -69,10 +69,10 @@ func (this *MysqlHandler) NewConnection(name string, config map[string]interface
 		if ok {
 			db.User = user
 		} else {
-			return nil, errors.New(errMysqlNewConnection + ": invalid config DATABASE_MYSQL_USER")
+			return nil, errors.New(errMysqlNewHandler + ": invalid config DATABASE_MYSQL_USER")
 		}
 		if user == "" {
-			return nil, errors.New(errMysqlNewConnection + ": empty config DATABASE_MYSQL_USER")
+			return nil, errors.New(errMysqlNewHandler + ": empty config DATABASE_MYSQL_USER")
 		}
 	}
 	configPassword, ok := config["DATABASE_MYSQL_PASSWORD"]
@@ -81,7 +81,7 @@ func (this *MysqlHandler) NewConnection(name string, config map[string]interface
 		if ok {
 			db.Password = password
 		} else {
-			return nil, errors.New(errMysqlNewConnection + ": invalid config DATABASE_MYSQL_PASSWORD")
+			return nil, errors.New(errMysqlNewHandler + ": invalid config DATABASE_MYSQL_PASSWORD")
 		}
 	}
 	configDatabase, ok := config["DATABASE_MYSQL_DATABASE"]
@@ -90,10 +90,10 @@ func (this *MysqlHandler) NewConnection(name string, config map[string]interface
 		if ok {
 			db.Database = database
 		} else {
-			return nil, errors.New(errMysqlNewConnection + ": invalid config DATABASE_MYSQL_DATABASE")
+			return nil, errors.New(errMysqlNewHandler + ": invalid config DATABASE_MYSQL_DATABASE")
 		}
 		if database == "" {
-			return nil, errors.New(errMysqlNewConnection + ": empty config DATABASE_MYSQL_DATABASE")
+			return nil, errors.New(errMysqlNewHandler + ": empty config DATABASE_MYSQL_DATABASE")
 		}
 	}
 	configTimezone, ok := config["DATABASE_MYSQL_TIMEZONE"]
@@ -104,7 +104,7 @@ func (this *MysqlHandler) NewConnection(name string, config map[string]interface
 				db.Timezone = timezone
 			}
 		} else {
-			return nil, errors.New(errMysqlNewConnection + ": invalid config DATABASE_MYSQL_TIMEZONE")
+			return nil, errors.New(errMysqlNewHandler + ": invalid config DATABASE_MYSQL_TIMEZONE")
 		}
 	}
 	configTimeout, ok := config["DATABASE_MYSQL_TIMEOUT"]
@@ -113,7 +113,7 @@ func (this *MysqlHandler) NewConnection(name string, config map[string]interface
 		if ok && timeout != "" {
 			db.Timeout = timeout
 		} else {
-			return nil, errors.New(errMysqlNewConnection + ": invalid config DATABASE_MYSQL_TIMEOUT")
+			return nil, errors.New(errMysqlNewHandler + ": invalid config DATABASE_MYSQL_TIMEOUT")
 		}
 	}
 	configWriteTimeout, ok := config["DATABASE_MYSQL_WRITE_TIMEOUT"]
@@ -124,7 +124,7 @@ func (this *MysqlHandler) NewConnection(name string, config map[string]interface
 				db.WriteTimeout = writeTimeout
 			}
 		} else {
-			return nil, errors.New(errMysqlNewConnection + ": invalid config DATABASE_MYSQL_WRITE_TIMEOUT")
+			return nil, errors.New(errMysqlNewHandler + ": invalid config DATABASE_MYSQL_WRITE_TIMEOUT")
 		}
 	}
 	configReadTimeout, ok := config["DATABASE_MYSQL_READ_TIMEOUT"]
@@ -135,7 +135,7 @@ func (this *MysqlHandler) NewConnection(name string, config map[string]interface
 				db.ReadTimeout = readTimeout
 			}
 		} else {
-			return nil, errors.New(errMysqlNewConnection + ": invalid config DATABASE_MYSQL_READ_TIMEOUT")
+			return nil, errors.New(errMysqlNewHandler + ": invalid config DATABASE_MYSQL_READ_TIMEOUT")
 		}
 	}
 	configMaxOpenConns, ok := config["DATABASE_MYSQL_MAX_OPEN_CONNS"]
@@ -146,7 +146,7 @@ func (this *MysqlHandler) NewConnection(name string, config map[string]interface
 				db.MaxOpenConns = maxOpenConns
 			}
 		} else {
-			return nil, errors.New(errMysqlNewConnection + ": invalid config DATABASE_MYSQL_MAX_OPEN_CONNS")
+			return nil, errors.New(errMysqlNewHandler + ": invalid config DATABASE_MYSQL_MAX_OPEN_CONNS")
 		}
 	}
 	configMaxIdleConns, ok := config["DATABASE_MYSQL_MAX_IDLE_CONNS"]
@@ -157,7 +157,7 @@ func (this *MysqlHandler) NewConnection(name string, config map[string]interface
 				db.MaxIdleConns = maxIdleConns
 			}
 		} else {
-			return nil, errors.New(errMysqlNewConnection + ": invalid config DATABASE_MYSQL_MAX_IDLE_CONNS")
+			return nil, errors.New(errMysqlNewHandler + ": invalid config DATABASE_MYSQL_MAX_IDLE_CONNS")
 		}
 	}
 	args := fmt.Sprintf(
@@ -183,7 +183,7 @@ func (this *MysqlHandler) NewConnection(name string, config map[string]interface
 					gormDb.Debug()
 				}
 			} else {
-				return nil, errors.New(errMysqlNewConnection + ": invalid DATABASE_MYSQL_DEBUG")
+				return nil, errors.New(errMysqlNewHandler + ": invalid DATABASE_MYSQL_DEBUG")
 			}
 		}
 		db.Db = gormDb
@@ -192,12 +192,12 @@ func (this *MysqlHandler) NewConnection(name string, config map[string]interface
 		}
 		this.databases[name] = db
 	} else {
-		return nil, errors.New(errMysqlNewConnection + ": " + err.Error())
+		return nil, errors.New(errMysqlNewHandler + ": " + err.Error())
 	}
 	return db, nil
 }
 
-func (this *MysqlHandler) GetConnection(name string) (DatabaseHandler, error) {
+func (this *MysqlHandler) GetHandler(name string) (DatabaseHandler, error) {
 	handlerDatabase, ok := this.databases[name]
 	if !ok {
 		return nil, errors.New(fmt.Sprintf(errMysqlConnectionNotExists, name))

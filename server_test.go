@@ -173,10 +173,9 @@ type TestServerSuite struct {
 	dotenvFile string
 	testAppLog string
 
-	engine          *Engine
-	server          *Server
-	defaultServer   *Server
-	configureServer *Server
+	engine        *Engine
+	server        *Server
+	defaultServer *Server
 }
 
 func (suite *TestServerSuite) SetupTest() {
@@ -231,23 +230,24 @@ func (suite *TestServerSuite) SetupTest() {
 			return routing.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
 	}
-	router := NewServerRouter(suite.engine.Context, ServerRouterHandlerTimeout(3*time.Second), ServerRouterGracefulStopTimeout(30*time.Second))
+	router := suite.engine.NewServerRouter(
+		ServerRouterRequestTimeout("3s"),
+		ServerRouterAccessLogFunc(accessLogFunc),
+		ServerRouterErrorLogFunc(systemLogger.Error),
+		ServerRouterErrorHandler(errorLogHandler),
+		ServerRouterRecoveryLogFunc(systemLogger.Emergency),
+		ServerRouterRecoveryHandler(recoveryHandler),
+		ServerRouterPanicHandler(systemLogger.Emergency),
+		ServerRouterTypeNegotiator(JSON, XML, XML2, HTML),
+		ServerRouterSlashRemover(Int(http.StatusMovedPermanently)),
+		ServerRouterLanguageNegotiator("zh-CN", "en-US"),
+		ServerRouterCors(&CorsAllowAll))
 	assert.NotNil(suite.T(), router)
-	router.WithAccessLogger(accessLogFunc).
-		WithErrorHandler(systemLogger.Error, errorLogHandler).
-		WithRecoveryHandler(systemLogger.Emergency, recoveryHandler).
-		WithPanicLogger(systemLogger.Emergency).
-		WithTypeNegotiator(JSON, XML, XML2, HTML).
-		WithSlashRemover(http.StatusMovedPermanently).
-		WithLanguageNegotiator("zh-CN", "en-US").
-		WithCors(CorsAllowAll)
-	suite.server = NewServer(router, ServerLogWriter(ioutil.Discard), ServerPort(8080))
-	suite.engine.SetServer("test", suite.server)
+	suite.server = suite.engine.NewServer(router, ServerLogWriter(ioutil.Discard), ServerPort(8080), ServerGracefulStopTimeoutDuration(30*time.Second))
+	suite.engine.RegisterServer("test", suite.server)
 
-	suite.defaultServer = suite.engine.NewDefaultServer()
-	suite.engine.SetServer("default", suite.defaultServer)
-	suite.configureServer = suite.engine.NewDefaultServer()
-	suite.engine.SetServer("configure", suite.configureServer)
+	suite.defaultServer = suite.engine.NewServer(suite.engine.NewServerRouter())
+	suite.engine.RegisterServer("default", suite.defaultServer)
 }
 
 func (suite *TestServerSuite) TestDefaultServer() {
@@ -295,7 +295,7 @@ func (suite *TestServerSuite) TestConfigureServer() {
 	providers["TestHandler"] = func() api.Handler {
 		return &TestHandler{}
 	}
-	err := suite.engine.ConfigureServerFromFile(suite.defaultServer, suite.engine.GetConfigCachedFileName(), providers, "server")
+	err := suite.engine.ConfigureServerFromFile(suite.defaultServer, suite.engine.GetConfigCachedFile(), providers, "server")
 	assert.Nil(suite.T(), err)
 	if err == nil {
 		err = suite.engine.Startup()
@@ -372,9 +372,9 @@ func (p Param) Serve(ctx *api.Context) error {
 func (p Param) Doc() api.Doc {
 	return api.Doc{
 		Note: "param desc",
-		Return: api.JSONMsg{
-			Code: 1,
-			Info: "success",
+		Return: api.ResponseData{
+			Code:    "1",
+			Message: "success",
 		},
 		MoreParams: []api.APIParam{
 			{
@@ -394,7 +394,9 @@ func (suite *TestServerSuite) TestApi() {
 	assert.NotNil(suite.T(), rg)
 	apiHandler, err := api.ToAPIHandler(&Param{}, true)
 	assert.Nil(suite.T(), err)
-	rg.AddApiRoute("POST", "user/<id>", apiHandler)
+	rg.AddApiRoute("POST", "user/<id>", []*routeHandler{
+		&routeHandler{Host: []string{"*"}, Handler: apiHandler},
+	})
 	err = suite.engine.Startup()
 	assert.Nil(suite.T(), err)
 	// case 1

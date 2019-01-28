@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/go-ozzo/ozzo-config"
+	"github.com/ltick/tick-config"
 	"github.com/joho/godotenv"
 	_ "github.com/joho/godotenv/autoload"
 	"github.com/juju/errors"
@@ -338,6 +338,10 @@ func (c *Config) GetStringMapStringSlice(key string) map[string][]string {
 // in bytes.
 func (c *Config) GetSizeInBytes(key string) uint {
 	return c.handler.GetSizeInBytes(key)
+}
+
+func (c *Config) GetAll() map[string]interface{} {
+	return c.handler.AllSettings()
 }
 
 type configHandler func() Handler

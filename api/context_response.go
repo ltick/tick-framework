@@ -189,7 +189,7 @@ func (ctx *Context) SetSecureCookie(secret, name, value string, others ...interf
 
 // NoContent sends a response with no body and a status code.
 func (ctx *Context) NoContent(status int) {
-	ctx.Response.WriteHeader(status)
+	ctx.Response.httpResponseWriter.WriteHeader(status)
 }
 
 // Bytes writes the data bytes to the connection as part of an HTTP reply.
@@ -208,7 +208,6 @@ func (ctx *Context) ResponseBytes(status int, contentType string, content []byte
 		}
 	}
 	ctx.Response.Header().Set(HeaderContentLength, strconv.Itoa(len(content)))
-	ctx.Response.WriteHeader(status)
 	_, err := ctx.Response.Write(content)
 	return err
 }
@@ -273,27 +272,6 @@ func (ctx *Context) ResponseJSONP(status int, callback string, data interface{},
 	return ctx.ResponseBytes(status, MIMEApplicationJavaScriptCharsetUTF8, callbackContent.Bytes())
 }
 
-// JSONMsg sends a JSON with JSONMsg format.
-func (ctx *Context) ResponseJSONMsg(status int, msgcode int, info interface{}, isIndent ...bool) error {
-	var (
-		b    []byte
-		err  error
-		data = JSONMsg{
-			Code: msgcode,
-			Info: info,
-		}
-	)
-	if len(isIndent) > 0 && isIndent[0] {
-		b, err = json.MarshalIndent(data, "", "  ")
-	} else {
-		b, err = json.Marshal(data)
-	}
-	if err != nil {
-		return err
-	}
-	return ctx.ResponseJSONBlob(status, b)
-}
-
 // XML sends an XML response with status code.
 func (ctx *Context) ResponseXML(status int, data interface{}, isIndent ...bool) error {
 	var (
@@ -327,45 +305,15 @@ func (ctx *Context) ResponseJSONOrXML(status int, data interface{}, isIndent ...
 }
 
 func (ctx *Context) ResponseDefault(code string, data interface{}, messages ...string) error {
-	responseData := ctx.newResponseDefault(code, data, messages...)
-	_, err := ctx.Response.Write(responseData)
-	return err
-}
-func (ctx *Context) ResponseDefaultError(code string, messages ...string) error {
-	responseData := ctx.newResponseDefaultError(code, messages...)
-	_, err := ctx.Response.Write(responseData)
+	responseData := NewResponseData(code, data, messages...)
+	err := ctx.Write(responseData)
 	if err != nil {
 		if ConnectionResetByPeer(err) || Timeout(err) || NetworkUnreachable(err) {
 			return routing.NewHTTPError(499, "Response write error: "+err.Error())
 		}
-		return routing.NewHTTPError(http.StatusInternalServerError, "Response write error: "+err.Error())
+		return routing.NewHTTPError(http.StatusRequestTimeout, "Response write error: "+err.Error())
 	}
-	return nil
-}
-func (ctx *Context) newResponseDefault(code string, data interface{}, messages ...string) *DefaultResponse {
-	config := make(map[string]interface{})
-	responseConfig, ok := responseOptions[code]
-	if ok {
-		config = responseConfig
-	} else {
-		config["message"] = "error code not exists"
-		config["status"] = http.StatusInternalServerError
-	}
-	message := config["message"].(string)
-	if len(messages) > 0 {
-		message = messages[0]
-	}
-	return &DefaultResponse{
-		Code:    code,
-		Status:  config["status"].(int),
-		Message: message,
-		Data:    data,
-	}
-}
-func (ctx *Context) newResponseDefaultError(code string, messages ...string) *DefaultErrorResponse {
-	return &DefaultErrorResponse{
-		DefaultResponse: ctx.newResponseDefault(code, nil, messages...),
-	}
+	return err
 }
 
 // File forces response for download file.
