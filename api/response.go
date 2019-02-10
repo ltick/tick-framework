@@ -166,7 +166,7 @@ func (r *Response) Header() http.Header {
 // Content-Type line, Write adds a Content-Type set to the result of passing
 // the initial 512 bytes of written data to DetectContentType.
 func (r *Response) Write(data interface{}) (n int, err error) {
-	if r.wrote == false {
+	if r.wrote == true {
 		return 0, nil
 	}
 	if r.responseWriter != nil {
@@ -175,6 +175,7 @@ func (r *Response) Write(data interface{}) (n int, err error) {
 		b := data.([]byte)
 		n, err = r.httpResponseWriter.Write(b)
 	}
+	r.wrote = true
 	if err != nil {
 		if ConnectionResetByPeer(err) || Timeout(err) || NetworkUnreachable(err) {
 			return 0, routing.NewHTTPError(499, "Response write error: "+err.Error())
