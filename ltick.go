@@ -107,8 +107,8 @@ var defaultConfigs map[string]config.Option = map[string]config.Option{
 
 	"ACCESS_LOG_TYPE":              config.Option{Type: config.String, Default: "console", EnvironmentKey: "ACCESS_LOG_TYPE"},
 	"ACCESS_LOG_FILE_NAME":         config.Option{Type: config.String, Default: "/tmp/access.log", EnvironmentKey: "ACCESS_LOG_FILE_NAME"},
-	"ACCESS_LOG_FILE_ROTATE":       config.Option{Type: config.Bool, Default: "true", EnvironmentKey: "LTICK_ACCESS_LOG_FILE_ROTATE"},
-	"ACCESS_LOG_FILE_BACKUP_COUNT": config.Option{Type: config.Int, Default: "-1", EnvironmentKey: "LTICK_ACCESS_LOG_FILE_BACKUP_COUNT"},
+	"ACCESS_LOG_FILE_ROTATE":       config.Option{Type: config.Bool, Default: "true", EnvironmentKey: "ACCESS_LOG_FILE_ROTATE"},
+	"ACCESS_LOG_FILE_BACKUP_COUNT": config.Option{Type: config.Int, Default: "-1", EnvironmentKey: "ACCESS_LOG_FILE_BACKUP_COUNT"},
 	"ACCESS_LOG_WRITER":            config.Option{Type: config.String, Default: "discard", EnvironmentKey: "ACCESS_LOG_WRITER"},
 	"ACCESS_LOG_MAX_LEVEL":         config.Option{Type: config.String, Default: log.LevelInfo, EnvironmentKey: "ACCESS_LOG_MAX_LEVEL"},
 	"ACCESS_LOG_FORMATTER":         config.Option{Type: config.String, Default: "raw", EnvironmentKey: "ACCESS_LOG_FORMATTER"},
