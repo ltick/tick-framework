@@ -103,7 +103,7 @@ func (w Writer) String() string {
 
 func StringToWriter(name string) Writer {
 	for writer, writerName := range WriterNames {
-		if strings.ToLower(name) == strings.ToLower(writerName) {
+		if writerName == strings.ToLower(name) {
 			return writer
 		}
 	}
@@ -121,9 +121,9 @@ const (
 
 // LevelNames maps log levels to names
 var TypeNames = map[Type]string{
-	TypeUnknown: "Unknown",
-	TypeFile:    "File",
-	TypeConsole: "Console",
+	TypeUnknown: "unknown",
+	TypeFile:    "file",
+	TypeConsole: "console",
 }
 
 // String returns the string representation of the log level
@@ -136,7 +136,7 @@ func (t Type) String() string {
 
 func StringToType(name string) Type {
 	for typ, typeName := range TypeNames {
-		if strings.ToLower(name) == strings.ToLower(typeName) {
+		if typeName == strings.ToLower(name) {
 			return typ
 		}
 	}
@@ -160,14 +160,14 @@ const (
 
 // LevelNames maps log levels to names
 var LevelNames = map[Level]string{
-	LevelDebug:     "Debug",
-	LevelInfo:      "Info",
-	LevelNotice:    "Notice",
-	LevelWarning:   "Warning",
-	LevelError:     "Error",
-	LevelCritical:  "Critical",
-	LevelAlert:     "Alert",
-	LevelEmergency: "Emergency",
+	LevelDebug:     "debug",
+	LevelInfo:      "info",
+	LevelNotice:    "notice",
+	LevelWarning:   "warning",
+	LevelError:     "error",
+	LevelCritical:  "critical",
+	LevelAlert:     "alert",
+	LevelEmergency: "emergency",
 }
 
 // String returns the string representation of the log level
@@ -209,7 +209,7 @@ func (l *Logger) Initiate(ctx context.Context) (context.Context, error) {
 			}
 			logConfigMaxLevel := LevelDebug
 			for level, levelName := range LevelNames {
-				if levelName == logConfig.MaxLevel {
+				if levelName == strings.ToLower(logConfig.MaxLevel) {
 					logConfigMaxLevel = level
 					break
 				}
