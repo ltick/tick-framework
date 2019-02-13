@@ -534,6 +534,7 @@ func (h pprofHandler) Serve(ctx *api.Context) error {
 	if h.basicAuth != nil {
 		ctx.Request.SetBasicAuth(h.basicAuth.Username, h.basicAuth.Username)
 	}
+	ctx.ResponseWriter.Header().Set("Content-Type", "text/html")
 	h.httpHandlerFunc(ctx.ResponseWriter, ctx.Request)
 	return nil
 }
