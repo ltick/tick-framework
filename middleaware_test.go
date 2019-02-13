@@ -137,10 +137,10 @@ func (suite *TestSuite) TestMiddleware() {
 		EngineConfigDotenvFile(suite.dotenvFile),
 		EngineConfigEnvPrefix("LTICK"))
 	a.SetContextValue("output", "")
-	router := a.NewServerRouter(ServerRouterTimeoutHandlers([]routing.Handler{func(c *routing.Context) error {
+	router := a.NewServerRouter(ServerRouterRequestTimeoutHandlers([]routing.Handler{func(c *routing.Context) error {
 		a.Context = context.WithValue(a.Context, "output", "Timeout")
 		return routing.NewHTTPError(http.StatusRequestTimeout)
-	}}), ServerRouterTimeout("3s"), )
+	}}), ServerRouterRequestTimeout("3s"))
 	assert.NotNil(suite.T(), router)
 	srv := a.NewServer(router, ServerLogWriter(ioutil.Discard), ServerPort(8080), ServerGracefulStopTimeoutDuration(30*time.Second))
 	a.RegisterServer("test", srv)
