@@ -30,6 +30,7 @@ var (
 	defaultServerLogWriter                   io.Writer     = os.Stdout
 	defaultServerGracefulStopTimeoutDuration time.Duration = 120 * time.Second
 	// Metrics Http Server
+	defaultMetricsHttpServerRequestsCounter             *prometheus.CounterVec
 	defaultMetricsHttpServerRequestsDurationSummary     *prometheus.SummaryVec
 	defaultMetricsHttpServerRequestsResponseSizeSummary *prometheus.SummaryVec
 	defaultMetricsHttpServerRequestsRequestSizeSummary  *prometheus.SummaryVec
@@ -123,24 +124,24 @@ func DefaultAccessLogFunc(c *routing.Context, rw *access.LogResponseWriter, elap
 func init() {
 	// Http Server
 	defaultMetricsHttpServerRequestsDurationSummary = prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Name:    "http_server_requests_duration_seconds",
-		Help:    "A summary of request latencies for requests.",
+		Name: "http_server_requests_duration_seconds",
+		Help: "A summary of request latencies for requests.",
 	},
 		[]string{"server_addr", "host", "method", "path", "status"},
 	)
 	prometheus.MustRegister(defaultMetricsHttpServerRequestsDurationSummary)
 	defaultMetricsHttpServerRequestsResponseSizeSummary = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
-			Name:    "http_server_requests_response_size_bytes",
-			Help:    "A summary of response size for requests.",
+			Name: "http_server_requests_response_size_bytes",
+			Help: "A summary of response size for requests.",
 		},
 		[]string{"server_addr", "host", "method", "path", "status"},
 	)
 	prometheus.MustRegister(defaultMetricsHttpServerRequestsResponseSizeSummary)
 	defaultMetricsHttpServerRequestsRequestSizeSummary = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
-			Name:    "http_server_requests_request_size_bytes",
-			Help:    "A summary of request size for requests.",
+			Name: "http_server_requests_request_size_bytes",
+			Help: "A summary of request size for requests.",
 		},
 		[]string{"server_addr", "host", "method", "path", "status"},
 	)
@@ -160,43 +161,43 @@ func init() {
 	)
 	prometheus.MustRegister(defaultMetricsHttpClientRequestsCounter)
 	defaultMetricsHttpClientRequestsDurationSummary = prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Name:   "http_client_requests_duration_seconds",
-		Help:   "A summary of request latencies for requests.",
+		Name: "http_client_requests_duration_seconds",
+		Help: "A summary of request latencies for requests.",
 	},
 		[]string{"server_addr", "host", "method", "path", "status"},
 	)
 	prometheus.MustRegister(defaultMetricsHttpClientRequestsDurationSummary)
 	defaultMetricsHttpClientRequestsTraceConnectionSummary = prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Name:   "http_client_requests_trace_connection_duration_seconds",
-		Help:   "A summary of request trace latencies for connection.",
+		Name: "http_client_requests_trace_connection_duration_seconds",
+		Help: "A summary of request trace latencies for connection.",
 	},
 		[]string{"event", "server_addr", "host", "method", "path"},
 	)
 	prometheus.MustRegister(defaultMetricsHttpClientRequestsTraceConnectionSummary)
 	defaultMetricsHttpClientRequestsTraceConnectSummary = prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Name:   "http_client_requests_trace_connect_duration_seconds",
-		Help:   "A summary of request trace latencies for connect.",
+		Name: "http_client_requests_trace_connect_duration_seconds",
+		Help: "A summary of request trace latencies for connect.",
 	},
 		[]string{"event", "server_addr", "host", "method", "path"},
 	)
 	prometheus.MustRegister(defaultMetricsHttpClientRequestsTraceConnectSummary)
 	defaultMetricsHttpClientRequestsTraceDnsSummary = prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Name:   "http_client_requests_trace_dns_duration_seconds",
-		Help:   "A summary of request trace latencies for dns.",
+		Name: "http_client_requests_trace_dns_duration_seconds",
+		Help: "A summary of request trace latencies for dns.",
 	},
 		[]string{"event", "server_addr", "host", "method", "path"},
 	)
 	prometheus.MustRegister(defaultMetricsHttpClientRequestsTraceDnsSummary)
 	defaultMetricsHttpClientRequestsTraceTlsSummary = prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Name:   "http_client_requests_trace_tls_duration_seconds",
-		Help:   "A summary of request trace latencies for tls.",
+		Name: "http_client_requests_trace_tls_duration_seconds",
+		Help: "A summary of request trace latencies for tls.",
 	},
 		[]string{"event", "server_addr", "host", "method", "path"},
 	)
 	prometheus.MustRegister(defaultMetricsHttpClientRequestsTraceTlsSummary)
 	defaultMetricsHttpClientRequestsTraceRequestSummary = prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Name:   "http_client_requests_trace_request_duration_seconds",
-		Help:   "A summary of request trace latencies for request.",
+		Name: "http_client_requests_trace_request_duration_seconds",
+		Help: "A summary of request trace latencies for request.",
 	},
 		[]string{"event", "server_addr", "host", "method", "path"},
 	)

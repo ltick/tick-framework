@@ -112,49 +112,49 @@ func ClientMetricsHttpClientRequestsCounter(counter *prometheus.CounterVec) Clie
 		}
 	}
 }
-func ClientMetricsHttpClientRequestsDuration(histogram *prometheus.HistogramVec) ClientOption {
+func ClientMetricsHttpClientRequestsDuration(histogram prometheus.ObserverVec) ClientOption {
 	if histogram == nil {
-		histogram = defaultMetricsHttpClientRequestsDurationHistogram
+		histogram = defaultMetricsHttpClientRequestsDurationSummary
 	}
 	return func(options *ClientOptions) {
 		options.MetricsHttpClientRequestsDurations = []prometheus.ObserverVec{histogram}
 	}
 }
-func ClientMetricsHttpClientRequestsTraceConnection(histogram *prometheus.HistogramVec) ClientOption {
+func ClientMetricsHttpClientRequestsTraceConnection(histogram prometheus.ObserverVec) ClientOption {
 	if histogram == nil {
-		histogram = defaultMetricsHttpClientRequestsTraceConnectionHistogram
+		histogram = defaultMetricsHttpClientRequestsTraceConnectionSummary
 	}
 	return func(options *ClientOptions) {
 		options.MetricsHttpClientRequestsTraceConnection = []prometheus.ObserverVec{histogram}
 	}
 }
-func ClientMetricsHttpClientRequestsTraceDns(histogram *prometheus.HistogramVec) ClientOption {
+func ClientMetricsHttpClientRequestsTraceDns(histogram prometheus.ObserverVec) ClientOption {
 	if histogram == nil {
-		histogram = defaultMetricsHttpClientRequestsTraceDnsHistogram
+		histogram = defaultMetricsHttpClientRequestsTraceDnsSummary
 	}
 	return func(options *ClientOptions) {
 		options.MetricsHttpClientRequestsTraceDns = []prometheus.ObserverVec{histogram}
 	}
 }
-func ClientMetricsHttpClientRequestsTraceConnect(histogram *prometheus.HistogramVec) ClientOption {
+func ClientMetricsHttpClientRequestsTraceConnect(histogram prometheus.ObserverVec) ClientOption {
 	if histogram == nil {
-		histogram = defaultMetricsHttpClientRequestsTraceConnectHistogram
+		histogram = defaultMetricsHttpClientRequestsTraceConnectSummary
 	}
 	return func(options *ClientOptions) {
 		options.MetricsHttpClientRequestsTraceConnect = []prometheus.ObserverVec{histogram}
 	}
 }
-func ClientMetricsHttpClientRequestsTraceTls(histogram *prometheus.HistogramVec) ClientOption {
+func ClientMetricsHttpClientRequestsTraceTls(histogram prometheus.ObserverVec) ClientOption {
 	if histogram == nil {
-		histogram = defaultMetricsHttpClientRequestsTraceTlsHistogram
+		histogram = defaultMetricsHttpClientRequestsTraceTlsSummary
 	}
 	return func(options *ClientOptions) {
 		options.MetricsHttpClientRequestsTraceTls = []prometheus.ObserverVec{histogram}
 	}
 }
-func ClientMetricsHttpClientRequestsTraceRequest(histogram *prometheus.HistogramVec) ClientOption {
+func ClientMetricsHttpClientRequestsTraceRequest(histogram prometheus.ObserverVec) ClientOption {
 	if histogram == nil {
-		histogram = defaultMetricsHttpClientRequestsTraceRequestHistogram
+		histogram = defaultMetricsHttpClientRequestsTraceRequestSummary
 	}
 	return func(options *ClientOptions) {
 		options.MetricsHttpClientRequestsTraceRequest = []prometheus.ObserverVec{histogram}
