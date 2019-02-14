@@ -124,10 +124,10 @@ func DefaultAccessLogFunc(c *routing.Context, rw *access.LogResponseWriter, elap
 func init() {
 	// Http Server
 	defaultMetricsHttpServerRequestsDurationSummary = prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Name: "http_server_requests_duration_seconds",
+		Name: "http_server_requests_seconds",
 		Help: "A summary of request latencies for requests.",
 	},
-		[]string{"server_addr", "host", "method", "path", "status"},
+		[]string{"server_addr", "host", "method", "uri", "status"},
 	)
 	prometheus.MustRegister(defaultMetricsHttpServerRequestsDurationSummary)
 	defaultMetricsHttpServerRequestsResponseSizeSummary = prometheus.NewSummaryVec(
@@ -135,7 +135,7 @@ func init() {
 			Name: "http_server_requests_response_size_bytes",
 			Help: "A summary of response size for requests.",
 		},
-		[]string{"server_addr", "host", "method", "path", "status"},
+		[]string{"server_addr", "host", "method", "uri", "status"},
 	)
 	prometheus.MustRegister(defaultMetricsHttpServerRequestsResponseSizeSummary)
 	defaultMetricsHttpServerRequestsRequestSizeSummary = prometheus.NewSummaryVec(
@@ -143,7 +143,7 @@ func init() {
 			Name: "http_server_requests_request_size_bytes",
 			Help: "A summary of request size for requests.",
 		},
-		[]string{"server_addr", "host", "method", "path", "status"},
+		[]string{"server_addr", "host", "method", "uri", "status"},
 	)
 	prometheus.MustRegister(defaultMetricsHttpServerRequestsRequestSizeSummary)
 	// Http Client
@@ -157,49 +157,49 @@ func init() {
 			Name: "http_client_requests_total",
 			Help: "A counter of requests from the wrapped client.",
 		},
-		[]string{"server_addr", "host", "method", "path", "status"},
+		[]string{"server_addr", "host", "method", "uri", "status"},
 	)
 	prometheus.MustRegister(defaultMetricsHttpClientRequestsCounter)
 	defaultMetricsHttpClientRequestsDurationSummary = prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Name: "http_client_requests_duration_seconds",
+		Name: "http_client_requests_seconds",
 		Help: "A summary of request latencies for requests.",
 	},
-		[]string{"server_addr", "host", "method", "path", "status"},
+		[]string{"server_addr", "host", "method", "uri", "status"},
 	)
 	prometheus.MustRegister(defaultMetricsHttpClientRequestsDurationSummary)
 	defaultMetricsHttpClientRequestsTraceConnectionSummary = prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Name: "http_client_requests_trace_connection_duration_seconds",
+		Name: "http_client_requests_trace_connection_seconds",
 		Help: "A summary of request trace latencies for connection.",
 	},
-		[]string{"event", "server_addr", "host", "method", "path"},
+		[]string{"event", "server_addr", "host", "method", "uri"},
 	)
 	prometheus.MustRegister(defaultMetricsHttpClientRequestsTraceConnectionSummary)
 	defaultMetricsHttpClientRequestsTraceConnectSummary = prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Name: "http_client_requests_trace_connect_duration_seconds",
+		Name: "http_client_requests_trace_connect_seconds",
 		Help: "A summary of request trace latencies for connect.",
 	},
-		[]string{"event", "server_addr", "host", "method", "path"},
+		[]string{"event", "server_addr", "host", "method", "uri"},
 	)
 	prometheus.MustRegister(defaultMetricsHttpClientRequestsTraceConnectSummary)
 	defaultMetricsHttpClientRequestsTraceDnsSummary = prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Name: "http_client_requests_trace_dns_duration_seconds",
+		Name: "http_client_requests_trace_dns_seconds",
 		Help: "A summary of request trace latencies for dns.",
 	},
-		[]string{"event", "server_addr", "host", "method", "path"},
+		[]string{"event", "server_addr", "host", "method", "uri"},
 	)
 	prometheus.MustRegister(defaultMetricsHttpClientRequestsTraceDnsSummary)
 	defaultMetricsHttpClientRequestsTraceTlsSummary = prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Name: "http_client_requests_trace_tls_duration_seconds",
+		Name: "http_client_requests_trace_tls_seconds",
 		Help: "A summary of request trace latencies for tls.",
 	},
-		[]string{"event", "server_addr", "host", "method", "path"},
+		[]string{"event", "server_addr", "host", "method", "uri"},
 	)
 	prometheus.MustRegister(defaultMetricsHttpClientRequestsTraceTlsSummary)
 	defaultMetricsHttpClientRequestsTraceRequestSummary = prometheus.NewSummaryVec(prometheus.SummaryOpts{
-		Name: "http_client_requests_trace_request_duration_seconds",
+		Name: "http_client_requests_trace_request_seconds",
 		Help: "A summary of request trace latencies for request.",
 	},
-		[]string{"event", "server_addr", "host", "method", "path"},
+		[]string{"event", "server_addr", "host", "method", "uri"},
 	)
 	prometheus.MustRegister(defaultMetricsHttpClientRequestsTraceRequestSummary)
 }
