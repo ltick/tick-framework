@@ -20,35 +20,35 @@ type HttpClientRequestLabelFunc func(obs prometheus.Collector, r *http.Request, 
 type HttpServerRequestLabelFunc func(obs prometheus.Collector, d Delegator, r *http.Request, customLabels ...prometheus.Labels) prometheus.Labels
 
 func defaultMetricsHttpClientRequestLabelFunc(obs prometheus.Collector, r *http.Request, rsp *http.Response, customLabels ...prometheus.Labels) prometheus.Labels {
-	serverAddr, host, method, path, status := checkLabels(obs)
+	serverAddr, host, method, uri, status := checkLabels(obs)
 	reqHost := r.Host
 	if reqHost == "" {
 		reqHost = r.URL.Host
 	}
-	reqPath := r.URL.Path
-	if reqPath == "" {
-		reqPath = r.URL.RawPath
+	reqUri := r.URL.Path
+	if reqUri == "" {
+		reqUri = r.URL.RawPath
 	}
 	reqServerAddr, _ := utility.GetServerAddress()
 	if rsp != nil {
-		return labels(serverAddr, host, method, path, status, reqServerAddr, reqHost, r.Method, reqPath, rsp.StatusCode, customLabels...)
+		return labels(serverAddr, host, method, uri, status, reqServerAddr, reqHost, r.Method, reqUri, rsp.StatusCode, customLabels...)
 	} else {
-		return labels(serverAddr, host, method, path, status, reqServerAddr, reqHost, r.Method, reqPath, 0, customLabels...)
+		return labels(serverAddr, host, method, uri, status, reqServerAddr, reqHost, r.Method, reqUri, 0, customLabels...)
 	}
 }
 
 func defaultMetricsHttpServerRequestLabelFunc(obs prometheus.Collector, d Delegator, r *http.Request, customLabels ...prometheus.Labels) prometheus.Labels {
-	serverAddr, host, method, path, status := checkLabels(obs)
+	serverAddr, host, method, uri, status := checkLabels(obs)
 	reqHost := r.Host
 	if reqHost == "" {
 		reqHost = r.URL.Host
 	}
-	reqPath := r.URL.Path
-	if reqPath == "" {
-		reqPath = r.URL.RawPath
+	reqUri := r.URL.Path
+	if reqUri == "" {
+		reqUri = r.URL.RawPath
 	}
 	reqServerAddr, _ := utility.GetServerAddress()
-	return labels(serverAddr, host, method, path, status, reqServerAddr, reqHost, r.Method, reqPath, d.Status(), customLabels...)
+	return labels(serverAddr, host, method, uri, status, reqServerAddr, reqHost, r.Method, reqUri, d.Status(), customLabels...)
 }
 
 // magicString is used for the hacky label test in checkLabels. Remove once fixed.
@@ -430,13 +430,13 @@ func InstrumentHttpClientRequestTrace(observers map[string][]prometheus.Observer
 // unnecessary allocations on each request.
 var emptyLabels = prometheus.Labels{}
 
-func labels(serverAddr, host, method, path, status bool, reqScheme string, reqHost string, reqMethod string, reqPath string, repStatus int, customLabels ...prometheus.Labels) prometheus.Labels {
+func labels(serverAddr, host, method, uri, status bool, reqScheme string, reqHost string, reqMethod string, reqUri string, repStatus int, customLabels ...prometheus.Labels) prometheus.Labels {
 	labels := prometheus.Labels{}
 	if len(customLabels) > 0 {
 		labels = customLabels[0]
 	}
 	if serverAddr {
-		labels["server_addr"] = reqScheme
+		labels["server_addr"] = serverAddr
 	}
 	if host {
 		labels["host"] = reqHost
@@ -447,8 +447,8 @@ func labels(serverAddr, host, method, path, status bool, reqScheme string, reqHo
 	if method {
 		labels["method"] = sanitizeMethod(reqMethod)
 	}
-	if path {
-		labels["path"] = reqPath
+	if uri {
+		labels["uri"] = reqUri
 	}
 	return labels
 }
@@ -604,7 +604,7 @@ func sanitizeStatus(s int) string {
 	}
 }
 
-func checkLabels(c prometheus.Collector) (serverAddr, host, method, path, status bool) {
+func checkLabels(c prometheus.Collector) (serverAddr, host, method, uri, status bool) {
 	// TODO(beorn7): Remove this hacky way to check for instance labels
 	// once Descriptors can have their dimensionality queried.
 	var (
@@ -656,8 +656,8 @@ func checkLabels(c prometheus.Collector) (serverAddr, host, method, path, status
 			host = true
 		case "method":
 			method = true
-		case "path":
-			path = true
+		case "uri":
+			uri = true
 		case "status":
 			status = true
 		case "event":
