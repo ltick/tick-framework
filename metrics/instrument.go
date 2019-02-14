@@ -430,13 +430,13 @@ func InstrumentHttpClientRequestTrace(observers map[string][]prometheus.Observer
 // unnecessary allocations on each request.
 var emptyLabels = prometheus.Labels{}
 
-func labels(serverAddr, host, method, uri, status bool, reqScheme string, reqHost string, reqMethod string, reqUri string, repStatus int, customLabels ...prometheus.Labels) prometheus.Labels {
+func labels(serverAddr, host, method, uri, status bool, reqServerAddr string, reqHost string, reqMethod string, reqUri string, repStatus int, customLabels ...prometheus.Labels) prometheus.Labels {
 	labels := prometheus.Labels{}
 	if len(customLabels) > 0 {
 		labels = customLabels[0]
 	}
 	if serverAddr {
-		labels["server_addr"] = serverAddr
+		labels["server_addr"] = reqServerAddr
 	}
 	if host {
 		labels["host"] = reqHost
