@@ -780,6 +780,10 @@ func (e *Engine) Startup() (err error) {
 		}
 	}
 	// 注入模块
+	err = e.Registry.InjectMiddleware()
+	if err != nil {
+		return errors.Annotatef(err, errStartupInjectComponent)
+	}
 	err = e.Registry.InjectComponent()
 	if err != nil {
 		return errors.Annotatef(err, errStartupInjectComponent)
