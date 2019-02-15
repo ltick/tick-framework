@@ -157,7 +157,7 @@ func init() {
 	prometheus.MustRegister(defaultMetricsHttpServerRequestsRequestSizeSummary)
 	// Http Server Histogram
 	defaultMetricsHttpServerRequestsDurationHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name: "http_server_requests_seconds",
+		Name: "http_server_requests_seconds_bucket",
 		Help: "A histogram of request latencies for requests.",
 		Buckets: []float64{.25, .5, 1, 2.5, 5, 10},
 	},
@@ -166,7 +166,7 @@ func init() {
 	prometheus.MustRegister(defaultMetricsHttpServerRequestsDurationHistogram)
 	defaultMetricsHttpServerRequestsResponseSizeHistogram = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name: "http_server_requests_response_size_bytes",
+			Name: "http_server_requests_response_size_bytes_bucket",
 			Help: "A histogram of response size for requests.",
 			Buckets: []float64{200, 500, 900, 1500},
 		},
@@ -175,7 +175,7 @@ func init() {
 	prometheus.MustRegister(defaultMetricsHttpServerRequestsResponseSizeHistogram)
 	defaultMetricsHttpServerRequestsRequestSizeHistogram = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name: "http_server_requests_request_size_bytes",
+			Name: "http_server_requests_request_size_bytes_bucket",
 			Help: "A histogram of request size for requests.",
 			Buckets: []float64{200, 500, 900, 1500},
 		},
@@ -253,7 +253,7 @@ func init() {
 	)
 	prometheus.MustRegister(defaultMetricsHttpClientRequestsCounter)
 	defaultMetricsHttpClientRequestsDurationHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name: "http_client_requests_seconds",
+		Name: "http_client_requests_seconds_bucket",
 		Help: "A histogram of request latencies for requests.",
 		Buckets: []float64{.25, .5, 1, 2.5, 5, 10},
 	},
@@ -261,7 +261,7 @@ func init() {
 	)
 	prometheus.MustRegister(defaultMetricsHttpClientRequestsDurationHistogram)
 	defaultMetricsHttpClientRequestsTraceConnectionHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name: "http_client_requests_trace_connection_seconds",
+		Name: "http_client_requests_trace_connection_seconds_bucket",
 		Help: "A histogram of request trace latencies for connection.",
 		Buckets: []float64{.005, .01, .02, .05},
 	},
@@ -269,7 +269,7 @@ func init() {
 	)
 	prometheus.MustRegister(defaultMetricsHttpClientRequestsTraceConnectionHistogram)
 	defaultMetricsHttpClientRequestsTraceConnectHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name: "http_client_requests_trace_connect_seconds",
+		Name: "http_client_requests_trace_connect_seconds_bucket",
 		Help: "A histogram of request trace latencies for connect.",
 		Buckets: []float64{.005, .01, .02, .05},
 	},
@@ -277,7 +277,7 @@ func init() {
 	)
 	prometheus.MustRegister(defaultMetricsHttpClientRequestsTraceConnectHistogram)
 	defaultMetricsHttpClientRequestsTraceDnsHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name: "http_client_requests_trace_dns_seconds",
+		Name: "http_client_requests_trace_dns_seconds_bucket",
 		Help: "A histogram of request trace latencies for dns.",
 		Buckets: []float64{.005, .01, .02, .05},
 	},
@@ -285,7 +285,7 @@ func init() {
 	)
 	prometheus.MustRegister(defaultMetricsHttpClientRequestsTraceDnsHistogram)
 	defaultMetricsHttpClientRequestsTraceTlsHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name: "http_client_requests_trace_tls_seconds",
+		Name: "http_client_requests_trace_tls_seconds_bucket",
 		Help: "A histogram of request trace latencies for tls.",
 		Buckets: []float64{.005, .01, .02, .05},
 	},
@@ -293,7 +293,7 @@ func init() {
 	)
 	prometheus.MustRegister(defaultMetricsHttpClientRequestsTraceTlsHistogram)
 	defaultMetricsHttpClientRequestsTraceRequestHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name: "http_client_requests_trace_request_seconds",
+		Name: "http_client_requests_trace_request_seconds_bucket",
 		Help: "A histogram of request trace latencies for request.",
 		Buckets: []float64{.005, .01, .02, .05},
 	},
