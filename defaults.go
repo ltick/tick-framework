@@ -159,6 +159,7 @@ func init() {
 	defaultMetricsHttpServerRequestsDurationHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name: "http_server_requests_seconds",
 		Help: "A histogram of request latencies for requests.",
+		Buckets: []float64{.25, .5, 1, 2.5, 5, 10},
 	},
 		[]string{"server_addr", "host", "method", "uri", "status"},
 	)
