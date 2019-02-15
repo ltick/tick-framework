@@ -112,52 +112,52 @@ func ClientMetricsHttpClientRequestsCounter(counter *prometheus.CounterVec) Clie
 		}
 	}
 }
-func ClientMetricsHttpClientRequestsDuration(histogram prometheus.ObserverVec) ClientOption {
-	if histogram == nil {
-		histogram = defaultMetricsHttpClientRequestsDurationSummary
+func ClientMetricsHttpClientRequestsDuration(observers []prometheus.ObserverVec) ClientOption {
+	if observers == nil {
+		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequestsDurationHistogram, defaultMetricsHttpClientRequestsDurationSummary}
 	}
 	return func(options *ClientOptions) {
-		options.MetricsHttpClientRequestsDurations = []prometheus.ObserverVec{histogram}
+		options.MetricsHttpClientRequestsDurations = observers
 	}
 }
-func ClientMetricsHttpClientRequestsTraceConnection(histogram prometheus.ObserverVec) ClientOption {
-	if histogram == nil {
-		histogram = defaultMetricsHttpClientRequestsTraceConnectionSummary
+func ClientMetricsHttpClientRequestsTraceConnection(observers []prometheus.ObserverVec) ClientOption {
+	if observers == nil {
+		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequestsTraceConnectionHistogram, defaultMetricsHttpClientRequestsTraceConnectionSummary}
 	}
 	return func(options *ClientOptions) {
-		options.MetricsHttpClientRequestsTraceConnection = []prometheus.ObserverVec{histogram}
+		options.MetricsHttpClientRequestsTraceConnection = observers
 	}
 }
-func ClientMetricsHttpClientRequestsTraceDns(histogram prometheus.ObserverVec) ClientOption {
-	if histogram == nil {
-		histogram = defaultMetricsHttpClientRequestsTraceDnsSummary
+func ClientMetricsHttpClientRequestsTraceDns(observers []prometheus.ObserverVec) ClientOption {
+	if observers == nil {
+		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequestsTraceDnsHistogram, defaultMetricsHttpClientRequestsTraceDnsSummary}
 	}
 	return func(options *ClientOptions) {
-		options.MetricsHttpClientRequestsTraceDns = []prometheus.ObserverVec{histogram}
+		options.MetricsHttpClientRequestsTraceDns = observers
 	}
 }
-func ClientMetricsHttpClientRequestsTraceConnect(histogram prometheus.ObserverVec) ClientOption {
-	if histogram == nil {
-		histogram = defaultMetricsHttpClientRequestsTraceConnectSummary
+func ClientMetricsHttpClientRequestsTraceConnect(observers []prometheus.ObserverVec) ClientOption {
+	if observers == nil {
+		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequestsTraceConnectHistogram, defaultMetricsHttpClientRequestsTraceConnectSummary}
 	}
 	return func(options *ClientOptions) {
-		options.MetricsHttpClientRequestsTraceConnect = []prometheus.ObserverVec{histogram}
+		options.MetricsHttpClientRequestsTraceConnect = observers
 	}
 }
-func ClientMetricsHttpClientRequestsTraceTls(histogram prometheus.ObserverVec) ClientOption {
-	if histogram == nil {
-		histogram = defaultMetricsHttpClientRequestsTraceTlsSummary
+func ClientMetricsHttpClientRequestsTraceTls(observers []prometheus.ObserverVec) ClientOption {
+	if observers == nil {
+		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequestsTraceTlsHistogram, defaultMetricsHttpClientRequestsTraceTlsSummary}
 	}
 	return func(options *ClientOptions) {
-		options.MetricsHttpClientRequestsTraceTls = []prometheus.ObserverVec{histogram}
+		options.MetricsHttpClientRequestsTraceTls = observers
 	}
 }
-func ClientMetricsHttpClientRequestsTraceRequest(histogram prometheus.ObserverVec) ClientOption {
-	if histogram == nil {
-		histogram = defaultMetricsHttpClientRequestsTraceRequestSummary
+func ClientMetricsHttpClientRequestsTraceRequest(observers []prometheus.ObserverVec) ClientOption {
+	if observers == nil {
+		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequestsTraceRequestHistogram, defaultMetricsHttpClientRequestsTraceRequestSummary}
 	}
 	return func(options *ClientOptions) {
-		options.MetricsHttpClientRequestsTraceRequest = []prometheus.ObserverVec{histogram}
+		options.MetricsHttpClientRequestsTraceRequest = observers
 	}
 }
 func ClientMetricsHttpClientRequestLabelFunc(httpClientRequestLabelFunc metrics.HttpClientRequestLabelFunc) ClientOption {

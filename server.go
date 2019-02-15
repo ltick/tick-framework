@@ -123,28 +123,28 @@ func ServerPort(port uint) ServerOption {
 		options.Port = port
 	}
 }
-func ServerMetricsHttpServerRequestsDuration(histogram prometheus.ObserverVec) ServerOption {
-	if histogram == nil {
-		histogram = defaultMetricsHttpServerRequestsDurationSummary
+func ServerMetricsHttpServerRequestsDuration(observers []prometheus.ObserverVec) ServerOption {
+	if observers == nil {
+		observers = []prometheus.ObserverVec{defaultMetricsHttpServerRequestsDurationHistogram, defaultMetricsHttpServerRequestsDurationSummary}
 	}
 	return func(options *ServerOptions) {
-		options.MetricsHttpServerRequestsDurations = []prometheus.ObserverVec{histogram}
+		options.MetricsHttpServerRequestsDurations = observers
 	}
 }
-func ServerMetricsHttpServerRequestsResponseSize(histogram prometheus.ObserverVec) ServerOption {
-	if histogram == nil {
-		histogram = defaultMetricsHttpServerRequestsResponseSizeSummary
+func ServerMetricsHttpServerRequestsResponseSize(observers []prometheus.ObserverVec) ServerOption {
+	if observers == nil {
+		observers = []prometheus.ObserverVec{defaultMetricsHttpServerRequestsResponseSizeHistogram, defaultMetricsHttpServerRequestsResponseSizeSummary}
 	}
 	return func(options *ServerOptions) {
-		options.MetricsHttpServerRequestsResponseSizes = []prometheus.ObserverVec{histogram}
+		options.MetricsHttpServerRequestsResponseSizes = observers
 	}
 }
-func ServerMetricsHttpServerRequestsRequestSize(histogram prometheus.ObserverVec) ServerOption {
-	if histogram == nil {
-		histogram = defaultMetricsHttpServerRequestsRequestSizeSummary
+func ServerMetricsHttpServerRequestsRequestSize(observers []prometheus.ObserverVec) ServerOption {
+	if observers == nil {
+		observers = []prometheus.ObserverVec{defaultMetricsHttpServerRequestsRequestSizeHistogram, defaultMetricsHttpServerRequestsRequestSizeSummary}
 	}
 	return func(options *ServerOptions) {
-		options.MetricsHttpServerRequestsRequestSizes = []prometheus.ObserverVec{histogram}
+		options.MetricsHttpServerRequestsRequestSizes = observers
 	}
 }
 func ServerMetricsHttpServerRequestLabelFunc(httpServerRequestLabelFunc metrics.HttpServerRequestLabelFunc) ServerOption {
