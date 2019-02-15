@@ -125,7 +125,7 @@ func ServerPort(port uint) ServerOption {
 }
 func ServerMetricsHttpServerRequestsDuration(observers []prometheus.ObserverVec) ServerOption {
 	if observers == nil {
-		observers = []prometheus.ObserverVec{defaultMetricsHttpServerRequestsDurationHistogram, defaultMetricsHttpServerRequestsDurationSummary}
+		observers = []prometheus.ObserverVec{defaultMetricsHttpServerRequests}
 	}
 	return func(options *ServerOptions) {
 		options.MetricsHttpServerRequestsDurations = observers
@@ -133,7 +133,7 @@ func ServerMetricsHttpServerRequestsDuration(observers []prometheus.ObserverVec)
 }
 func ServerMetricsHttpServerRequestsResponseSize(observers []prometheus.ObserverVec) ServerOption {
 	if observers == nil {
-		observers = []prometheus.ObserverVec{defaultMetricsHttpServerRequestsResponseSizeHistogram, defaultMetricsHttpServerRequestsResponseSizeSummary}
+		observers = []prometheus.ObserverVec{defaultMetricsHttpServerRequestsResponseSize}
 	}
 	return func(options *ServerOptions) {
 		options.MetricsHttpServerRequestsResponseSizes = observers
@@ -141,7 +141,7 @@ func ServerMetricsHttpServerRequestsResponseSize(observers []prometheus.Observer
 }
 func ServerMetricsHttpServerRequestsRequestSize(observers []prometheus.ObserverVec) ServerOption {
 	if observers == nil {
-		observers = []prometheus.ObserverVec{defaultMetricsHttpServerRequestsRequestSizeHistogram, defaultMetricsHttpServerRequestsRequestSizeSummary}
+		observers = []prometheus.ObserverVec{defaultMetricsHttpServerRequestsRequestSize}
 	}
 	return func(options *ServerOptions) {
 		options.MetricsHttpServerRequestsRequestSizes = observers

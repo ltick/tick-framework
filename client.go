@@ -114,7 +114,7 @@ func ClientMetricsHttpClientRequestsCounter(counter *prometheus.CounterVec) Clie
 }
 func ClientMetricsHttpClientRequestsDuration(observers []prometheus.ObserverVec) ClientOption {
 	if observers == nil {
-		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequestsDurationHistogram, defaultMetricsHttpClientRequestsDurationSummary}
+		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequests}
 	}
 	return func(options *ClientOptions) {
 		options.MetricsHttpClientRequestsDurations = observers
@@ -122,7 +122,7 @@ func ClientMetricsHttpClientRequestsDuration(observers []prometheus.ObserverVec)
 }
 func ClientMetricsHttpClientRequestsTraceConnection(observers []prometheus.ObserverVec) ClientOption {
 	if observers == nil {
-		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequestsTraceConnectionHistogram, defaultMetricsHttpClientRequestsTraceConnectionSummary}
+		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequestsTraceConnection}
 	}
 	return func(options *ClientOptions) {
 		options.MetricsHttpClientRequestsTraceConnection = observers
@@ -130,7 +130,7 @@ func ClientMetricsHttpClientRequestsTraceConnection(observers []prometheus.Obser
 }
 func ClientMetricsHttpClientRequestsTraceDns(observers []prometheus.ObserverVec) ClientOption {
 	if observers == nil {
-		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequestsTraceDnsHistogram, defaultMetricsHttpClientRequestsTraceDnsSummary}
+		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequestsTraceDns}
 	}
 	return func(options *ClientOptions) {
 		options.MetricsHttpClientRequestsTraceDns = observers
@@ -138,7 +138,7 @@ func ClientMetricsHttpClientRequestsTraceDns(observers []prometheus.ObserverVec)
 }
 func ClientMetricsHttpClientRequestsTraceConnect(observers []prometheus.ObserverVec) ClientOption {
 	if observers == nil {
-		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequestsTraceConnectHistogram, defaultMetricsHttpClientRequestsTraceConnectSummary}
+		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequestsTraceConnect}
 	}
 	return func(options *ClientOptions) {
 		options.MetricsHttpClientRequestsTraceConnect = observers
@@ -146,7 +146,7 @@ func ClientMetricsHttpClientRequestsTraceConnect(observers []prometheus.Observer
 }
 func ClientMetricsHttpClientRequestsTraceTls(observers []prometheus.ObserverVec) ClientOption {
 	if observers == nil {
-		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequestsTraceTlsHistogram, defaultMetricsHttpClientRequestsTraceTlsSummary}
+		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequestsTraceTls}
 	}
 	return func(options *ClientOptions) {
 		options.MetricsHttpClientRequestsTraceTls = observers
@@ -154,7 +154,7 @@ func ClientMetricsHttpClientRequestsTraceTls(observers []prometheus.ObserverVec)
 }
 func ClientMetricsHttpClientRequestsTraceRequest(observers []prometheus.ObserverVec) ClientOption {
 	if observers == nil {
-		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequestsTraceRequestHistogram, defaultMetricsHttpClientRequestsTraceRequestSummary}
+		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequestsTraceRequest}
 	}
 	return func(options *ClientOptions) {
 		options.MetricsHttpClientRequestsTraceRequest = observers
