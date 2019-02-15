@@ -30,22 +30,22 @@ var (
 	defaultServerLogWriter                   io.Writer     = os.Stdout
 	defaultServerGracefulStopTimeoutDuration time.Duration = 120 * time.Second
 	// Metrics Http Server
-	defaultMetricsHttpServerRequestsCounter             *prometheus.CounterVec
-	defaultMetricsHttpServerRequestsDurationSummary     *prometheus.SummaryVec
-	defaultMetricsHttpServerRequestsResponseSizeSummary *prometheus.SummaryVec
-	defaultMetricsHttpServerRequestsRequestSizeSummary  *prometheus.SummaryVec
+	defaultMetricsHttpServerRequestsCounter               *prometheus.CounterVec
+	defaultMetricsHttpServerRequestsDurationSummary       *prometheus.SummaryVec
+	defaultMetricsHttpServerRequestsResponseSizeSummary   *prometheus.SummaryVec
+	defaultMetricsHttpServerRequestsRequestSizeSummary    *prometheus.SummaryVec
 	defaultMetricsHttpServerRequestsDurationHistogram     *prometheus.HistogramVec
 	defaultMetricsHttpServerRequestsResponseSizeHistogram *prometheus.HistogramVec
 	defaultMetricsHttpServerRequestsRequestSizeHistogram  *prometheus.HistogramVec
 	// Metrics Http Client
-	defaultMetricsHttpClientRequestsInFlight               prometheus.Gauge
-	defaultMetricsHttpClientRequestsCounter                *prometheus.CounterVec
-	defaultMetricsHttpClientRequestsDurationSummary        *prometheus.SummaryVec
-	defaultMetricsHttpClientRequestsTraceConnectionSummary *prometheus.SummaryVec
-	defaultMetricsHttpClientRequestsTraceConnectSummary    *prometheus.SummaryVec
-	defaultMetricsHttpClientRequestsTraceDnsSummary        *prometheus.SummaryVec
-	defaultMetricsHttpClientRequestsTraceTlsSummary        *prometheus.SummaryVec
-	defaultMetricsHttpClientRequestsTraceRequestSummary    *prometheus.SummaryVec
+	defaultMetricsHttpClientRequestsInFlight                 prometheus.Gauge
+	defaultMetricsHttpClientRequestsCounter                  *prometheus.CounterVec
+	defaultMetricsHttpClientRequestsDurationSummary          *prometheus.SummaryVec
+	defaultMetricsHttpClientRequestsTraceConnectionSummary   *prometheus.SummaryVec
+	defaultMetricsHttpClientRequestsTraceConnectSummary      *prometheus.SummaryVec
+	defaultMetricsHttpClientRequestsTraceDnsSummary          *prometheus.SummaryVec
+	defaultMetricsHttpClientRequestsTraceTlsSummary          *prometheus.SummaryVec
+	defaultMetricsHttpClientRequestsTraceRequestSummary      *prometheus.SummaryVec
 	defaultMetricsHttpClientRequestsDurationHistogram        *prometheus.HistogramVec
 	defaultMetricsHttpClientRequestsTraceConnectionHistogram *prometheus.HistogramVec
 	defaultMetricsHttpClientRequestsTraceConnectHistogram    *prometheus.HistogramVec
@@ -157,8 +157,8 @@ func init() {
 	prometheus.MustRegister(defaultMetricsHttpServerRequestsRequestSizeSummary)
 	// Http Server Histogram
 	defaultMetricsHttpServerRequestsDurationHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name: "http_server_requests_seconds_bucket",
-		Help: "A histogram of request latencies for requests.",
+		Name:    "http_server_requests_seconds_bucket",
+		Help:    "A histogram of request latencies for requests.",
 		Buckets: []float64{.25, .5, 1, 2.5, 5, 10},
 	},
 		[]string{"server_addr", "host", "method", "uri", "status"},
@@ -166,8 +166,8 @@ func init() {
 	prometheus.MustRegister(defaultMetricsHttpServerRequestsDurationHistogram)
 	defaultMetricsHttpServerRequestsResponseSizeHistogram = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name: "http_server_requests_response_size_bytes_bucket",
-			Help: "A histogram of response size for requests.",
+			Name:    "http_server_requests_response_size_bytes_bucket",
+			Help:    "A histogram of response size for requests.",
 			Buckets: []float64{200, 500, 900, 1500},
 		},
 		[]string{"server_addr", "host", "method", "uri", "status"},
@@ -175,14 +175,14 @@ func init() {
 	prometheus.MustRegister(defaultMetricsHttpServerRequestsResponseSizeHistogram)
 	defaultMetricsHttpServerRequestsRequestSizeHistogram = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name: "http_server_requests_request_size_bytes_bucket",
-			Help: "A histogram of request size for requests.",
+			Name:    "http_server_requests_request_size_bytes_bucket",
+			Help:    "A histogram of request size for requests.",
 			Buckets: []float64{200, 500, 900, 1500},
 		},
 		[]string{"server_addr", "host", "method", "uri", "status"},
 	)
 	prometheus.MustRegister(defaultMetricsHttpServerRequestsRequestSizeHistogram)
-	// Http Client Summary
+	// Http Client
 	defaultMetricsHttpClientRequestsInFlight = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "http_client_requests_in_flight",
 		Help: "A gauge of in-flight requests for the wrapped client.",
@@ -196,6 +196,7 @@ func init() {
 		[]string{"server_addr", "host", "method", "uri", "status"},
 	)
 	prometheus.MustRegister(defaultMetricsHttpClientRequestsCounter)
+	// Http Client Summary
 	defaultMetricsHttpClientRequestsDurationSummary = prometheus.NewSummaryVec(prometheus.SummaryOpts{
 		Name: "http_client_requests_seconds",
 		Help: "A summary of request latencies for requests.",
@@ -239,62 +240,49 @@ func init() {
 	)
 	prometheus.MustRegister(defaultMetricsHttpClientRequestsTraceRequestSummary)
 	// Http Client Histogram
-	defaultMetricsHttpClientRequestsInFlight = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "http_client_requests_in_flight",
-		Help: "A gauge of in-flight requests for the wrapped client.",
-	})
-	prometheus.MustRegister(defaultMetricsHttpClientRequestsInFlight)
-	defaultMetricsHttpClientRequestsCounter = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "http_client_requests_total",
-			Help: "A counter of requests from the wrapped client.",
-		},
-		[]string{"server_addr", "host", "method", "uri", "status"},
-	)
-	prometheus.MustRegister(defaultMetricsHttpClientRequestsCounter)
 	defaultMetricsHttpClientRequestsDurationHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name: "http_client_requests_seconds_bucket",
-		Help: "A histogram of request latencies for requests.",
+		Name:    "http_client_requests_seconds_bucket",
+		Help:    "A histogram of request latencies for requests.",
 		Buckets: []float64{.25, .5, 1, 2.5, 5, 10},
 	},
 		[]string{"server_addr", "host", "method", "uri", "status"},
 	)
 	prometheus.MustRegister(defaultMetricsHttpClientRequestsDurationHistogram)
 	defaultMetricsHttpClientRequestsTraceConnectionHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name: "http_client_requests_trace_connection_seconds_bucket",
-		Help: "A histogram of request trace latencies for connection.",
+		Name:    "http_client_requests_trace_connection_seconds_bucket",
+		Help:    "A histogram of request trace latencies for connection.",
 		Buckets: []float64{.005, .01, .02, .05},
 	},
 		[]string{"event", "server_addr", "host", "method", "uri"},
 	)
 	prometheus.MustRegister(defaultMetricsHttpClientRequestsTraceConnectionHistogram)
 	defaultMetricsHttpClientRequestsTraceConnectHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name: "http_client_requests_trace_connect_seconds_bucket",
-		Help: "A histogram of request trace latencies for connect.",
+		Name:    "http_client_requests_trace_connect_seconds_bucket",
+		Help:    "A histogram of request trace latencies for connect.",
 		Buckets: []float64{.005, .01, .02, .05},
 	},
 		[]string{"event", "server_addr", "host", "method", "uri"},
 	)
 	prometheus.MustRegister(defaultMetricsHttpClientRequestsTraceConnectHistogram)
 	defaultMetricsHttpClientRequestsTraceDnsHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name: "http_client_requests_trace_dns_seconds_bucket",
-		Help: "A histogram of request trace latencies for dns.",
+		Name:    "http_client_requests_trace_dns_seconds_bucket",
+		Help:    "A histogram of request trace latencies for dns.",
 		Buckets: []float64{.005, .01, .02, .05},
 	},
 		[]string{"event", "server_addr", "host", "method", "uri"},
 	)
 	prometheus.MustRegister(defaultMetricsHttpClientRequestsTraceDnsHistogram)
 	defaultMetricsHttpClientRequestsTraceTlsHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name: "http_client_requests_trace_tls_seconds_bucket",
-		Help: "A histogram of request trace latencies for tls.",
+		Name:    "http_client_requests_trace_tls_seconds_bucket",
+		Help:    "A histogram of request trace latencies for tls.",
 		Buckets: []float64{.005, .01, .02, .05},
 	},
 		[]string{"event", "server_addr", "host", "method", "uri"},
 	)
 	prometheus.MustRegister(defaultMetricsHttpClientRequestsTraceTlsHistogram)
 	defaultMetricsHttpClientRequestsTraceRequestHistogram = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name: "http_client_requests_trace_request_seconds_bucket",
-		Help: "A histogram of request trace latencies for request.",
+		Name:    "http_client_requests_trace_request_seconds_bucket",
+		Help:    "A histogram of request trace latencies for request.",
 		Buckets: []float64{.005, .01, .02, .05},
 	},
 		[]string{"event", "server_addr", "host", "method", "uri"},
