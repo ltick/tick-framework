@@ -3,9 +3,6 @@ package utility
 import (
 	"math/rand"
 	"time"
-	"hash"
-	"crypto/sha256"
-	"encoding/hex"
 )
 
 // RandomBytes returns securely generated random bytes. It will panic
