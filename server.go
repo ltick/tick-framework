@@ -556,7 +556,9 @@ func (s *Server) SetServerReuqestCors(corsOptions *cors.Options) *Server {
 }
 func (s *Server) AddRouteGroup(group string) *ServerRouteGroup {
 	// Router Handlers (Global)
-	s.RouteGroups[group] = s.Router.AddRouteGroup(group)
+	if _, ok := s.RouteGroups[group]; !ok {
+		s.RouteGroups[group] = s.Router.AddRouteGroup(group)
+	}
 	return s.RouteGroups[group]
 }
 func (s *Server) AddRoute(method string, path string, handlers ...routing.Handler) *Server {

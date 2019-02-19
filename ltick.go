@@ -30,6 +30,7 @@ import (
 	"github.com/ltick/tick-routing"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"golang.org/x/tools/cmd/getgo/server"
 )
 
 var (
@@ -113,21 +114,21 @@ var defaultConfigs map[string]config.Option = map[string]config.Option{
 	"ACCESS_LOG_MAX_LEVEL":         config.Option{Type: config.String, Default: log.LevelInfo, EnvironmentKey: "ACCESS_LOG_MAX_LEVEL"},
 	"ACCESS_LOG_FORMATTER":         config.Option{Type: config.String, Default: "raw", EnvironmentKey: "ACCESS_LOG_FORMATTER"},
 
-	"APP_LOG_TYPE":      config.Option{Type: config.String, Default: "console", EnvironmentKey: "APP_LOG_TYPE"},
-	"APP_LOG_FILE_NAME":  config.Option{Type: config.String, Default: "/tmp/app.log", EnvironmentKey: "APP_LOG_FILE_NAME"},
+	"APP_LOG_TYPE":              config.Option{Type: config.String, Default: "console", EnvironmentKey: "APP_LOG_TYPE"},
+	"APP_LOG_FILE_NAME":         config.Option{Type: config.String, Default: "/tmp/app.log", EnvironmentKey: "APP_LOG_FILE_NAME"},
 	"APP_LOG_FILE_ROTATE":       config.Option{Type: config.Bool, Default: "true", EnvironmentKey: "APP_LOG_FILE_ROTATE"},
 	"APP_LOG_FILE_BACKUP_COUNT": config.Option{Type: config.Int, Default: "1000", EnvironmentKey: "APP_LOG_FILE_BACKUP_COUNT"},
-	"APP_LOG_WRITER":    config.Option{Type: config.String, Default: "discard", EnvironmentKey: "APP_LOG_WRITER"},
-	"APP_LOG_MAX_LEVEL": config.Option{Type: config.String, Default: log.LevelInfo, EnvironmentKey: "APP_LOG_MAX_LEVEL"},
-	"APP_LOG_FORMATTER": config.Option{Type: config.String, Default: "default", EnvironmentKey: "APP_LOG_FORMATTER"},
+	"APP_LOG_WRITER":            config.Option{Type: config.String, Default: "discard", EnvironmentKey: "APP_LOG_WRITER"},
+	"APP_LOG_MAX_LEVEL":         config.Option{Type: config.String, Default: log.LevelInfo, EnvironmentKey: "APP_LOG_MAX_LEVEL"},
+	"APP_LOG_FORMATTER":         config.Option{Type: config.String, Default: "default", EnvironmentKey: "APP_LOG_FORMATTER"},
 
-	"SYSTEM_LOG_TYPE":      config.Option{Type: config.String, Default: "console", EnvironmentKey: "SYSTEM_LOG_TYPE"},
-	"SYSTEM_LOG_FILE_NAME":  config.Option{Type: config.String, Default: "/tmp/system.log", EnvironmentKey: "SYSTEM_LOG_FILE_NAME"},
+	"SYSTEM_LOG_TYPE":              config.Option{Type: config.String, Default: "console", EnvironmentKey: "SYSTEM_LOG_TYPE"},
+	"SYSTEM_LOG_FILE_NAME":         config.Option{Type: config.String, Default: "/tmp/system.log", EnvironmentKey: "SYSTEM_LOG_FILE_NAME"},
 	"SYSTEM_LOG_FILE_ROTATE":       config.Option{Type: config.Bool, Default: "true", EnvironmentKey: "SYSTEM_LOG_FILE_ROTATE"},
 	"SYSTEM_LOG_FILE_BACKUP_COUNT": config.Option{Type: config.Int, Default: "1000", EnvironmentKey: "SYSTEM_LOG_FILE_BACKUP_COUNT"},
-	"SYSTEM_LOG_WRITER":    config.Option{Type: config.String, Default: "discard", EnvironmentKey: "SYSTEM_LOG_WRITER"},
-	"SYSTEM_LOG_MAX_LEVEL": config.Option{Type: config.String, Default: log.LevelInfo, EnvironmentKey: "SYSTEM_LOG_MAX_LEVEL"},
-	"SYSTEM_LOG_FORMATTER": config.Option{Type: config.String, Default: "sys", EnvironmentKey: "SYSTEM_LOG_FORMATTER"},
+	"SYSTEM_LOG_WRITER":            config.Option{Type: config.String, Default: "discard", EnvironmentKey: "SYSTEM_LOG_WRITER"},
+	"SYSTEM_LOG_MAX_LEVEL":         config.Option{Type: config.String, Default: log.LevelInfo, EnvironmentKey: "SYSTEM_LOG_MAX_LEVEL"},
+	"SYSTEM_LOG_FORMATTER":         config.Option{Type: config.String, Default: "sys", EnvironmentKey: "SYSTEM_LOG_FORMATTER"},
 }
 
 func EngineConfigFile(configFile string) EngineOption {
@@ -731,48 +732,36 @@ func (e *Engine) Startup() (err error) {
 					},
 				}}, server.Router.Routes...)
 			}
-			sortedRouteHandlers := []string{}
-			routeHandlerMap := make(map[string][]*routeHandler)
+			routeHandlerMap := make(map[string]map[string][]*routeHandler)
 			if server.Router.Routes != nil && len(server.Router.Routes) > 0 {
 				for _, route := range server.Router.Routes {
 					if route == nil {
 						return errors.Annotatef(errors.New("ltick: route does not exists"), errStartup)
 					}
-					if _, ok := server.RouteGroups[route.Group]; !ok {
-						server.RouteGroups[route.Group] = server.AddRouteGroup(route.Group)
-					} else if server.RouteGroups[route.Group] == nil {
-						server.RouteGroups[route.Group] = server.AddRouteGroup(route.Group)
+					server.AddRouteGroup(route.Group)
+					if _, ok := routeHandlerMap[route.Group]; !ok {
+						routeHandlerMap[route.Group] = make(map[string][]*routeHandler, 0)
 					}
 					for index, method := range route.Method {
-						routeId := route.Group + "|" + method + "|" + route.Path
-						if _, ok := routeHandlerMap[routeId]; !ok {
-							sortedRouteHandlers = append(sortedRouteHandlers, routeId)
-							if route.Handlers[index] != nil {
-								routeHandlerMap[routeId] = []*routeHandler{
-									&routeHandler{
-										Handler: route.Handlers[index],
-										Host:    route.Host,
-									},
-								}
+						if route.Handlers[index] != nil {
+							routeId := method+"|"+route.Path
+							if _, ok := routeHandlerMap[route.Group][routeId]; !ok {
+								routeHandlerMap[route.Group][routeId] = make([]*routeHandler, 0)
 							}
-						} else {
-							if route.Handlers[index] != nil {
-								routeHandlerMap[routeId] = append(routeHandlerMap[routeId], &routeHandler{
-									Handler: route.Handlers[index],
-									Host:    route.Host,
-								})
-							}
+							routeHandlerMap[route.Group][routeId]  = append(routeHandlerMap[route.Group][routeId], &routeHandler{
+								Handler: route.Handlers[index],
+								Host:    route.Host,
+							})
 						}
 					}
 				}
 			}
-			for _, routeId := range sortedRouteHandlers {
-				if routeHandlers, ok := routeHandlerMap[routeId]; ok {
-					routeIds := strings.SplitN(routeId, "|", 3)
-					routeGroup := routeIds[0]
-					routeMethod := routeIds[1]
-					routePath := routeIds[2]
-					server.RouteGroups[routeGroup].PrependAnteriorHandler(proxyHandlers...)
+			for routeGroup, routeHandlers := range routeHandlerMap {
+				server.RouteGroups[routeGroup].PrependAnteriorHandler(proxyHandlers...)
+				for routeId, routeHandlers := range routeHandlers {
+					routeIds := strings.SplitN(routeId, "|", 2)
+					routeMethod := routeIds[0]
+					routePath := routeIds[1]
 					server.RouteGroups[routeGroup].AddApiRoute(routeMethod, routePath, routeHandlers)
 				}
 			}
