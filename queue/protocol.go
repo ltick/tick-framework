@@ -34,6 +34,8 @@ func (q *Queue) Prepare(ctx context.Context) (context.Context, error) {
 	var configs map[string]config.Option = map[string]config.Option{
 		"QUEUE_PROVIDER":          config.Option{Type: config.String, Default: "kafka", EnvironmentKey: "QUEUE_PROVIDER"},
 		"QUEUE_KAFKA_BROKERS":     config.Option{Type: config.String, EnvironmentKey: "QUEUE_KAFKA_BROKERS"},
+		"QUEUE_KAFKA_EVENT_GROUP": config.Option{Type: config.String, EnvironmentKey: "QUEUE_KAFKA_EVENT_GROUP"},
+		"QUEUE_KAFKA_EVENT_TOPIC": config.Option{Type: config.String, EnvironmentKey: "QUEUE_KAFKA_EVENT_TOPIC"},
 	}
 	err := q.Config.SetOptions(configs)
 	if err != nil {
@@ -131,6 +133,9 @@ func (q *Queue) NewQueue(ctx context.Context, name string, configs ...map[string
 	return queueHandler, nil
 }
 func (q *Queue) GetQueue(name string) (QueueHandler, error) {
+	if q.handler == nil {
+		return nil, errors.Annotate(errors.New("queue: handler does not initiated"), fmt.Sprintf(errGetQueue, name))
+	}
 	queueHandler, err := q.handler.GetQueue(name)
 	if err != nil {
 		return nil, errors.Annotate(err, fmt.Sprintf(errGetQueue, name))
