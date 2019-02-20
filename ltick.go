@@ -755,16 +755,18 @@ func (e *Engine) Startup() (err error) {
 					}
 				}
 			}
-			for routeGroup, routeHandlers := range routeHandlerMap {
-				server.RouteGroups[routeGroup].PrependAnteriorHandler(proxyHandlers...)
-				for routeId, routeHandlers := range routeHandlers {
+			for routeGroup, routeGroupHandlers := range routeHandlerMap {
+				if len(proxyHandlers) > 0 {
+					server.RouteGroups[routeGroup].PrependAnteriorHandler(proxyHandlers...)
+				}
+				for routeId, routeHandlers := range routeGroupHandlers {
 					routeIds := strings.SplitN(routeId, "|", 2)
 					routeMethod := routeIds[0]
 					routePath := routeIds[1]
 					server.RouteGroups[routeGroup].AddApiRoute(routeMethod, routePath, routeHandlers)
 				}
 			}
-			e.Log(fmt.Sprintf("ltick: new server [serverOptions:'%+v', serverRouterOptions:'%+v', handlerTimeout:'%.fs']", server.ServerOptions, server.Router.Options, server.Router.TimeoutDuration.Seconds()))
+			e.Log(fmt.Sprintf("ltick: new server [serverOptions:'%+v', serverRouterOptions:'%+v', handlerTimeout:'%.6fs']", server.ServerOptions, server.Router.Options, server.Router.TimeoutDuration.Seconds()))
 		}
 	}
 	// 注入模块

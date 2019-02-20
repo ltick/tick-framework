@@ -756,16 +756,13 @@ func (g *ServerRouteGroup) AddCallback(callback RouterCallback) *ServerRouteGrou
 // 添加API路由
 // 可进行参数校验
 func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes []*routeHandler) {
-	routeHandlers := make([]routing.Handler, len(handlerRoutes))
-	routeCnt := len(handlerRoutes)
-	for index, handlerRoute := range handlerRoutes {
-		route := handlerRoute
-		routeHandlers[index] = func(ctx *routing.Context) error {
-			requestHost := ctx.Request.Host
-			if requestHost == "" {
-				requestHost = ctx.Request.URL.Host
-			}
-			var handlerErrorChannels map[string]chan error = make(map[string]chan error, 0)
+	routeHandler := func(ctx *routing.Context) error {
+		requestHost := ctx.Request.Host
+		if requestHost == "" {
+			requestHost = ctx.Request.URL.Host
+		}
+		var handlerErrorChannels map[string]chan error = make(map[string]chan error, 0)
+		for _, route := range handlerRoutes{
 			for _, host := range route.Host {
 				if utility.WildcardMatch(host, requestHost) {
 					if _, ok := handlerErrorChannels[host]; !ok {
@@ -773,8 +770,6 @@ func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes
 					} else {
 						return nil
 					}
-					// Jump After NotFoundHandler
-					ctx.Jump(routeCnt)
 					if route.BasicAuth != nil {
 						ctx.Request.SetBasicAuth(route.BasicAuth.Username, route.BasicAuth.Password)
 					}
@@ -800,12 +795,11 @@ func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes
 					}
 				}
 			}
-			return nil
 		}
+		// TODO custom NotFoundHandler
+		return routing.NotFoundHandler(ctx)
 	}
-	// TODO custom NotFoundHandler
-	routeHandlers = combineHandlers(routeHandlers, []routing.Handler{routing.NotFoundHandler})
-	g.AddRoute(method, path, routeHandlers...)
+	g.AddRoute(method, path, routeHandler)
 }
 
 // 添加API路由
