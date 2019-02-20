@@ -34,8 +34,6 @@ func (q *Queue) Prepare(ctx context.Context) (context.Context, error) {
 	var configs map[string]config.Option = map[string]config.Option{
 		"QUEUE_PROVIDER":          config.Option{Type: config.String, Default: "kafka", EnvironmentKey: "QUEUE_PROVIDER"},
 		"QUEUE_KAFKA_BROKERS":     config.Option{Type: config.String, EnvironmentKey: "QUEUE_KAFKA_BROKERS"},
-		"QUEUE_KAFKA_EVENT_GROUP": config.Option{Type: config.String, EnvironmentKey: "QUEUE_KAFKA_EVENT_GROUP"},
-		"QUEUE_KAFKA_EVENT_TOPIC": config.Option{Type: config.String, EnvironmentKey: "QUEUE_KAFKA_EVENT_TOPIC"},
 	}
 	err := q.Config.SetOptions(configs)
 	if err != nil {
@@ -52,12 +50,6 @@ func (q *Queue) Initiate(ctx context.Context) (context.Context, error) {
 	}
 	if _, ok := q.configs["QUEUE_KAFKA_BROKERS"]; !ok {
 		q.configs["QUEUE_KAFKA_BROKERS"] = q.Config.GetString("QUEUE_KAFKA_BROKERS")
-	}
-	if _, ok := q.configs["QUEUE_KAFKA_EVENT_GROUP"]; !ok {
-		q.configs["QUEUE_KAFKA_EVENT_GROUP"] = q.Config.GetString("QUEUE_KAFKA_EVENT_GROUP")
-	}
-	if _, ok := q.configs["QUEUE_KAFKA_EVENT_TOPIC"]; !ok {
-		q.configs["QUEUE_KAFKA_EVENT_TOPIC"] = q.Config.GetString("QUEUE_KAFKA_EVENT_TOPIC")
 	}
 	return ctx, nil
 }

@@ -30,7 +30,6 @@ import (
 	"github.com/ltick/tick-routing"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"golang.org/x/tools/cmd/getgo/server"
 )
 
 var (
