@@ -665,7 +665,7 @@ func (e *Engine) Startup() (err error) {
 					Method: []string{"GET"},
 					Host:   server.Router.Metrics.Host,
 					Group:  server.Router.Metrics.Group,
-					Path:   "",
+					Path:   "*",
 					Handlers: []api.Handler{
 						metricsHandler{
 							basicAuth: server.Router.Metrics.BasicAuth,

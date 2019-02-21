@@ -7,7 +7,11 @@ import (
 	"strings"
 )
 
-var errGetServerAddress = "ltick utility: get server address"
+var (
+	errGetServerAddress = "ltick utility: get server address"
+)
+
+var serverAddress *string
 
 func GetClientIP(req *http.Request) string {
 	ip := req.Header.Get("X-Real-IP")
@@ -23,6 +27,9 @@ func GetClientIP(req *http.Request) string {
 	return ip
 }
 func GetServerAddress() (ip string, err error) {
+	if serverAddress != nil {
+		return *serverAddress, nil
+	}
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return "", errors.New(errGetServerAddress + ": " + err.Error())
