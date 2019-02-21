@@ -64,7 +64,6 @@ type (
 	}
 	ServerRouterPprof struct {
 		Host      []string
-		Group     string
 		BasicAuth *ServerBasicAuth
 	}
 	ServerRouterRoute struct {
@@ -496,10 +495,9 @@ func (s *Server) Proxy(host []string, group string, path string, upstream string
 	})
 	return s
 }
-func (s *Server) Pprof(host []string, group string, basicAuth *ServerBasicAuth) *Server {
+func (s *Server) Pprof(host []string, basicAuth *ServerBasicAuth) *Server {
 	s.Router.Pprof = &ServerRouterPprof{
 		Host:      host,
-		Group:     group,
 		BasicAuth: basicAuth,
 	}
 	return s

@@ -677,7 +677,7 @@ func (e *Engine) Startup() (err error) {
 				server.Router.Routes = append([]*ServerRouterRoute{&ServerRouterRoute{
 					Method: []string{"ANY"},
 					Host:   server.Router.Pprof.Host,
-					Group:  server.Router.Pprof.Group,
+					Group:  "/debug/pprof", // follow official route rule
 					Path:   "*",
 					Handlers: []api.Handler{
 						pprofHandler{
@@ -688,7 +688,7 @@ func (e *Engine) Startup() (err error) {
 				}, &ServerRouterRoute{
 					Method: []string{"ANY"},
 					Host:   server.Router.Pprof.Host,
-					Group:  server.Router.Pprof.Group,
+					Group:  "/debug/pprof",  // follow official route rule
 					Path:   "/cmdline",
 					Handlers: []api.Handler{
 						pprofHandler{
@@ -699,7 +699,7 @@ func (e *Engine) Startup() (err error) {
 				}, &ServerRouterRoute{
 					Method: []string{"ANY"},
 					Host:   server.Router.Pprof.Host,
-					Group:  server.Router.Pprof.Group,
+					Group:  "/debug/pprof",  // follow official route rule
 					Path:   "/profile",
 					Handlers: []api.Handler{
 						pprofHandler{
@@ -710,7 +710,7 @@ func (e *Engine) Startup() (err error) {
 				}, &ServerRouterRoute{
 					Method: []string{"ANY"},
 					Host:   server.Router.Pprof.Host,
-					Group:  server.Router.Pprof.Group,
+					Group:  "/debug/pprof",  // follow official route rule
 					Path:   "/symbol",
 					Handlers: []api.Handler{
 						pprofHandler{
@@ -721,7 +721,7 @@ func (e *Engine) Startup() (err error) {
 				}, &ServerRouterRoute{
 					Method: []string{"ANY"},
 					Host:   server.Router.Pprof.Host,
-					Group:  server.Router.Pprof.Group,
+					Group:  "/debug/pprof",  // follow official route rule
 					Path:   "/trace",
 					Handlers: []api.Handler{
 						pprofHandler{
