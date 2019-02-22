@@ -38,11 +38,12 @@ type Delegator interface {
 type responseWriterDelegator struct {
 	http.ResponseWriter
 
-	handler, method    string
-	status             int
-	written            int64
-	wroteHeader        bool
-	observeWriteHeader func(int)
+	handler, method     string
+	status              int
+	written             int64
+	wroteHeader         bool
+	observeWriteHeader  func(int)
+	observeWriteRequest func(string)
 }
 
 func (r *responseWriterDelegator) Status() int {
@@ -63,11 +64,17 @@ func (r *responseWriterDelegator) WriteHeader(code int) {
 }
 
 func (r *responseWriterDelegator) Write(b []byte) (int, error) {
+	if r.observeWriteRequest != nil {
+		r.observeWriteRequest("sent_first_response_byte")
+	}
 	if !r.wroteHeader {
 		r.WriteHeader(http.StatusOK)
 	}
 	n, err := r.ResponseWriter.Write(b)
 	r.written += int64(n)
+	if r.observeWriteRequest != nil {
+		r.observeWriteRequest("wrote_request")
+	}
 	return n, err
 }
 

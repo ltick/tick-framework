@@ -177,7 +177,7 @@ func (r *Response) Write(data interface{}) (n int, err error) {
 	}
 	r.wrote = true
 	if err != nil {
-		if ConnectionResetByPeer(err) || Timeout(err) || NetworkUnreachable(err) {
+		if BrokenPipe(err) || ConnectionResetByPeer(err) || Timeout(err) || NetworkUnreachable(err) {
 			return 0, routing.NewHTTPError(499, "Response write error: "+err.Error())
 		}
 		return 0, routing.NewHTTPError(http.StatusInternalServerError, "Response write error: "+err.Error())
@@ -237,7 +237,7 @@ func (r *Response) Copy(src io.Reader) (int64, error) {
 		}
 	}
 	if err != nil {
-		if ConnectionResetByPeer(err) || Timeout(err) || NetworkUnreachable(err) {
+		if BrokenPipe(err) || ConnectionResetByPeer(err) || Timeout(err) || NetworkUnreachable(err) {
 			return 0, routing.NewHTTPError(499, "Response write error: "+err.Error())
 		}
 		return 0, routing.NewHTTPError(http.StatusGatewayTimeout, "Response write error: "+err.Error())
@@ -313,4 +313,8 @@ func Timeout(err error) bool {
 
 func NetworkUnreachable(err error) bool {
 	return strings.Contains(err.Error(), "network is unreachable")
+}
+
+func BrokenPipe(err error) bool {
+	return strings.Contains(err.Error(), "broken pipe")
 }

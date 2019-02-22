@@ -678,9 +678,9 @@ func (e *Engine) Startup() (err error) {
 					Method: []string{"ANY"},
 					Host:   server.Router.Pprof.Host,
 					Group:  "/debug/pprof", // follow official route rule
-					Path:   "*",
+					Path:   "",
 					Handlers: []api.Handler{
-						pprofHandler{
+						pprofHandlerFunc{
 							httpHandlerFunc: pprof.Index,
 							basicAuth:       server.Router.Pprof.BasicAuth,
 						},
@@ -688,10 +688,65 @@ func (e *Engine) Startup() (err error) {
 				}, &ServerRouterRoute{
 					Method: []string{"ANY"},
 					Host:   server.Router.Pprof.Host,
-					Group:  "/debug/pprof",  // follow official route rule
-					Path:   "/cmdline",
+					Group:  "/debug/pprof", // follow official route rule
+					Path:   "/goroutine",
 					Handlers: []api.Handler{
 						pprofHandler{
+							httpHandler: pprof.Handler("goroutine"),
+							basicAuth:   server.Router.Pprof.BasicAuth,
+						},
+					},
+				}, &ServerRouterRoute{
+					Method: []string{"ANY"},
+					Host:   server.Router.Pprof.Host,
+					Group:  "/debug/pprof", // follow official route rule
+					Path:   "/threadcreate",
+					Handlers: []api.Handler{
+						pprofHandler{
+							httpHandler: pprof.Handler("threadcreate"),
+							basicAuth:   server.Router.Pprof.BasicAuth,
+						},
+					},
+				}, &ServerRouterRoute{
+					Method: []string{"ANY"},
+					Host:   server.Router.Pprof.Host,
+					Group:  "/debug/pprof", // follow official route rule
+					Path:   "/heap",
+					Handlers: []api.Handler{
+						pprofHandler{
+							httpHandler: pprof.Handler("heap"),
+							basicAuth:   server.Router.Pprof.BasicAuth,
+						},
+					},
+				}, &ServerRouterRoute{
+					Method: []string{"ANY"},
+					Host:   server.Router.Pprof.Host,
+					Group:  "/debug/pprof", // follow official route rule
+					Path:   "/block",
+					Handlers: []api.Handler{
+						pprofHandler{
+							httpHandler: pprof.Handler("block"),
+							basicAuth:   server.Router.Pprof.BasicAuth,
+						},
+					},
+				}, &ServerRouterRoute{
+					Method: []string{"ANY"},
+					Host:   server.Router.Pprof.Host,
+					Group:  "/debug/pprof", // follow official route rule
+					Path:   "/mutex",
+					Handlers: []api.Handler{
+						pprofHandler{
+							httpHandler: pprof.Handler("mutex"),
+							basicAuth:   server.Router.Pprof.BasicAuth,
+						},
+					},
+				}, &ServerRouterRoute{
+					Method: []string{"ANY"},
+					Host:   server.Router.Pprof.Host,
+					Group:  "/debug/pprof", // follow official route rule
+					Path:   "/cmdline",
+					Handlers: []api.Handler{
+						pprofHandlerFunc{
 							httpHandlerFunc: pprof.Cmdline,
 							basicAuth:       server.Router.Pprof.BasicAuth,
 						},
@@ -699,10 +754,10 @@ func (e *Engine) Startup() (err error) {
 				}, &ServerRouterRoute{
 					Method: []string{"ANY"},
 					Host:   server.Router.Pprof.Host,
-					Group:  "/debug/pprof",  // follow official route rule
+					Group:  "/debug/pprof", // follow official route rule
 					Path:   "/profile",
 					Handlers: []api.Handler{
-						pprofHandler{
+						pprofHandlerFunc{
 							httpHandlerFunc: pprof.Profile,
 							basicAuth:       server.Router.Pprof.BasicAuth,
 						},
@@ -710,10 +765,10 @@ func (e *Engine) Startup() (err error) {
 				}, &ServerRouterRoute{
 					Method: []string{"ANY"},
 					Host:   server.Router.Pprof.Host,
-					Group:  "/debug/pprof",  // follow official route rule
+					Group:  "/debug/pprof", // follow official route rule
 					Path:   "/symbol",
 					Handlers: []api.Handler{
-						pprofHandler{
+						pprofHandlerFunc{
 							httpHandlerFunc: pprof.Symbol,
 							basicAuth:       server.Router.Pprof.BasicAuth,
 						},
@@ -721,16 +776,18 @@ func (e *Engine) Startup() (err error) {
 				}, &ServerRouterRoute{
 					Method: []string{"ANY"},
 					Host:   server.Router.Pprof.Host,
-					Group:  "/debug/pprof",  // follow official route rule
+					Group:  "/debug/pprof", // follow official route rule
 					Path:   "/trace",
 					Handlers: []api.Handler{
-						pprofHandler{
+						pprofHandlerFunc{
 							httpHandlerFunc: pprof.Trace,
 							basicAuth:       server.Router.Pprof.BasicAuth,
 						},
 					},
 				}}, server.Router.Routes...)
 			}
+			sortedRouteGroup := make([]string, 0)
+			sortedRouteId := make(map[string][]string, 0)
 			routeHandlerMap := make(map[string]map[string][]*routeHandler)
 			if server.Router.Routes != nil && len(server.Router.Routes) > 0 {
 				for _, route := range server.Router.Routes {
@@ -739,15 +796,18 @@ func (e *Engine) Startup() (err error) {
 					}
 					server.AddRouteGroup(route.Group)
 					if _, ok := routeHandlerMap[route.Group]; !ok {
+						sortedRouteGroup = append(sortedRouteGroup, route.Group)
+						sortedRouteId[route.Group] = make([]string, 0)
 						routeHandlerMap[route.Group] = make(map[string][]*routeHandler, 0)
 					}
 					for index, method := range route.Method {
 						if route.Handlers[index] != nil {
-							routeId := method+"|"+route.Path
+							routeId := method + "|" + route.Path
 							if _, ok := routeHandlerMap[route.Group][routeId]; !ok {
+								sortedRouteId[route.Group] = append(sortedRouteId[route.Group], routeId)
 								routeHandlerMap[route.Group][routeId] = make([]*routeHandler, 0)
 							}
-							routeHandlerMap[route.Group][routeId]  = append(routeHandlerMap[route.Group][routeId], &routeHandler{
+							routeHandlerMap[route.Group][routeId] = append(routeHandlerMap[route.Group][routeId], &routeHandler{
 								Handler: route.Handlers[index],
 								Host:    route.Host,
 							})
@@ -755,15 +815,15 @@ func (e *Engine) Startup() (err error) {
 					}
 				}
 			}
-			for routeGroup, routeGroupHandlers := range routeHandlerMap {
+			for _, routeGroup := range sortedRouteGroup {
 				if len(proxyHandlers) > 0 {
 					server.RouteGroups[routeGroup].PrependAnteriorHandler(proxyHandlers...)
 				}
-				for routeId, routeHandlers := range routeGroupHandlers {
+				for _, routeId,  := range sortedRouteId[routeGroup] {
 					routeIds := strings.SplitN(routeId, "|", 2)
 					routeMethod := routeIds[0]
 					routePath := routeIds[1]
-					server.RouteGroups[routeGroup].AddApiRoute(routeMethod, routePath, routeHandlers)
+					server.RouteGroups[routeGroup].AddApiRoute(routeMethod, routePath, routeHandlerMap[routeGroup][routeId])
 				}
 			}
 			e.Log(fmt.Sprintf("ltick: new server [serverOptions:'%+v', serverRouterOptions:'%+v', handlerTimeout:'%.6fs']", server.ServerOptions, server.Router.Options, server.Router.TimeoutDuration.Seconds()))

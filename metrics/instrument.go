@@ -17,7 +17,7 @@ import (
 )
 
 type HttpClientRequestLabelFunc func(obs prometheus.Collector, r *http.Request, rsp *http.Response, customLabels ...prometheus.Labels) prometheus.Labels
-type HttpServerRequestLabelFunc func(obs prometheus.Collector, d Delegator, r *http.Request, customLabels ...prometheus.Labels) prometheus.Labels
+type HttpServerRequestLabelFunc func(obs prometheus.Collector, rspStatus int, r *http.Request, customLabels ...prometheus.Labels) prometheus.Labels
 
 func defaultMetricsHttpClientRequestLabelFunc(obs prometheus.Collector, r *http.Request, rsp *http.Response, customLabels ...prometheus.Labels) prometheus.Labels {
 	serverAddr, host, method, uri, status := checkLabels(obs)
@@ -37,7 +37,7 @@ func defaultMetricsHttpClientRequestLabelFunc(obs prometheus.Collector, r *http.
 	}
 }
 
-func defaultMetricsHttpServerRequestLabelFunc(obs prometheus.Collector, d Delegator, r *http.Request, customLabels ...prometheus.Labels) prometheus.Labels {
+func defaultMetricsHttpServerRequestLabelFunc(obs prometheus.Collector, rspStatus int, r *http.Request, customLabels ...prometheus.Labels) prometheus.Labels {
 	serverAddr, host, method, uri, status := checkLabels(obs)
 	reqHost := r.Host
 	if reqHost == "" {
@@ -48,7 +48,7 @@ func defaultMetricsHttpServerRequestLabelFunc(obs prometheus.Collector, d Delega
 		reqUri = r.URL.RawPath
 	}
 	reqServerAddr, _ := utility.GetServerAddress()
-	return labels(serverAddr, host, method, uri, status, reqServerAddr, reqHost, r.Method, reqUri, d.Status(), customLabels...)
+	return labels(serverAddr, host, method, uri, status, reqServerAddr, reqHost, r.Method, reqUri, rspStatus, customLabels...)
 }
 
 // magicString is used for the hacky label test in checkLabels. Remove once fixed.
@@ -73,16 +73,29 @@ const magicString = "zZgWfBxLqvG8kc8IMv3POi2Bb0tZI3vAnBx+gBaFi9FyPzB/CzKUer1yufD
 // if used with Go1.9+.
 func InstrumentHttpServerRequestsDuration(observers []prometheus.ObserverVec, next http.Handler, serverRequestLabelFuncs ...HttpServerRequestLabelFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		now := time.Now()
-		d := newDelegator(w, nil)
-		next.ServeHTTP(d, r)
 		serverRequestLabelFunc := defaultMetricsHttpServerRequestLabelFunc
 		if len(serverRequestLabelFuncs) > 0 {
 			serverRequestLabelFunc = serverRequestLabelFuncs[0]
 		}
+		now := time.Now()
+		d := newDelegator(w, func(status int) {
+			elapseTime := time.Since(now).Seconds()
+			for _, obs := range observers {
+				labels := serverRequestLabelFunc(obs, status, r)
+				obs.With(labels).Observe(elapseTime)
+			}
+		}, func(event string) {
+			elapseTime := time.Since(now).Seconds()
+			for _, obs := range observers {
+				labels := serverRequestLabelFunc(obs, 0, r, prometheus.Labels{"event": event})
+				obs.With(labels).Observe(elapseTime)
+			}
+		})
+		next.ServeHTTP(d, r)
+		elapseTime := time.Since(now).Seconds()
 		for _, obs := range observers {
-			labels := serverRequestLabelFunc(obs, d, r)
-			obs.With(labels).Observe(time.Since(now).Seconds())
+			labels := serverRequestLabelFunc(obs, d.Status(), r)
+			obs.With(labels).Observe(elapseTime)
 		}
 	})
 }
@@ -105,7 +118,7 @@ func InstrumentHttpServerRequestsDuration(observers []prometheus.ObserverVec, ne
 // See the example for InstrumentHttpServerRequestsDuration for example usage.
 func InstrumentHttpServerRequestsRequestSize(observers []prometheus.ObserverVec, next http.Handler, serverRequestLabelFuncs ...HttpServerRequestLabelFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		d := newDelegator(w, nil)
+		d := newDelegator(w, nil, nil)
 		next.ServeHTTP(d, r)
 		size := computeApproximateRequestSize(r)
 		serverRequestLabelFunc := defaultMetricsHttpServerRequestLabelFunc
@@ -113,7 +126,7 @@ func InstrumentHttpServerRequestsRequestSize(observers []prometheus.ObserverVec,
 			serverRequestLabelFunc = serverRequestLabelFuncs[0]
 		}
 		for _, obs := range observers {
-			labels := serverRequestLabelFunc(obs, d, r)
+			labels := serverRequestLabelFunc(obs, d.Status(), r)
 			obs.With(labels).Observe(float64(size))
 		}
 	})
@@ -137,14 +150,14 @@ func InstrumentHttpServerRequestsRequestSize(observers []prometheus.ObserverVec,
 // See the example for InstrumentHttpServerRequestsDuration for example usage.
 func InstrumentHttpServerRequestsResponseSize(observers []prometheus.ObserverVec, next http.Handler, serverRequestLabelFuncs ...HttpServerRequestLabelFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		d := newDelegator(w, nil)
+		d := newDelegator(w, nil, nil)
 		next.ServeHTTP(d, r)
 		serverRequestLabelFunc := defaultMetricsHttpServerRequestLabelFunc
 		if len(serverRequestLabelFuncs) > 0 {
 			serverRequestLabelFunc = serverRequestLabelFuncs[0]
 		}
 		for _, obs := range observers {
-			labels := serverRequestLabelFunc(obs, d, r)
+			labels := serverRequestLabelFunc(obs, d.Status(), r)
 			obs.With(labels).Observe(float64(d.Written()))
 		}
 	})

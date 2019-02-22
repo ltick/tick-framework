@@ -36,6 +36,7 @@ type (
 		MetricsHttpServerRequestsDurations     []prometheus.ObserverVec
 		MetricsHttpServerRequestsResponseSizes []prometheus.ObserverVec
 		MetricsHttpServerRequestsRequestSizes  []prometheus.ObserverVec
+		MetricsHttpServerRequestsTraceRequest  []prometheus.ObserverVec
 		MetricsHttpServerRequestLabelFunc      metrics.HttpServerRequestLabelFunc
 	}
 	ServerBasicAuth struct {
@@ -146,6 +147,15 @@ func ServerMetricsHttpServerRequestsRequestSize(observers []prometheus.ObserverV
 		options.MetricsHttpServerRequestsRequestSizes = observers
 	}
 }
+func ServerMetricsHttpServerRequestsTraceRequest(observers []prometheus.ObserverVec) ServerOption {
+	if observers == nil {
+		observers = []prometheus.ObserverVec{defaultMetricsHttpServerRequestsTraceRequest}
+	}
+	return func(options *ServerOptions) {
+		options.MetricsHttpServerRequestsTraceRequest = observers
+	}
+}
+
 func ServerMetricsHttpServerRequestLabelFunc(httpServerRequestLabelFunc metrics.HttpServerRequestLabelFunc) ServerOption {
 	return func(options *ServerOptions) {
 		options.MetricsHttpServerRequestLabelFunc = httpServerRequestLabelFunc
@@ -523,9 +533,23 @@ func (h metricsHandler) Serve(ctx *api.Context) error {
 	return nil
 }
 
-type pprofHandler struct {
+type pprofHandlerFunc struct {
 	httpHandlerFunc http.HandlerFunc
 	basicAuth       *ServerBasicAuth
+}
+
+func (h pprofHandlerFunc) Serve(ctx *api.Context) error {
+	if h.basicAuth != nil {
+		ctx.Request.SetBasicAuth(h.basicAuth.Username, h.basicAuth.Username)
+	}
+	ctx.ResponseWriter.Header().Set("Content-Type", "text/html")
+	h.httpHandlerFunc(ctx.ResponseWriter, ctx.Request)
+	return nil
+}
+
+type pprofHandler struct {
+	httpHandler http.Handler
+	basicAuth   *ServerBasicAuth
 }
 
 func (h pprofHandler) Serve(ctx *api.Context) error {
@@ -533,7 +557,7 @@ func (h pprofHandler) Serve(ctx *api.Context) error {
 		ctx.Request.SetBasicAuth(h.basicAuth.Username, h.basicAuth.Username)
 	}
 	ctx.ResponseWriter.Header().Set("Content-Type", "text/html")
-	h.httpHandlerFunc(ctx.ResponseWriter, ctx.Request)
+	h.httpHandler.ServeHTTP(ctx.ResponseWriter, ctx.Request)
 	return nil
 }
 
@@ -760,7 +784,7 @@ func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes
 			requestHost = ctx.Request.URL.Host
 		}
 		var handlerErrorChannels map[string]chan error = make(map[string]chan error, 0)
-		for _, route := range handlerRoutes{
+		for _, route := range handlerRoutes {
 			for _, host := range route.Host {
 				if utility.WildcardMatch(host, requestHost) {
 					if _, ok := handlerErrorChannels[host]; !ok {
