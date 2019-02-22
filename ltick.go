@@ -819,7 +819,7 @@ func (e *Engine) Startup() (err error) {
 				if len(proxyHandlers) > 0 {
 					server.RouteGroups[routeGroup].PrependAnteriorHandler(proxyHandlers...)
 				}
-				for _, routeId,  := range sortedRouteId[routeGroup] {
+				for _, routeId := range sortedRouteId[routeGroup] {
 					routeIds := strings.SplitN(routeId, "|", 2)
 					routeMethod := routeIds[0]
 					routePath := routeIds[1]
