@@ -217,9 +217,9 @@ func NewHttpClient(setters ...ClientOption) *http.Client {
 	// Wrap the default RoundTripper with middleware.
 	if c.MetricsHttpClientRequestsDurations != nil {
 		if c.MetricsHttpClientRequestLabelFunc != nil {
-			httpClient.Transport = metrics.InstrumentHttpClientRequestDuration(c.MetricsHttpClientRequestsDurations, httpClient.Transport, c.MetricsHttpClientRequestLabelFunc)
+			httpClient.Transport = metrics.InstrumentHttpClientRequest(c.MetricsHttpClientRequestsDurations, httpClient.Transport, c.MetricsHttpClientRequestLabelFunc)
 		} else {
-			httpClient.Transport = metrics.InstrumentHttpClientRequestDuration(c.MetricsHttpClientRequestsDurations, httpClient.Transport)
+			httpClient.Transport = metrics.InstrumentHttpClientRequest(c.MetricsHttpClientRequestsDurations, httpClient.Transport)
 		}
 	}
 	observers := map[string][]prometheus.ObserverVec{}

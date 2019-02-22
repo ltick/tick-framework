@@ -921,12 +921,11 @@ func (e *Engine) ListenAndServe() {
 func (e *Engine) ServerListenAndServe(name string, server *Server) {
 	e.Log("ltick: Server start listen ", server.Port, "...")
 	var handler http.Handler = server.Router
-	if server.MetricsHttpServerRequestsDurations != nil {
-
+	if server.MetricsHttpServerRequests != nil {
 		if server.MetricsHttpServerRequestLabelFunc != nil {
-			handler = metrics.InstrumentHttpServerRequestsDuration(server.MetricsHttpServerRequestsDurations, server.MetricsHttpServerRequestsTraceRequest, handler, server.MetricsHttpServerRequestLabelFunc)
+			handler = metrics.InstrumentHttpServerRequests(server.MetricsHttpServerRequests, server.MetricsHttpServerRequestsTrace, handler, server.MetricsHttpServerRequestLabelFunc)
 		} else {
-			handler = metrics.InstrumentHttpServerRequestsDuration(server.MetricsHttpServerRequestsDurations, server.MetricsHttpServerRequestsTraceRequest, handler)
+			handler = metrics.InstrumentHttpServerRequests(server.MetricsHttpServerRequests, server.MetricsHttpServerRequestsTrace, handler)
 		}
 	}
 	if server.MetricsHttpServerRequestsResponseSizes != nil {

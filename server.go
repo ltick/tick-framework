@@ -33,10 +33,10 @@ type (
 		Port                                   uint
 		GracefulStopTimeout                    string
 		GracefulStopTimeoutDuration            time.Duration
-		MetricsHttpServerRequestsDurations     []prometheus.ObserverVec
+		MetricsHttpServerRequests     []prometheus.ObserverVec
+		MetricsHttpServerRequestsTrace  []prometheus.ObserverVec
 		MetricsHttpServerRequestsResponseSizes []prometheus.ObserverVec
 		MetricsHttpServerRequestsRequestSizes  []prometheus.ObserverVec
-		MetricsHttpServerRequestsTraceRequest  []prometheus.ObserverVec
 		MetricsHttpServerRequestLabelFunc      metrics.HttpServerRequestLabelFunc
 	}
 	ServerBasicAuth struct {
@@ -123,12 +123,12 @@ func ServerPort(port uint) ServerOption {
 		options.Port = port
 	}
 }
-func ServerMetricsHttpServerRequestsDuration(observers []prometheus.ObserverVec) ServerOption {
+func ServerMetricsHttpServerRequests(observers []prometheus.ObserverVec) ServerOption {
 	if observers == nil {
 		observers = []prometheus.ObserverVec{defaultMetricsHttpServerRequests}
 	}
 	return func(options *ServerOptions) {
-		options.MetricsHttpServerRequestsDurations = observers
+		options.MetricsHttpServerRequests = observers
 	}
 }
 func ServerMetricsHttpServerRequestsResponseSize(observers []prometheus.ObserverVec) ServerOption {
@@ -147,12 +147,12 @@ func ServerMetricsHttpServerRequestsRequestSize(observers []prometheus.ObserverV
 		options.MetricsHttpServerRequestsRequestSizes = observers
 	}
 }
-func ServerMetricsHttpServerRequestsTraceRequest(observers []prometheus.ObserverVec) ServerOption {
+func ServerMetricsHttpServerRequestsTrace(observers []prometheus.ObserverVec) ServerOption {
 	if observers == nil {
-		observers = []prometheus.ObserverVec{defaultMetricsHttpServerRequestsTraceRequest}
+		observers = []prometheus.ObserverVec{defaultMetricsHttpServerRequestsTrace}
 	}
 	return func(options *ServerOptions) {
-		options.MetricsHttpServerRequestsTraceRequest = observers
+		options.MetricsHttpServerRequestsTrace = observers
 	}
 }
 

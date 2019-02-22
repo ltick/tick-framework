@@ -34,7 +34,7 @@ var (
 	defaultMetricsHttpServerRequests             *prometheus.HistogramVec
 	defaultMetricsHttpServerRequestsResponseSize *prometheus.HistogramVec
 	defaultMetricsHttpServerRequestsRequestSize  *prometheus.HistogramVec
-	defaultMetricsHttpServerRequestsTraceRequest *prometheus.HistogramVec
+	defaultMetricsHttpServerRequestsTrace        *prometheus.HistogramVec
 	// Metrics Http Client
 	defaultMetricsHttpClientRequestsInFlight        prometheus.Gauge
 	defaultMetricsHttpClientRequestsCounter         *prometheus.CounterVec
@@ -150,14 +150,14 @@ func init() {
 		[]string{"server_addr", "host", "method", "uri", "status"},
 	)
 	prometheus.MustRegister(defaultMetricsHttpServerRequestsRequestSize)
-	defaultMetricsHttpServerRequestsTraceRequest = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "http_server_requests_trace_request_seconds",
-		Help:    "A histogram of request latencies for requests.",
+	defaultMetricsHttpServerRequestsTrace = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "http_server_requests_trace_seconds",
+		Help:    "A histogram of request trace latencies for requests.",
 		Buckets: []float64{.25, .5, 1, 2.5, 5, 10},
 	},
 		[]string{"event", "server_addr", "host", "method", "uri"},
 	)
-	prometheus.MustRegister(defaultMetricsHttpServerRequestsTraceRequest)
+	prometheus.MustRegister(defaultMetricsHttpServerRequestsTrace)
 	// Http Client
 	defaultMetricsHttpClientRequestsInFlight = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "http_client_requests_in_flight",

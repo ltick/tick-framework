@@ -54,7 +54,7 @@ func defaultMetricsHttpServerRequestLabelFunc(obs prometheus.Collector, d Delega
 // magicString is used for the hacky label test in checkLabels. Remove once fixed.
 const magicString = "zZgWfBxLqvG8kc8IMv3POi2Bb0tZI3vAnBx+gBaFi9FyPzB/CzKUer1yufDa"
 
-// InstrumentHttpServerRequestsDuration is a middleware that wraps the provided
+// InstrumentHttpServerRequests is a middleware that wraps the provided
 // http.Handler to observe the request duration with the provided ObserverVec.
 // The ObserverVec must have zero, one, or two non-const non-curried labels. For
 // those, the only allowed label names are "status" and "method". The function
@@ -71,7 +71,7 @@ const magicString = "zZgWfBxLqvG8kc8IMv3POi2Bb0tZI3vAnBx+gBaFi9FyPzB/CzKUer1yufD
 //
 // Note that this method is only guaranteed to never observe negative durations
 // if used with Go1.9+.
-func InstrumentHttpServerRequestsDuration(observers []prometheus.ObserverVec, traceObservers []prometheus.ObserverVec, next http.Handler, serverRequestLabelFuncs ...HttpServerRequestLabelFunc) http.HandlerFunc {
+func InstrumentHttpServerRequests(observers []prometheus.ObserverVec, traceObservers []prometheus.ObserverVec, next http.Handler, serverRequestLabelFuncs ...HttpServerRequestLabelFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		serverRequestLabelFunc := defaultMetricsHttpServerRequestLabelFunc
 		if len(serverRequestLabelFuncs) > 0 {
@@ -120,7 +120,7 @@ func InstrumentHttpServerRequestsDuration(observers []prometheus.ObserverVec, tr
 //
 // If the wrapped Handler panics, no values are reported.
 //
-// See the example for InstrumentHttpServerRequestsDuration for example usage.
+// See the example for InstrumentHttpServerRequests for example usage.
 func InstrumentHttpServerRequestsRequestSize(observers []prometheus.ObserverVec, next http.Handler, serverRequestLabelFuncs ...HttpServerRequestLabelFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		d := newDelegator(w, nil, nil)
@@ -152,7 +152,7 @@ func InstrumentHttpServerRequestsRequestSize(observers []prometheus.ObserverVec,
 //
 // If the wrapped Handler panics, no values are reported.
 //
-// See the example for InstrumentHttpServerRequestsDuration for example usage.
+// See the example for InstrumentHttpServerRequests for example usage.
 func InstrumentHttpServerRequestsResponseSize(observers []prometheus.ObserverVec, next http.Handler, serverRequestLabelFuncs ...HttpServerRequestLabelFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		d := newDelegator(w, nil, nil)
@@ -179,7 +179,7 @@ func InstrumentHttpServerRequestsResponseSize(observers []prometheus.ObserverVec
 // If the wrapped RoundTripper panics or returns a non-nil error, the Counter
 // is not incremented.
 //
-// See the example for ExampleInstrumentHttpClientRequestDuration for example usage.
+// See the example for ExampleInstrumentHttpClientRequest for example usage.
 func InstrumentHttpClientRequestCounter(counter *prometheus.CounterVec, next http.RoundTripper, clientRequestLabelFuncs ...HttpClientRequestLabelFunc) promhttp.RoundTripperFunc {
 	return promhttp.RoundTripperFunc(func(r *http.Request) (*http.Response, error) {
 		resp, err := next.RoundTrip(r)
@@ -195,7 +195,7 @@ func InstrumentHttpClientRequestCounter(counter *prometheus.CounterVec, next htt
 	})
 }
 
-// InstrumentHttpClientRequestDuration is a middleware that wraps the provided
+// InstrumentHttpClientRequest is a middleware that wraps the provided
 // http.RoundTripper to observe the request duration with the provided
 // ObserverVec.  The ObserverVec must have zero, one, or two non-const
 // non-curried labels. For those, the only allowed label names are "code" and
@@ -211,7 +211,7 @@ func InstrumentHttpClientRequestCounter(counter *prometheus.CounterVec, next htt
 //
 // Note that this method is only guaranteed to never observe negative durations
 // if used with Go1.9+.
-func InstrumentHttpClientRequestDuration(observers []prometheus.ObserverVec, next http.RoundTripper, clientRequestLabelFuncs ...HttpClientRequestLabelFunc) promhttp.RoundTripperFunc {
+func InstrumentHttpClientRequest(observers []prometheus.ObserverVec, next http.RoundTripper, clientRequestLabelFuncs ...HttpClientRequestLabelFunc) promhttp.RoundTripperFunc {
 	return promhttp.RoundTripperFunc(func(r *http.Request) (*http.Response, error) {
 		start := time.Now()
 		resp, err := next.RoundTrip(r)
