@@ -155,7 +155,7 @@ func init() {
 		Help:    "A histogram of request trace latencies for requests.",
 		Buckets: []float64{.25, .5, 1, 2.5, 5, 10},
 	},
-		[]string{"event", "server_addr", "host", "method", "uri"},
+		[]string{"event", "server_addr", "host", "method", "uri", "status"},
 	)
 	prometheus.MustRegister(defaultMetricsHttpServerRequestsTrace)
 	// Http Client

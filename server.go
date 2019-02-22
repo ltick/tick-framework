@@ -1,7 +1,6 @@
 package ltick
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -33,8 +32,8 @@ type (
 		Port                                   uint
 		GracefulStopTimeout                    string
 		GracefulStopTimeoutDuration            time.Duration
-		MetricsHttpServerRequests     []prometheus.ObserverVec
-		MetricsHttpServerRequestsTrace  []prometheus.ObserverVec
+		MetricsHttpServerRequests              []prometheus.ObserverVec
+		MetricsHttpServerRequestsTrace         []prometheus.ObserverVec
 		MetricsHttpServerRequestsResponseSizes []prometheus.ObserverVec
 		MetricsHttpServerRequestsRequestSizes  []prometheus.ObserverVec
 		MetricsHttpServerRequestLabelFunc      metrics.HttpServerRequestLabelFunc
@@ -783,15 +782,9 @@ func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes
 		if requestHost == "" {
 			requestHost = ctx.Request.URL.Host
 		}
-		var handlerErrorChannels map[string]chan error = make(map[string]chan error, 0)
 		for _, route := range handlerRoutes {
 			for _, host := range route.Host {
 				if utility.WildcardMatch(host, requestHost) {
-					if _, ok := handlerErrorChannels[host]; !ok {
-						handlerErrorChannels[host] = make(chan error, 1)
-					} else {
-						return nil
-					}
 					if route.BasicAuth != nil {
 						ctx.Request.SetBasicAuth(route.BasicAuth.Username, route.BasicAuth.Password)
 					}
@@ -799,22 +792,7 @@ func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes
 						Context:  ctx,
 						Response: api.NewResponse(ctx.ResponseWriter),
 					}
-					go func(ctx *routing.Context, handlerErrorChan chan error) {
-						handlerErrorChan <- route.Handler.Serve(apiCtx)
-					}(ctx, handlerErrorChannels[host])
-					select {
-					case <-ctx.Context.Done():
-						ctx.Abort()
-						switch ctx.Context.Err() {
-						case context.DeadlineExceeded:
-							return routing.NewHTTPError(http.StatusRequestTimeout, http.StatusText(http.StatusRequestTimeout))
-						case context.Canceled:
-							return routing.NewHTTPError(http.StatusNoContent, http.StatusText(http.StatusNoContent))
-						}
-						return routing.NewHTTPError(http.StatusNoContent, http.StatusText(http.StatusNoContent))
-					case handlerError := <-handlerErrorChannels[host]:
-						return handlerError
-					}
+					return route.Handler.Serve(apiCtx)
 				}
 			}
 		}
