@@ -17,7 +17,7 @@ import (
 )
 
 type HttpClientRequestLabelFunc func(obs prometheus.Collector, r *http.Request, rsp *http.Response, customLabels ...prometheus.Labels) prometheus.Labels
-type HttpServerRequestLabelFunc func(obs prometheus.Collector, rspStatus int, r *http.Request, customLabels ...prometheus.Labels) prometheus.Labels
+type HttpServerRequestLabelFunc func(obs prometheus.Collector, d Delegator, r *http.Request, customLabels ...prometheus.Labels) prometheus.Labels
 
 func defaultMetricsHttpClientRequestLabelFunc(obs prometheus.Collector, r *http.Request, rsp *http.Response, customLabels ...prometheus.Labels) prometheus.Labels {
 	serverAddr, host, method, uri, status := checkLabels(obs)
@@ -37,7 +37,7 @@ func defaultMetricsHttpClientRequestLabelFunc(obs prometheus.Collector, r *http.
 	}
 }
 
-func defaultMetricsHttpServerRequestLabelFunc(obs prometheus.Collector, rspStatus int, r *http.Request, customLabels ...prometheus.Labels) prometheus.Labels {
+func defaultMetricsHttpServerRequestLabelFunc(obs prometheus.Collector, d Delegator, r *http.Request, customLabels ...prometheus.Labels) prometheus.Labels {
 	serverAddr, host, method, uri, status := checkLabels(obs)
 	reqHost := r.Host
 	if reqHost == "" {
@@ -48,7 +48,7 @@ func defaultMetricsHttpServerRequestLabelFunc(obs prometheus.Collector, rspStatu
 		reqUri = r.URL.RawPath
 	}
 	reqServerAddr, _ := utility.GetServerAddress()
-	return labels(serverAddr, host, method, uri, status, reqServerAddr, reqHost, r.Method, reqUri, rspStatus, customLabels...)
+	return labels(serverAddr, host, method, uri, status, reqServerAddr, reqHost, r.Method, reqUri, d.Status(), customLabels...)
 }
 
 // magicString is used for the hacky label test in checkLabels. Remove once fixed.
@@ -78,23 +78,23 @@ func InstrumentHttpServerRequestsDuration(observers []prometheus.ObserverVec, ne
 			serverRequestLabelFunc = serverRequestLabelFuncs[0]
 		}
 		now := time.Now()
-		d := newDelegator(w, func(status int) {
+		d := newDelegator(w, func(d Delegator) {
 			elapseTime := time.Since(now).Seconds()
 			for _, obs := range observers {
-				labels := serverRequestLabelFunc(obs, status, r)
+				labels := serverRequestLabelFunc(obs, d, r, prometheus.Labels{"event": d.Event()})
 				obs.With(labels).Observe(elapseTime)
 			}
-		}, func(event string) {
+		}, func(d Delegator) {
 			elapseTime := time.Since(now).Seconds()
 			for _, obs := range observers {
-				labels := serverRequestLabelFunc(obs, 0, r, prometheus.Labels{"event": event})
+				labels := serverRequestLabelFunc(obs, d, r, prometheus.Labels{"event": d.Event()})
 				obs.With(labels).Observe(elapseTime)
 			}
 		})
 		next.ServeHTTP(d, r)
 		elapseTime := time.Since(now).Seconds()
 		for _, obs := range observers {
-			labels := serverRequestLabelFunc(obs, d.Status(), r)
+			labels := serverRequestLabelFunc(obs, d, r)
 			obs.With(labels).Observe(elapseTime)
 		}
 	})
@@ -126,7 +126,7 @@ func InstrumentHttpServerRequestsRequestSize(observers []prometheus.ObserverVec,
 			serverRequestLabelFunc = serverRequestLabelFuncs[0]
 		}
 		for _, obs := range observers {
-			labels := serverRequestLabelFunc(obs, d.Status(), r)
+			labels := serverRequestLabelFunc(obs, d, r)
 			obs.With(labels).Observe(float64(size))
 		}
 	})
@@ -157,7 +157,7 @@ func InstrumentHttpServerRequestsResponseSize(observers []prometheus.ObserverVec
 			serverRequestLabelFunc = serverRequestLabelFuncs[0]
 		}
 		for _, obs := range observers {
-			labels := serverRequestLabelFunc(obs, d.Status(), r)
+			labels := serverRequestLabelFunc(obs, d, r)
 			obs.With(labels).Observe(float64(d.Written()))
 		}
 	})
