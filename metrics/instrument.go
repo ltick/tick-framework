@@ -71,26 +71,31 @@ const magicString = "zZgWfBxLqvG8kc8IMv3POi2Bb0tZI3vAnBx+gBaFi9FyPzB/CzKUer1yufD
 //
 // Note that this method is only guaranteed to never observe negative durations
 // if used with Go1.9+.
-func InstrumentHttpServerRequestsDuration(observers []prometheus.ObserverVec, next http.Handler, serverRequestLabelFuncs ...HttpServerRequestLabelFunc) http.HandlerFunc {
+func InstrumentHttpServerRequestsDuration(observers []prometheus.ObserverVec, traceObservers []prometheus.ObserverVec, next http.Handler, serverRequestLabelFuncs ...HttpServerRequestLabelFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		serverRequestLabelFunc := defaultMetricsHttpServerRequestLabelFunc
 		if len(serverRequestLabelFuncs) > 0 {
 			serverRequestLabelFunc = serverRequestLabelFuncs[0]
 		}
 		now := time.Now()
-		d := newDelegator(w, func(d Delegator) {
-			elapseTime := time.Since(now).Seconds()
-			for _, obs := range observers {
-				labels := serverRequestLabelFunc(obs, d, r, prometheus.Labels{"event": d.Event()})
-				obs.With(labels).Observe(elapseTime)
-			}
-		}, func(d Delegator) {
-			elapseTime := time.Since(now).Seconds()
-			for _, obs := range observers {
-				labels := serverRequestLabelFunc(obs, d, r, prometheus.Labels{"event": d.Event()})
-				obs.With(labels).Observe(elapseTime)
-			}
-		})
+		var d Delegator
+		if traceObservers != nil {
+			d = newDelegator(w, func(d Delegator) {
+				elapseTime := time.Since(now).Seconds()
+				for _, obs := range traceObservers {
+					labels := serverRequestLabelFunc(obs, d, r, prometheus.Labels{"event": d.Event()})
+					obs.With(labels).Observe(elapseTime)
+				}
+			}, func(d Delegator) {
+				elapseTime := time.Since(now).Seconds()
+				for _, obs := range traceObservers {
+					labels := serverRequestLabelFunc(obs, d, r, prometheus.Labels{"event": d.Event()})
+					obs.With(labels).Observe(elapseTime)
+				}
+			})
+		} else {
+			d = newDelegator(w, nil, nil)
+		}
 		next.ServeHTTP(d, r)
 		elapseTime := time.Since(now).Seconds()
 		for _, obs := range observers {
