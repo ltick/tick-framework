@@ -378,6 +378,10 @@ func (e *Engine) NewServer(router *ServerRouter, setters ...ServerOption) *Serve
 		logWriter: defaultServerLogWriter,
 		Port:      defaultServerPort,
 		GracefulStopTimeoutDuration: defaultServerGracefulStopTimeoutDuration,
+		ReadHeaderTimeoutDuration:   defaultServerReadHeaderTimeoutDuration,
+		ReadTimeoutDuration:         defaultServerReadTimeoutDuration,
+		WriteTimeoutDuration:        defaultServerWriteTimeoutDuration,
+		IdleTimeoutDuration:         defaultServerIdleTimeoutDuration,
 	}
 	for _, setter := range setters {
 		setter(serverOptions)
@@ -945,8 +949,12 @@ func (e *Engine) ServerListenAndServe(name string, server *Server) {
 	handler = promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handler)
 	g := graceful.New().Server(
 		&http.Server{
-			Addr:    fmt.Sprintf(":%d", server.Port),
-			Handler: handler,
+			Addr:              fmt.Sprintf(":%d", server.Port),
+			Handler:           handler,
+			IdleTimeout:       server.IdleTimeoutDuration,
+			ReadTimeout:       server.ReadTimeoutDuration,
+			ReadHeaderTimeout: server.ReadHeaderTimeoutDuration,
+			WriteTimeout:      server.WriteTimeoutDuration,
 		}).Timeout(server.GracefulStopTimeoutDuration).Build()
 	if err := g.ListenAndServe(); err != nil {
 		if opErr, ok := err.(*net.OpError); !ok || (ok && opErr.Op != "accept") {

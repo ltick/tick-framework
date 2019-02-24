@@ -28,8 +28,35 @@ import (
 
 type (
 	ServerOptions struct {
-		logWriter                              io.Writer
-		Port                                   uint
+		logWriter io.Writer
+		Port      uint
+		// ReadTimeout is the maximum duration for reading the entire
+		// request, including the body.
+		//
+		// Because ReadTimeout does not let Handlers make per-request
+		// decisions on each request body's acceptable deadline or
+		// upload rate, most users will prefer to use
+		// ReadHeaderTimeout. It is valid to use them both.
+		ReadTimeout         string
+		ReadTimeoutDuration time.Duration
+		// ReadHeaderTimeout is the amount of time allowed to read
+		// request headers. The connection's read deadline is reset
+		// after reading the headers and the Handler can decide what
+		// is considered too slow for the body.
+		ReadHeaderTimeout         string
+		ReadHeaderTimeoutDuration time.Duration
+		// WriteTimeout is the maximum duration before timing out
+		// writes of the response. It is reset whenever a new
+		// request's header is read. Like ReadTimeout, it does not
+		// let Handlers make decisions on a per-request basis.
+		WriteTimeout         string
+		WriteTimeoutDuration time.Duration
+		// IdleTimeout is the maximum amount of time to wait for the
+		// next request when keep-alives are enabled. If IdleTimeout
+		// is zero, the value of ReadTimeout is used. If both are
+		// zero, ReadHeaderTimeout is used.
+		IdleTimeout                            string
+		IdleTimeoutDuration                    time.Duration
 		GracefulStopTimeout                    string
 		GracefulStopTimeoutDuration            time.Duration
 		MetricsHttpServerRequests              []prometheus.ObserverVec
@@ -154,7 +181,6 @@ func ServerMetricsHttpServerRequestsTrace(observers []prometheus.ObserverVec) Se
 		options.MetricsHttpServerRequestsTrace = observers
 	}
 }
-
 func ServerMetricsHttpServerRequestLabelFunc(httpServerRequestLabelFunc metrics.HttpServerRequestLabelFunc) ServerOption {
 	return func(options *ServerOptions) {
 		options.MetricsHttpServerRequestLabelFunc = httpServerRequestLabelFunc
@@ -173,6 +199,36 @@ func ServerGracefulStopTimeout(gracefulStopTimeout string) ServerOption {
 func ServerGracefulStopTimeoutDuration(gracefulStopTimeoutDuration time.Duration) ServerOption {
 	return func(options *ServerOptions) {
 		options.GracefulStopTimeoutDuration = gracefulStopTimeoutDuration
+	}
+}
+func ServerReadTimeout(readTimeout string) ServerOption {
+	return func(options *ServerOptions) {
+		options.ReadTimeout = readTimeout
+	}
+}
+func ServerReadTimeoutDuration(readTimeoutDuration time.Duration) ServerOption {
+	return func(options *ServerOptions) {
+		options.ReadTimeoutDuration = readTimeoutDuration
+	}
+}
+func ServerReadHeaderTimeout(readHeaderTimeout string) ServerOption {
+	return func(options *ServerOptions) {
+		options.ReadHeaderTimeout = readHeaderTimeout
+	}
+}
+func ServerReadHeaderTimeoutDuration(readHeaderTimeoutDuration time.Duration) ServerOption {
+	return func(options *ServerOptions) {
+		options.ReadHeaderTimeoutDuration = readHeaderTimeoutDuration
+	}
+}
+func ServerWriteTimeout(writeTimeout string) ServerOption {
+	return func(options *ServerOptions) {
+		options.WriteTimeout = writeTimeout
+	}
+}
+func ServerWriteTimeoutDuration(writeTimeoutDuration time.Duration) ServerOption {
+	return func(options *ServerOptions) {
+		options.WriteTimeoutDuration = writeTimeoutDuration
 	}
 }
 func ServerRouterRequestTimeoutHandlers(requestTimeoutHandlers []routing.Handler) ServerRouterOption {
@@ -408,6 +464,30 @@ func (e *Engine) GetServerMap() map[string]*Server {
 
 /********** Server **********/
 func (s *Server) Resolve() {
+	if s.IdleTimeout != "" {
+		idleTimeoutDuration, err := time.ParseDuration(s.IdleTimeout)
+		if err == nil {
+			s.IdleTimeoutDuration = idleTimeoutDuration
+		}
+	}
+	if s.ReadTimeout != "" {
+		readTimeoutDuration, err := time.ParseDuration(s.ReadTimeout)
+		if err == nil {
+			s.ReadTimeoutDuration = readTimeoutDuration
+		}
+	}
+	if s.ReadHeaderTimeout != "" {
+		readHeaderTimeoutDuration, err := time.ParseDuration(s.ReadHeaderTimeout)
+		if err == nil {
+			s.ReadHeaderTimeoutDuration = readHeaderTimeoutDuration
+		}
+	}
+	if s.WriteTimeout != "" {
+		writeTimeoutDuration, err := time.ParseDuration(s.WriteTimeout)
+		if err == nil {
+			s.WriteTimeoutDuration = writeTimeoutDuration
+		}
+	}
 	if s.GracefulStopTimeout != "" {
 		gracefulStopTimeoutDuration, err := time.ParseDuration(s.GracefulStopTimeout)
 		if err == nil {

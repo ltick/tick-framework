@@ -29,6 +29,10 @@ var (
 	defaultServerPort                        uint          = 80
 	defaultServerLogWriter                   io.Writer     = os.Stdout
 	defaultServerGracefulStopTimeoutDuration time.Duration = 120 * time.Second
+	defaultServerReadTimeoutDuration         time.Duration = 60 * time.Second
+	defaultServerReadHeaderTimeoutDuration   time.Duration = 60 * time.Second
+	defaultServerWriteTimeoutDuration        time.Duration = 60 * time.Second
+	defaultServerIdleTimeoutDuration         time.Duration = 60 * time.Second
 	// Metrics Http Server
 	defaultMetricsHttpServerRequestsCounter      *prometheus.CounterVec
 	defaultMetricsHttpServerRequests             *prometheus.HistogramVec
