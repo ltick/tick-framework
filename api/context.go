@@ -113,6 +113,7 @@ type (
 		*routing.Context
 
 		apiParams ApiParams // The parameter values on the URL path
+		Response  *Response
 		enableGzip bool
 
 		// create param name from struct field name
