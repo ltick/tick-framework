@@ -136,10 +136,6 @@ type Response struct {
 	status int
 }
 
-func (r *Response) reset(w http.ResponseWriter) {
-	r.status = 0
-}
-
 func (r *Response) SetDataWriter(w routing.DataWriter) *Response {
 	r.ctx.SetDataWriter(w)
 	return r
@@ -158,6 +154,15 @@ func (r *Response) Write(data interface{}) (err error) {
 		return routing.NewHTTPError(http.StatusInternalServerError, "Response write error: "+err.Error())
 	}
 	return err
+}
+
+func (r *Response) WriteHeader(status int) {
+	r.ctx.ResponseWriter.WriteHeader(status)
+	r.status = status
+}
+
+func (r *Response) Status() int {
+	return r.status
 }
 
 // AddCookie adds a Set-Cookie header.
@@ -254,11 +259,6 @@ func (r *Response) CloseNotify() <-chan bool {
 // Wrote returns whether the response has been submitted or not.
 func (r *Response) Wrote() bool {
 	return r.ctx.Wrote
-}
-
-// Status returns the HTTP status code of the response.
-func (r *Response) Status() int {
-	return r.status
 }
 
 func (r *Response) wroteCallback() {

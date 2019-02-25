@@ -189,7 +189,7 @@ func (ctx *Context) SetSecureCookie(secret, name, value string, others ...interf
 
 // NoContent sends a response with no body and a status code.
 func (ctx *Context) NoContent(status int) {
-	ctx.Response.httpResponseWriter.WriteHeader(status)
+	ctx.Response.WriteHeader(status)
 }
 
 // Bytes writes the data bytes to the connection as part of an HTTP reply.
@@ -208,8 +208,7 @@ func (ctx *Context) ResponseBytes(status int, contentType string, content []byte
 		}
 	}
 	ctx.Response.Header().Set(HeaderContentLength, strconv.Itoa(len(content)))
-	_, err := ctx.Response.Write(content)
-	return err
+	return ctx.Response.Write(content)
 }
 
 // String writes a string to the client, something like fmt.Fprintf
