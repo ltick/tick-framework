@@ -870,7 +870,7 @@ func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes
 					}
 					apiCtx := &api.Context{
 						Context:  ctx,
-						Response: api.NewResponse(ctx.ResponseWriter),
+						Response: api.NewResponse(ctx),
 					}
 					return route.Handler.Serve(apiCtx)
 				}
