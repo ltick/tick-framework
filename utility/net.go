@@ -50,5 +50,7 @@ func GetServerAddress() (ip string, err error) {
 			}
 		}
 	}
+	serverAddress = &ip
 	return ip, nil
 }
+
