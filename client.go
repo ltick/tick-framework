@@ -16,8 +16,8 @@ const (
 	DEFAULT_IDLE_CONN_TIMEOUT       = 90 * time.Second
 	DEFAULT_TLS_HANDSHAKE_TIMEOUT   = 2 * time.Second
 	DEFAULT_EXPECT_CONTINUE_TIMEOUT = 1 * time.Second
-	DEFAULT_MAX_IDLE_CONNS          = 300
-	DEFAULT_MAX_IDLE_CONNS_PER_HOST = 100
+	DEFAULT_MAX_IDLE_CONNS          = 1000
+	DEFAULT_MAX_IDLE_CONNS_PER_HOST = 1000
 )
 
 type (
@@ -112,52 +112,52 @@ func ClientMetricsHttpClientRequestsCounter(counter *prometheus.CounterVec) Clie
 		}
 	}
 }
-func ClientMetricsHttpClientRequestsDuration(histogram *prometheus.HistogramVec) ClientOption {
-	if histogram == nil {
-		histogram = defaultMetricsHttpClientRequestsDurationHistogram
+func ClientMetricsHttpClientRequestsDuration(observers []prometheus.ObserverVec) ClientOption {
+	if observers == nil {
+		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequests}
 	}
 	return func(options *ClientOptions) {
-		options.MetricsHttpClientRequestsDurations = []prometheus.ObserverVec{histogram}
+		options.MetricsHttpClientRequestsDurations = observers
 	}
 }
-func ClientMetricsHttpClientRequestsTraceConnection(histogram *prometheus.HistogramVec) ClientOption {
-	if histogram == nil {
-		histogram = defaultMetricsHttpClientRequestsTraceConnectionHistogram
+func ClientMetricsHttpClientRequestsTraceConnection(observers []prometheus.ObserverVec) ClientOption {
+	if observers == nil {
+		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequestsTraceConnection}
 	}
 	return func(options *ClientOptions) {
-		options.MetricsHttpClientRequestsTraceConnection = []prometheus.ObserverVec{histogram}
+		options.MetricsHttpClientRequestsTraceConnection = observers
 	}
 }
-func ClientMetricsHttpClientRequestsTraceDns(histogram *prometheus.HistogramVec) ClientOption {
-	if histogram == nil {
-		histogram = defaultMetricsHttpClientRequestsTraceDnsHistogram
+func ClientMetricsHttpClientRequestsTraceDns(observers []prometheus.ObserverVec) ClientOption {
+	if observers == nil {
+		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequestsTraceDns}
 	}
 	return func(options *ClientOptions) {
-		options.MetricsHttpClientRequestsTraceDns = []prometheus.ObserverVec{histogram}
+		options.MetricsHttpClientRequestsTraceDns = observers
 	}
 }
-func ClientMetricsHttpClientRequestsTraceConnect(histogram *prometheus.HistogramVec) ClientOption {
-	if histogram == nil {
-		histogram = defaultMetricsHttpClientRequestsTraceConnectHistogram
+func ClientMetricsHttpClientRequestsTraceConnect(observers []prometheus.ObserverVec) ClientOption {
+	if observers == nil {
+		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequestsTraceConnect}
 	}
 	return func(options *ClientOptions) {
-		options.MetricsHttpClientRequestsTraceConnect = []prometheus.ObserverVec{histogram}
+		options.MetricsHttpClientRequestsTraceConnect = observers
 	}
 }
-func ClientMetricsHttpClientRequestsTraceTls(histogram *prometheus.HistogramVec) ClientOption {
-	if histogram == nil {
-		histogram = defaultMetricsHttpClientRequestsTraceTlsHistogram
+func ClientMetricsHttpClientRequestsTraceTls(observers []prometheus.ObserverVec) ClientOption {
+	if observers == nil {
+		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequestsTraceTls}
 	}
 	return func(options *ClientOptions) {
-		options.MetricsHttpClientRequestsTraceTls = []prometheus.ObserverVec{histogram}
+		options.MetricsHttpClientRequestsTraceTls = observers
 	}
 }
-func ClientMetricsHttpClientRequestsTraceRequest(histogram *prometheus.HistogramVec) ClientOption {
-	if histogram == nil {
-		histogram = defaultMetricsHttpClientRequestsTraceRequestHistogram
+func ClientMetricsHttpClientRequestsTraceRequest(observers []prometheus.ObserverVec) ClientOption {
+	if observers == nil {
+		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequestsTraceRequest}
 	}
 	return func(options *ClientOptions) {
-		options.MetricsHttpClientRequestsTraceRequest = []prometheus.ObserverVec{histogram}
+		options.MetricsHttpClientRequestsTraceRequest = observers
 	}
 }
 func ClientMetricsHttpClientRequestLabelFunc(httpClientRequestLabelFunc metrics.HttpClientRequestLabelFunc) ClientOption {
@@ -217,9 +217,9 @@ func NewHttpClient(setters ...ClientOption) *http.Client {
 	// Wrap the default RoundTripper with middleware.
 	if c.MetricsHttpClientRequestsDurations != nil {
 		if c.MetricsHttpClientRequestLabelFunc != nil {
-			httpClient.Transport = metrics.InstrumentHttpClientRequestDuration(c.MetricsHttpClientRequestsDurations, httpClient.Transport, c.MetricsHttpClientRequestLabelFunc)
+			httpClient.Transport = metrics.InstrumentHttpClientRequest(c.MetricsHttpClientRequestsDurations, httpClient.Transport, c.MetricsHttpClientRequestLabelFunc)
 		} else {
-			httpClient.Transport = metrics.InstrumentHttpClientRequestDuration(c.MetricsHttpClientRequestsDurations, httpClient.Transport)
+			httpClient.Transport = metrics.InstrumentHttpClientRequest(c.MetricsHttpClientRequestsDurations, httpClient.Transport)
 		}
 	}
 	observers := map[string][]prometheus.ObserverVec{}

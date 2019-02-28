@@ -107,23 +107,27 @@ var defaultConfigs map[string]config.Option = map[string]config.Option{
 
 	"ACCESS_LOG_TYPE":              config.Option{Type: config.String, Default: "console", EnvironmentKey: "ACCESS_LOG_TYPE"},
 	"ACCESS_LOG_FILE_NAME":         config.Option{Type: config.String, Default: "/tmp/access.log", EnvironmentKey: "ACCESS_LOG_FILE_NAME"},
-	"ACCESS_LOG_FILE_ROTATE":       config.Option{Type: config.Bool, Default: "true", EnvironmentKey: "LTICK_ACCESS_LOG_FILE_ROTATE"},
-	"ACCESS_LOG_FILE_BACKUP_COUNT": config.Option{Type: config.Int, Default: "-1", EnvironmentKey: "LTICK_ACCESS_LOG_FILE_BACKUP_COUNT"},
+	"ACCESS_LOG_FILE_ROTATE":       config.Option{Type: config.Bool, Default: "true", EnvironmentKey: "ACCESS_LOG_FILE_ROTATE"},
+	"ACCESS_LOG_FILE_BACKUP_COUNT": config.Option{Type: config.Int, Default: "1000", EnvironmentKey: "ACCESS_LOG_FILE_BACKUP_COUNT"},
 	"ACCESS_LOG_WRITER":            config.Option{Type: config.String, Default: "discard", EnvironmentKey: "ACCESS_LOG_WRITER"},
 	"ACCESS_LOG_MAX_LEVEL":         config.Option{Type: config.String, Default: log.LevelInfo, EnvironmentKey: "ACCESS_LOG_MAX_LEVEL"},
 	"ACCESS_LOG_FORMATTER":         config.Option{Type: config.String, Default: "raw", EnvironmentKey: "ACCESS_LOG_FORMATTER"},
 
-	"DEBUG_LOG_TYPE":      config.Option{Type: config.String, Default: "console", EnvironmentKey: "DEBUG_LOG_TYPE"},
-	"DEBUG_LOG_FILENAME":  config.Option{Type: config.String, Default: "/tmp/debug.log", EnvironmentKey: "DEBUG_LOG_FILENAME"},
-	"DEBUG_LOG_WRITER":    config.Option{Type: config.String, Default: "discard", EnvironmentKey: "DEBUG_LOG_WRITER"},
-	"DEBUG_LOG_MAX_LEVEL": config.Option{Type: config.String, Default: log.LevelInfo, EnvironmentKey: "DEBUG_LOG_MAX_LEVEL"},
-	"DEBUG_LOG_FORMATTER": config.Option{Type: config.String, Default: "default", EnvironmentKey: "DEBUG_LOG_FORMATTER"},
+	"APP_LOG_TYPE":              config.Option{Type: config.String, Default: "console", EnvironmentKey: "APP_LOG_TYPE"},
+	"APP_LOG_FILE_NAME":         config.Option{Type: config.String, Default: "/tmp/app.log", EnvironmentKey: "APP_LOG_FILE_NAME"},
+	"APP_LOG_FILE_ROTATE":       config.Option{Type: config.Bool, Default: "true", EnvironmentKey: "APP_LOG_FILE_ROTATE"},
+	"APP_LOG_FILE_BACKUP_COUNT": config.Option{Type: config.Int, Default: "1000", EnvironmentKey: "APP_LOG_FILE_BACKUP_COUNT"},
+	"APP_LOG_WRITER":            config.Option{Type: config.String, Default: "discard", EnvironmentKey: "APP_LOG_WRITER"},
+	"APP_LOG_MAX_LEVEL":         config.Option{Type: config.String, Default: log.LevelInfo, EnvironmentKey: "APP_LOG_MAX_LEVEL"},
+	"APP_LOG_FORMATTER":         config.Option{Type: config.String, Default: "default", EnvironmentKey: "APP_LOG_FORMATTER"},
 
-	"SYSTEM_LOG_TYPE":      config.Option{Type: config.String, Default: "console", EnvironmentKey: "SYSTEM_LOG_TYPE"},
-	"SYSTEM_LOG_FILENAME":  config.Option{Type: config.String, Default: "/tmp/system.log", EnvironmentKey: "SYSTEM_LOG_FILENAME"},
-	"SYSTEM_LOG_WRITER":    config.Option{Type: config.String, Default: "discard", EnvironmentKey: "SYSTEM_LOG_WRITER"},
-	"SYSTEM_LOG_MAX_LEVEL": config.Option{Type: config.String, Default: log.LevelInfo, EnvironmentKey: "SYSTEM_LOG_MAX_LEVEL"},
-	"SYSTEM_LOG_FORMATTER": config.Option{Type: config.String, Default: "sys", EnvironmentKey: "SYSTEM_LOG_FORMATTER"},
+	"SYSTEM_LOG_TYPE":              config.Option{Type: config.String, Default: "console", EnvironmentKey: "SYSTEM_LOG_TYPE"},
+	"SYSTEM_LOG_FILE_NAME":         config.Option{Type: config.String, Default: "/tmp/system.log", EnvironmentKey: "SYSTEM_LOG_FILE_NAME"},
+	"SYSTEM_LOG_FILE_ROTATE":       config.Option{Type: config.Bool, Default: "true", EnvironmentKey: "SYSTEM_LOG_FILE_ROTATE"},
+	"SYSTEM_LOG_FILE_BACKUP_COUNT": config.Option{Type: config.Int, Default: "1000", EnvironmentKey: "SYSTEM_LOG_FILE_BACKUP_COUNT"},
+	"SYSTEM_LOG_WRITER":            config.Option{Type: config.String, Default: "discard", EnvironmentKey: "SYSTEM_LOG_WRITER"},
+	"SYSTEM_LOG_MAX_LEVEL":         config.Option{Type: config.String, Default: log.LevelInfo, EnvironmentKey: "SYSTEM_LOG_MAX_LEVEL"},
+	"SYSTEM_LOG_FORMATTER":         config.Option{Type: config.String, Default: "sys", EnvironmentKey: "SYSTEM_LOG_FORMATTER"},
 }
 
 func EngineConfigFile(configFile string) EngineOption {
@@ -374,6 +378,10 @@ func (e *Engine) NewServer(router *ServerRouter, setters ...ServerOption) *Serve
 		logWriter: defaultServerLogWriter,
 		Port:      defaultServerPort,
 		GracefulStopTimeoutDuration: defaultServerGracefulStopTimeoutDuration,
+		ReadHeaderTimeoutDuration:   defaultServerReadHeaderTimeoutDuration,
+		ReadTimeoutDuration:         defaultServerReadTimeoutDuration,
+		WriteTimeoutDuration:        defaultServerWriteTimeoutDuration,
+		IdleTimeoutDuration:         defaultServerIdleTimeoutDuration,
 	}
 	for _, setter := range setters {
 		setter(serverOptions)
@@ -673,10 +681,10 @@ func (e *Engine) Startup() (err error) {
 				server.Router.Routes = append([]*ServerRouterRoute{&ServerRouterRoute{
 					Method: []string{"ANY"},
 					Host:   server.Router.Pprof.Host,
-					Group:  server.Router.Pprof.Group,
+					Group:  "/debug/pprof", // follow official route rule
 					Path:   "",
 					Handlers: []api.Handler{
-						pprofHandler{
+						pprofHandlerFunc{
 							httpHandlerFunc: pprof.Index,
 							basicAuth:       server.Router.Pprof.BasicAuth,
 						},
@@ -684,10 +692,65 @@ func (e *Engine) Startup() (err error) {
 				}, &ServerRouterRoute{
 					Method: []string{"ANY"},
 					Host:   server.Router.Pprof.Host,
-					Group:  server.Router.Pprof.Group,
-					Path:   "/cmdline",
+					Group:  "/debug/pprof", // follow official route rule
+					Path:   "/goroutine",
 					Handlers: []api.Handler{
 						pprofHandler{
+							httpHandler: pprof.Handler("goroutine"),
+							basicAuth:   server.Router.Pprof.BasicAuth,
+						},
+					},
+				}, &ServerRouterRoute{
+					Method: []string{"ANY"},
+					Host:   server.Router.Pprof.Host,
+					Group:  "/debug/pprof", // follow official route rule
+					Path:   "/threadcreate",
+					Handlers: []api.Handler{
+						pprofHandler{
+							httpHandler: pprof.Handler("threadcreate"),
+							basicAuth:   server.Router.Pprof.BasicAuth,
+						},
+					},
+				}, &ServerRouterRoute{
+					Method: []string{"ANY"},
+					Host:   server.Router.Pprof.Host,
+					Group:  "/debug/pprof", // follow official route rule
+					Path:   "/heap",
+					Handlers: []api.Handler{
+						pprofHandler{
+							httpHandler: pprof.Handler("heap"),
+							basicAuth:   server.Router.Pprof.BasicAuth,
+						},
+					},
+				}, &ServerRouterRoute{
+					Method: []string{"ANY"},
+					Host:   server.Router.Pprof.Host,
+					Group:  "/debug/pprof", // follow official route rule
+					Path:   "/block",
+					Handlers: []api.Handler{
+						pprofHandler{
+							httpHandler: pprof.Handler("block"),
+							basicAuth:   server.Router.Pprof.BasicAuth,
+						},
+					},
+				}, &ServerRouterRoute{
+					Method: []string{"ANY"},
+					Host:   server.Router.Pprof.Host,
+					Group:  "/debug/pprof", // follow official route rule
+					Path:   "/mutex",
+					Handlers: []api.Handler{
+						pprofHandler{
+							httpHandler: pprof.Handler("mutex"),
+							basicAuth:   server.Router.Pprof.BasicAuth,
+						},
+					},
+				}, &ServerRouterRoute{
+					Method: []string{"ANY"},
+					Host:   server.Router.Pprof.Host,
+					Group:  "/debug/pprof", // follow official route rule
+					Path:   "/cmdline",
+					Handlers: []api.Handler{
+						pprofHandlerFunc{
 							httpHandlerFunc: pprof.Cmdline,
 							basicAuth:       server.Router.Pprof.BasicAuth,
 						},
@@ -695,10 +758,10 @@ func (e *Engine) Startup() (err error) {
 				}, &ServerRouterRoute{
 					Method: []string{"ANY"},
 					Host:   server.Router.Pprof.Host,
-					Group:  server.Router.Pprof.Group,
+					Group:  "/debug/pprof", // follow official route rule
 					Path:   "/profile",
 					Handlers: []api.Handler{
-						pprofHandler{
+						pprofHandlerFunc{
 							httpHandlerFunc: pprof.Profile,
 							basicAuth:       server.Router.Pprof.BasicAuth,
 						},
@@ -706,10 +769,10 @@ func (e *Engine) Startup() (err error) {
 				}, &ServerRouterRoute{
 					Method: []string{"ANY"},
 					Host:   server.Router.Pprof.Host,
-					Group:  server.Router.Pprof.Group,
+					Group:  "/debug/pprof", // follow official route rule
 					Path:   "/symbol",
 					Handlers: []api.Handler{
-						pprofHandler{
+						pprofHandlerFunc{
 							httpHandlerFunc: pprof.Symbol,
 							basicAuth:       server.Router.Pprof.BasicAuth,
 						},
@@ -717,65 +780,64 @@ func (e *Engine) Startup() (err error) {
 				}, &ServerRouterRoute{
 					Method: []string{"ANY"},
 					Host:   server.Router.Pprof.Host,
-					Group:  server.Router.Pprof.Group,
+					Group:  "/debug/pprof", // follow official route rule
 					Path:   "/trace",
 					Handlers: []api.Handler{
-						pprofHandler{
+						pprofHandlerFunc{
 							httpHandlerFunc: pprof.Trace,
 							basicAuth:       server.Router.Pprof.BasicAuth,
 						},
 					},
 				}}, server.Router.Routes...)
 			}
-			sortedRouteHandlers := []string{}
-			routeHandlerMap := make(map[string][]*routeHandler)
+			sortedRouteGroup := make([]string, 0)
+			sortedRouteId := make(map[string][]string, 0)
+			routeHandlerMap := make(map[string]map[string][]*routeHandler)
 			if server.Router.Routes != nil && len(server.Router.Routes) > 0 {
 				for _, route := range server.Router.Routes {
 					if route == nil {
 						return errors.Annotatef(errors.New("ltick: route does not exists"), errStartup)
 					}
-					if _, ok := server.RouteGroups[route.Group]; !ok {
-						server.RouteGroups[route.Group] = server.AddRouteGroup(route.Group)
-					} else if server.RouteGroups[route.Group] == nil {
-						server.RouteGroups[route.Group] = server.AddRouteGroup(route.Group)
+					server.AddRouteGroup(route.Group)
+					if _, ok := routeHandlerMap[route.Group]; !ok {
+						sortedRouteGroup = append(sortedRouteGroup, route.Group)
+						sortedRouteId[route.Group] = make([]string, 0)
+						routeHandlerMap[route.Group] = make(map[string][]*routeHandler, 0)
 					}
 					for index, method := range route.Method {
-						routeId := route.Group + "|" + method + "|" + route.Path
-						if _, ok := routeHandlerMap[routeId]; !ok {
-							sortedRouteHandlers = append(sortedRouteHandlers, routeId)
-							if route.Handlers[index] != nil {
-								routeHandlerMap[routeId] = []*routeHandler{
-									&routeHandler{
-										Handler: route.Handlers[index],
-										Host:    route.Host,
-									},
-								}
+						if route.Handlers[index] != nil {
+							routeId := method + "|" + route.Path
+							if _, ok := routeHandlerMap[route.Group][routeId]; !ok {
+								sortedRouteId[route.Group] = append(sortedRouteId[route.Group], routeId)
+								routeHandlerMap[route.Group][routeId] = make([]*routeHandler, 0)
 							}
-						} else {
-							if route.Handlers[index] != nil {
-								routeHandlerMap[routeId] = append(routeHandlerMap[routeId], &routeHandler{
-									Handler: route.Handlers[index],
-									Host:    route.Host,
-								})
-							}
+							routeHandlerMap[route.Group][routeId] = append(routeHandlerMap[route.Group][routeId], &routeHandler{
+								Handler: route.Handlers[index],
+								Host:    route.Host,
+							})
 						}
 					}
 				}
 			}
-			for _, routeId := range sortedRouteHandlers {
-				if routeHandlers, ok := routeHandlerMap[routeId]; ok {
-					routeIds := strings.SplitN(routeId, "|", 3)
-					routeGroup := routeIds[0]
-					routeMethod := routeIds[1]
-					routePath := routeIds[2]
+			for _, routeGroup := range sortedRouteGroup {
+				if len(proxyHandlers) > 0 {
 					server.RouteGroups[routeGroup].PrependAnteriorHandler(proxyHandlers...)
-					server.RouteGroups[routeGroup].AddApiRoute(routeMethod, routePath, routeHandlers)
+				}
+				for _, routeId := range sortedRouteId[routeGroup] {
+					routeIds := strings.SplitN(routeId, "|", 2)
+					routeMethod := routeIds[0]
+					routePath := routeIds[1]
+					server.RouteGroups[routeGroup].AddApiRoute(routeMethod, routePath, routeHandlerMap[routeGroup][routeId])
 				}
 			}
-			e.Log(fmt.Sprintf("ltick: new server [serverOptions:'%+v', serverRouterOptions:'%+v', handlerTimeout:'%.fs']", server.ServerOptions, server.Router.Options, server.Router.TimeoutDuration.Seconds()))
+			e.Log(fmt.Sprintf("ltick: new server [serverOptions:'%+v', serverRouterOptions:'%+v', handlerTimeout:'%.6fs']", server.ServerOptions, server.Router.Options, server.Router.TimeoutDuration.Seconds()))
 		}
 	}
 	// 注入模块
+	err = e.Registry.InjectMiddleware()
+	if err != nil {
+		return errors.Annotatef(err, errStartupInjectComponent)
+	}
 	err = e.Registry.InjectComponent()
 	if err != nil {
 		return errors.Annotatef(err, errStartupInjectComponent)
@@ -863,11 +925,11 @@ func (e *Engine) ListenAndServe() {
 func (e *Engine) ServerListenAndServe(name string, server *Server) {
 	e.Log("ltick: Server start listen ", server.Port, "...")
 	var handler http.Handler = server.Router
-	if server.MetricsHttpServerRequestsDurations != nil {
+	if server.MetricsHttpServerRequests != nil {
 		if server.MetricsHttpServerRequestLabelFunc != nil {
-			handler = metrics.InstrumentHttpServerRequestsDuration(server.MetricsHttpServerRequestsDurations, handler, server.MetricsHttpServerRequestLabelFunc)
+			handler = metrics.InstrumentHttpServerRequests(server.MetricsHttpServerRequests, server.MetricsHttpServerRequestsTrace, handler, server.MetricsHttpServerRequestLabelFunc)
 		} else {
-			handler = metrics.InstrumentHttpServerRequestsDuration(server.MetricsHttpServerRequestsDurations, handler)
+			handler = metrics.InstrumentHttpServerRequests(server.MetricsHttpServerRequests, server.MetricsHttpServerRequestsTrace, handler)
 		}
 	}
 	if server.MetricsHttpServerRequestsResponseSizes != nil {
@@ -887,8 +949,12 @@ func (e *Engine) ServerListenAndServe(name string, server *Server) {
 	handler = promhttp.InstrumentMetricHandler(prometheus.DefaultRegisterer, handler)
 	g := graceful.New().Server(
 		&http.Server{
-			Addr:    fmt.Sprintf(":%d", server.Port),
-			Handler: handler,
+			Addr:              fmt.Sprintf(":%d", server.Port),
+			Handler:           handler,
+			IdleTimeout:       server.IdleTimeoutDuration,
+			ReadTimeout:       server.ReadTimeoutDuration,
+			ReadHeaderTimeout: server.ReadHeaderTimeoutDuration,
+			WriteTimeout:      server.WriteTimeoutDuration,
 		}).Timeout(server.GracefulStopTimeoutDuration).Build()
 	if err := g.ListenAndServe(); err != nil {
 		if opErr, ok := err.(*net.OpError); !ok || (ok && opErr.Op != "accept") {

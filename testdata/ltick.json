@@ -43,19 +43,19 @@
         },
         {
           "Name" : "debug",
-          "Type": "%DEBUG_LOG_TYPE%",
-          "Writer": "%DEBUG_LOG_WRITER%",
-          "FileName": "%DEBUG_LOG_FILE_NAME%",
-          "FileRotate": "%DEBUG_LOG_FILE_ROTATE%",
-          "FileBackupCount": "%DEBUG_LOG_FILE_BACKUP_COUNT%",
-          "MaxLevel": "%DEBUG_LOG_MAX_LEVEL%",
-          "Formatter": "%DEBUG_LOG_FORMATTER%"
+          "Type": "%APP_LOG_TYPE%",
+          "Writer": "%APP_LOG_WRITER%",
+          "FileName": "%APP_LOG_FILE_NAME%",
+          "FileRotate": "%APP_LOG_FILE_ROTATE%",
+          "FileBackupCount": "%APP_LOG_FILE_BACKUP_COUNT%",
+          "MaxLevel": "%APP_LOG_MAX_LEVEL%",
+          "Formatter": "%APP_LOG_FORMATTER%"
         },
         {
           "Name" : "system",
           "Type": "%SYSTEM_LOG_TYPE%",
           "Writer": "%SYSTEM_LOG_WRITER%",
-          "FileName": "%SYSTEM_LOG_FILENAME%",
+          "FileName": "%SYSTEM_LOG_FILE_NAME%",
           "FileRotate": "%SYSTEM_LOG_FILE_ROTATE%",
           "FileBackupCount": "%SYSTEM_LOG_FILE_BACKUP_COUNT%",
           "MaxLevel": "%SYSTEM_LOG_MAX_LEVEL%",

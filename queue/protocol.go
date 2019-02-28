@@ -53,12 +53,6 @@ func (q *Queue) Initiate(ctx context.Context) (context.Context, error) {
 	if _, ok := q.configs["QUEUE_KAFKA_BROKERS"]; !ok {
 		q.configs["QUEUE_KAFKA_BROKERS"] = q.Config.GetString("QUEUE_KAFKA_BROKERS")
 	}
-	if _, ok := q.configs["QUEUE_KAFKA_EVENT_GROUP"]; !ok {
-		q.configs["QUEUE_KAFKA_EVENT_GROUP"] = q.Config.GetString("QUEUE_KAFKA_EVENT_GROUP")
-	}
-	if _, ok := q.configs["QUEUE_KAFKA_EVENT_TOPIC"]; !ok {
-		q.configs["QUEUE_KAFKA_EVENT_TOPIC"] = q.Config.GetString("QUEUE_KAFKA_EVENT_TOPIC")
-	}
 	return ctx, nil
 }
 func (q *Queue) OnStartup(ctx context.Context) (context.Context, error) {
@@ -139,6 +133,9 @@ func (q *Queue) NewQueue(ctx context.Context, name string, configs ...map[string
 	return queueHandler, nil
 }
 func (q *Queue) GetQueue(name string) (QueueHandler, error) {
+	if q.handler == nil {
+		return nil, errors.Annotate(errors.New("queue: handler does not initiated"), fmt.Sprintf(errGetQueue, name))
+	}
 	queueHandler, err := q.handler.GetQueue(name)
 	if err != nil {
 		return nil, errors.Annotate(err, fmt.Sprintf(errGetQueue, name))

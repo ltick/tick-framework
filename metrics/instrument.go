@@ -20,41 +20,41 @@ type HttpClientRequestLabelFunc func(obs prometheus.Collector, r *http.Request, 
 type HttpServerRequestLabelFunc func(obs prometheus.Collector, d Delegator, r *http.Request, customLabels ...prometheus.Labels) prometheus.Labels
 
 func defaultMetricsHttpClientRequestLabelFunc(obs prometheus.Collector, r *http.Request, rsp *http.Response, customLabels ...prometheus.Labels) prometheus.Labels {
-	serverAddr, host, method, path, status := checkLabels(obs)
+	serverAddr, host, method, uri, status := checkLabels(obs)
 	reqHost := r.Host
 	if reqHost == "" {
 		reqHost = r.URL.Host
 	}
-	reqPath := r.URL.Path
-	if reqPath == "" {
-		reqPath = r.URL.RawPath
+	reqUri := r.URL.Path
+	if reqUri == "" {
+		reqUri = r.URL.RawPath
 	}
 	reqServerAddr, _ := utility.GetServerAddress()
 	if rsp != nil {
-		return labels(serverAddr, host, method, path, status, reqServerAddr, reqHost, r.Method, reqPath, rsp.StatusCode, customLabels...)
+		return labels(serverAddr, host, method, uri, status, reqServerAddr, reqHost, r.Method, reqUri, rsp.StatusCode, customLabels...)
 	} else {
-		return labels(serverAddr, host, method, path, status, reqServerAddr, reqHost, r.Method, reqPath, 0, customLabels...)
+		return labels(serverAddr, host, method, uri, status, reqServerAddr, reqHost, r.Method, reqUri, 0, customLabels...)
 	}
 }
 
 func defaultMetricsHttpServerRequestLabelFunc(obs prometheus.Collector, d Delegator, r *http.Request, customLabels ...prometheus.Labels) prometheus.Labels {
-	serverAddr, host, method, path, status := checkLabels(obs)
+	serverAddr, host, method, uri, status := checkLabels(obs)
 	reqHost := r.Host
 	if reqHost == "" {
 		reqHost = r.URL.Host
 	}
-	reqPath := r.URL.Path
-	if reqPath == "" {
-		reqPath = r.URL.RawPath
+	reqUri := r.URL.Path
+	if reqUri == "" {
+		reqUri = r.URL.RawPath
 	}
 	reqServerAddr, _ := utility.GetServerAddress()
-	return labels(serverAddr, host, method, path, status, reqServerAddr, reqHost, r.Method, reqPath, d.Status(), customLabels...)
+	return labels(serverAddr, host, method, uri, status, reqServerAddr, reqHost, r.Method, reqUri, d.Status(), customLabels...)
 }
 
 // magicString is used for the hacky label test in checkLabels. Remove once fixed.
 const magicString = "zZgWfBxLqvG8kc8IMv3POi2Bb0tZI3vAnBx+gBaFi9FyPzB/CzKUer1yufDa"
 
-// InstrumentHttpServerRequestsDuration is a middleware that wraps the provided
+// InstrumentHttpServerRequests is a middleware that wraps the provided
 // http.Handler to observe the request duration with the provided ObserverVec.
 // The ObserverVec must have zero, one, or two non-const non-curried labels. For
 // those, the only allowed label names are "status" and "method". The function
@@ -71,18 +71,36 @@ const magicString = "zZgWfBxLqvG8kc8IMv3POi2Bb0tZI3vAnBx+gBaFi9FyPzB/CzKUer1yufD
 //
 // Note that this method is only guaranteed to never observe negative durations
 // if used with Go1.9+.
-func InstrumentHttpServerRequestsDuration(observers []prometheus.ObserverVec, next http.Handler, serverRequestLabelFuncs ...HttpServerRequestLabelFunc) http.HandlerFunc {
+func InstrumentHttpServerRequests(observers []prometheus.ObserverVec, traceObservers []prometheus.ObserverVec, next http.Handler, serverRequestLabelFuncs ...HttpServerRequestLabelFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		now := time.Now()
-		d := newDelegator(w, nil)
-		next.ServeHTTP(d, r)
 		serverRequestLabelFunc := defaultMetricsHttpServerRequestLabelFunc
 		if len(serverRequestLabelFuncs) > 0 {
 			serverRequestLabelFunc = serverRequestLabelFuncs[0]
 		}
+		now := time.Now()
+		var d Delegator
+		if traceObservers != nil {
+			d = newDelegator(w, func(d Delegator) {
+				elapseTime := time.Since(now).Seconds()
+				for _, obs := range traceObservers {
+					labels := serverRequestLabelFunc(obs, d, r, prometheus.Labels{"event": d.Event()})
+					obs.With(labels).Observe(elapseTime)
+				}
+			}, func(d Delegator) {
+				elapseTime := time.Since(now).Seconds()
+				for _, obs := range traceObservers {
+					labels := serverRequestLabelFunc(obs, d, r, prometheus.Labels{"event": d.Event()})
+					obs.With(labels).Observe(elapseTime)
+				}
+			})
+		} else {
+			d = newDelegator(w, nil, nil)
+		}
+		next.ServeHTTP(d, r)
+		elapseTime := time.Since(now).Seconds()
 		for _, obs := range observers {
 			labels := serverRequestLabelFunc(obs, d, r)
-			obs.With(labels).Observe(time.Since(now).Seconds())
+			obs.With(labels).Observe(elapseTime)
 		}
 	})
 }
@@ -102,10 +120,10 @@ func InstrumentHttpServerRequestsDuration(observers []prometheus.ObserverVec, ne
 //
 // If the wrapped Handler panics, no values are reported.
 //
-// See the example for InstrumentHttpServerRequestsDuration for example usage.
+// See the example for InstrumentHttpServerRequests for example usage.
 func InstrumentHttpServerRequestsRequestSize(observers []prometheus.ObserverVec, next http.Handler, serverRequestLabelFuncs ...HttpServerRequestLabelFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		d := newDelegator(w, nil)
+		d := newDelegator(w, nil, nil)
 		next.ServeHTTP(d, r)
 		size := computeApproximateRequestSize(r)
 		serverRequestLabelFunc := defaultMetricsHttpServerRequestLabelFunc
@@ -134,10 +152,10 @@ func InstrumentHttpServerRequestsRequestSize(observers []prometheus.ObserverVec,
 //
 // If the wrapped Handler panics, no values are reported.
 //
-// See the example for InstrumentHttpServerRequestsDuration for example usage.
+// See the example for InstrumentHttpServerRequests for example usage.
 func InstrumentHttpServerRequestsResponseSize(observers []prometheus.ObserverVec, next http.Handler, serverRequestLabelFuncs ...HttpServerRequestLabelFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		d := newDelegator(w, nil)
+		d := newDelegator(w, nil, nil)
 		next.ServeHTTP(d, r)
 		serverRequestLabelFunc := defaultMetricsHttpServerRequestLabelFunc
 		if len(serverRequestLabelFuncs) > 0 {
@@ -161,7 +179,7 @@ func InstrumentHttpServerRequestsResponseSize(observers []prometheus.ObserverVec
 // If the wrapped RoundTripper panics or returns a non-nil error, the Counter
 // is not incremented.
 //
-// See the example for ExampleInstrumentHttpClientRequestDuration for example usage.
+// See the example for ExampleInstrumentHttpClientRequest for example usage.
 func InstrumentHttpClientRequestCounter(counter *prometheus.CounterVec, next http.RoundTripper, clientRequestLabelFuncs ...HttpClientRequestLabelFunc) promhttp.RoundTripperFunc {
 	return promhttp.RoundTripperFunc(func(r *http.Request) (*http.Response, error) {
 		resp, err := next.RoundTrip(r)
@@ -177,7 +195,7 @@ func InstrumentHttpClientRequestCounter(counter *prometheus.CounterVec, next htt
 	})
 }
 
-// InstrumentHttpClientRequestDuration is a middleware that wraps the provided
+// InstrumentHttpClientRequest is a middleware that wraps the provided
 // http.RoundTripper to observe the request duration with the provided
 // ObserverVec.  The ObserverVec must have zero, one, or two non-const
 // non-curried labels. For those, the only allowed label names are "code" and
@@ -193,7 +211,7 @@ func InstrumentHttpClientRequestCounter(counter *prometheus.CounterVec, next htt
 //
 // Note that this method is only guaranteed to never observe negative durations
 // if used with Go1.9+.
-func InstrumentHttpClientRequestDuration(observers []prometheus.ObserverVec, next http.RoundTripper, clientRequestLabelFuncs ...HttpClientRequestLabelFunc) promhttp.RoundTripperFunc {
+func InstrumentHttpClientRequest(observers []prometheus.ObserverVec, next http.RoundTripper, clientRequestLabelFuncs ...HttpClientRequestLabelFunc) promhttp.RoundTripperFunc {
 	return promhttp.RoundTripperFunc(func(r *http.Request) (*http.Response, error) {
 		start := time.Now()
 		resp, err := next.RoundTrip(r)
@@ -430,13 +448,13 @@ func InstrumentHttpClientRequestTrace(observers map[string][]prometheus.Observer
 // unnecessary allocations on each request.
 var emptyLabels = prometheus.Labels{}
 
-func labels(serverAddr, host, method, path, status bool, reqScheme string, reqHost string, reqMethod string, reqPath string, repStatus int, customLabels ...prometheus.Labels) prometheus.Labels {
+func labels(serverAddr, host, method, uri, status bool, reqServerAddr string, reqHost string, reqMethod string, reqUri string, repStatus int, customLabels ...prometheus.Labels) prometheus.Labels {
 	labels := prometheus.Labels{}
 	if len(customLabels) > 0 {
 		labels = customLabels[0]
 	}
 	if serverAddr {
-		labels["server_addr"] = reqScheme
+		labels["server_addr"] = reqServerAddr
 	}
 	if host {
 		labels["host"] = reqHost
@@ -447,8 +465,8 @@ func labels(serverAddr, host, method, path, status bool, reqScheme string, reqHo
 	if method {
 		labels["method"] = sanitizeMethod(reqMethod)
 	}
-	if path {
-		labels["path"] = reqPath
+	if uri {
+		labels["uri"] = reqUri
 	}
 	return labels
 }
@@ -604,7 +622,7 @@ func sanitizeStatus(s int) string {
 	}
 }
 
-func checkLabels(c prometheus.Collector) (serverAddr, host, method, path, status bool) {
+func checkLabels(c prometheus.Collector) (serverAddr, host, method, uri, status bool) {
 	// TODO(beorn7): Remove this hacky way to check for instance labels
 	// once Descriptors can have their dimensionality queried.
 	var (
@@ -656,8 +674,8 @@ func checkLabels(c prometheus.Collector) (serverAddr, host, method, path, status
 			host = true
 		case "method":
 			method = true
-		case "path":
-			path = true
+		case "uri":
+			uri = true
 		case "status":
 			status = true
 		case "event":

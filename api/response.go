@@ -119,9 +119,9 @@ func RegisterResponseOption(code string, status int, message string) {
 	}
 }
 
-func NewResponse(rw http.ResponseWriter, w ...routing.DataWriter) (r *Response) {
+func NewResponse(c *routing.Context, w ...routing.DataWriter) (r *Response) {
 	r = &Response{
-		httpResponseWriter: rw,
+		ctx: c,
 	}
 	if len(w) > 0 {
 		r.SetDataWriter(w[0])
@@ -132,56 +132,37 @@ func NewResponse(rw http.ResponseWriter, w ...routing.DataWriter) (r *Response) 
 }
 
 type Response struct {
-	httpResponseWriter http.ResponseWriter
-	responseWriter     routing.DataWriter
-	status             int
-	wrote              bool
-}
-
-func (r *Response) reset(w http.ResponseWriter) {
-	r.httpResponseWriter = w
-	r.responseWriter = nil
-	r.status = 0
-	r.wrote = false
+	ctx    *routing.Context
+	status int
 }
 
 func (r *Response) SetDataWriter(w routing.DataWriter) *Response {
-	r.responseWriter = w
+	r.ctx.SetDataWriter(w)
 	return r
 }
 
-// Header returns the header map that will be sent by
-// WriteHeader. Changing the header after a call to
-// WriteHeader (or Write) has no effect unless the modified
-// headers were declared as trailers by setting the
-// "Trailer" header before the call to WriteHeader (see example).
-// To suppress implicit response headers, set their value to nil.
 func (r *Response) Header() http.Header {
-	return r.httpResponseWriter.Header()
+	return r.ctx.ResponseWriter.Header()
 }
 
-// Write writes the data to the connection as part of an HTTP reply.
-// If WriteHeader has not yet been called, Write calls WriteHeader(http.StatusOK)
-// before writing the data.  If the Header does not contain a
-// Content-Type line, Write adds a Content-Type set to the result of passing
-// the initial 512 bytes of written data to DetectContentType.
-func (r *Response) Write(data interface{}) (n int, err error) {
-	if r.wrote == false {
-		return 0, nil
-	}
-	if r.responseWriter != nil {
-		n, err = r.responseWriter.Write(r.httpResponseWriter, data)
-	} else {
-		b := data.([]byte)
-		n, err = r.httpResponseWriter.Write(b)
-	}
+func (r *Response) Write(data interface{}) (err error) {
+	err = r.ctx.Write(data)
 	if err != nil {
-		if ConnectionResetByPeer(err) || Timeout(err) || NetworkUnreachable(err) {
-			return 0, routing.NewHTTPError(499, "Response write error: "+err.Error())
+		if BrokenPipe(err) || ConnectionResetByPeer(err) || Timeout(err) || NetworkUnreachable(err) {
+			return routing.NewHTTPError(499, "Response write error: "+err.Error())
 		}
-		return 0, routing.NewHTTPError(http.StatusInternalServerError, "Response write error: "+err.Error())
+		return routing.NewHTTPError(http.StatusInternalServerError, "Response write error: "+err.Error())
 	}
-	return n, err
+	return err
+}
+
+func (r *Response) WriteHeader(status int) {
+	r.ctx.ResponseWriter.WriteHeader(status)
+	r.status = status
+}
+
+func (r *Response) Status() int {
+	return r.status
 }
 
 // AddCookie adds a Set-Cookie header.
@@ -204,7 +185,10 @@ func (r *Response) DelCookie() {
 // Copy is here to optimize copying from an *os.File regular file
 // to a *net.TCPConn with sendfile.
 func (r *Response) Copy(src io.Reader) (int64, error) {
-	if rf, ok := r.httpResponseWriter.(io.ReaderFrom); ok {
+	if r.Wrote() {
+		return 0, nil
+	}
+	if rf, ok := r.ctx.ResponseWriter.(io.ReaderFrom); ok {
 		n, err := rf.ReadFrom(src)
 		return n, err
 	}
@@ -214,7 +198,7 @@ func (r *Response) Copy(src io.Reader) (int64, error) {
 	for {
 		nr, er := src.Read(buf)
 		if nr > 0 {
-			nw, ew := r.httpResponseWriter.Write(buf[0:nr])
+			nw, ew := r.ctx.ResponseWriter.Write(buf[0:nr])
 			if nw > 0 {
 				n += int64(nw)
 			}
@@ -236,7 +220,7 @@ func (r *Response) Copy(src io.Reader) (int64, error) {
 		}
 	}
 	if err != nil {
-		if ConnectionResetByPeer(err) || Timeout(err) || NetworkUnreachable(err) {
+		if BrokenPipe(err) || ConnectionResetByPeer(err) || Timeout(err) || NetworkUnreachable(err) {
 			return 0, routing.NewHTTPError(499, "Response write error: "+err.Error())
 		}
 		return 0, routing.NewHTTPError(http.StatusGatewayTimeout, "Response write error: "+err.Error())
@@ -247,7 +231,7 @@ func (r *Response) Copy(src io.Reader) (int64, error) {
 // Flush implements the http.Flusher interface to allow an HTTP handler to flush
 // buffered data to the client.
 func (r *Response) Flush() {
-	if f, ok := r.httpResponseWriter.(http.Flusher); ok {
+	if f, ok := r.ctx.ResponseWriter.(http.Flusher); ok {
 		f.Flush()
 	}
 }
@@ -255,7 +239,7 @@ func (r *Response) Flush() {
 // Hijack implements the http.Hijacker interface to allow an HTTP handler to
 // take over the connection.
 func (r *Response) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	if hj, ok := r.httpResponseWriter.(http.Hijacker); ok {
+	if hj, ok := r.ctx.ResponseWriter.(http.Hijacker); ok {
 		return hj.Hijack()
 	}
 	return nil, nil, errors.New("webserver doesn't support Hijack")
@@ -266,7 +250,7 @@ func (r *Response) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 // This mechanism can be used to cancel long operations on the server if the
 // client has disconnected before the response is ready.
 func (r *Response) CloseNotify() <-chan bool {
-	if cn, ok := r.httpResponseWriter.(http.CloseNotifier); ok {
+	if cn, ok := r.ctx.ResponseWriter.(http.CloseNotifier); ok {
 		return cn.CloseNotify()
 	}
 	return nil
@@ -274,12 +258,7 @@ func (r *Response) CloseNotify() <-chan bool {
 
 // Wrote returns whether the response has been submitted or not.
 func (r *Response) Wrote() bool {
-	return r.wrote
-}
-
-// Status returns the HTTP status code of the response.
-func (r *Response) Status() int {
-	return r.status
+	return r.ctx.Wrote
 }
 
 func (r *Response) wroteCallback() {
@@ -312,4 +291,8 @@ func Timeout(err error) bool {
 
 func NetworkUnreachable(err error) bool {
 	return strings.Contains(err.Error(), "network is unreachable")
+}
+
+func BrokenPipe(err error) bool {
+	return strings.Contains(err.Error(), "broken pipe")
 }

@@ -1,7 +1,6 @@
 package ltick
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -29,11 +28,39 @@ import (
 
 type (
 	ServerOptions struct {
-		logWriter                              io.Writer
-		Port                                   uint
+		logWriter io.Writer
+		Port      uint
+		// ReadTimeout is the maximum duration for reading the entire
+		// request, including the body.
+		//
+		// Because ReadTimeout does not let Handlers make per-request
+		// decisions on each request body's acceptable deadline or
+		// upload rate, most users will prefer to use
+		// ReadHeaderTimeout. It is valid to use them both.
+		ReadTimeout         string
+		ReadTimeoutDuration time.Duration
+		// ReadHeaderTimeout is the amount of time allowed to read
+		// request headers. The connection's read deadline is reset
+		// after reading the headers and the Handler can decide what
+		// is considered too slow for the body.
+		ReadHeaderTimeout         string
+		ReadHeaderTimeoutDuration time.Duration
+		// WriteTimeout is the maximum duration before timing out
+		// writes of the response. It is reset whenever a new
+		// request's header is read. Like ReadTimeout, it does not
+		// let Handlers make decisions on a per-request basis.
+		WriteTimeout         string
+		WriteTimeoutDuration time.Duration
+		// IdleTimeout is the maximum amount of time to wait for the
+		// next request when keep-alives are enabled. If IdleTimeout
+		// is zero, the value of ReadTimeout is used. If both are
+		// zero, ReadHeaderTimeout is used.
+		IdleTimeout                            string
+		IdleTimeoutDuration                    time.Duration
 		GracefulStopTimeout                    string
 		GracefulStopTimeoutDuration            time.Duration
-		MetricsHttpServerRequestsDurations     []prometheus.ObserverVec
+		MetricsHttpServerRequests              []prometheus.ObserverVec
+		MetricsHttpServerRequestsTrace         []prometheus.ObserverVec
 		MetricsHttpServerRequestsResponseSizes []prometheus.ObserverVec
 		MetricsHttpServerRequestsRequestSizes  []prometheus.ObserverVec
 		MetricsHttpServerRequestLabelFunc      metrics.HttpServerRequestLabelFunc
@@ -64,7 +91,6 @@ type (
 	}
 	ServerRouterPprof struct {
 		Host      []string
-		Group     string
 		BasicAuth *ServerBasicAuth
 	}
 	ServerRouterRoute struct {
@@ -123,28 +149,36 @@ func ServerPort(port uint) ServerOption {
 		options.Port = port
 	}
 }
-func ServerMetricsHttpServerRequestsDuration(histogram *prometheus.HistogramVec) ServerOption {
-	if histogram == nil {
-		histogram = defaultMetricsHttpServerRequestsDurationHistogram
+func ServerMetricsHttpServerRequests(observers []prometheus.ObserverVec) ServerOption {
+	if observers == nil {
+		observers = []prometheus.ObserverVec{defaultMetricsHttpServerRequests}
 	}
 	return func(options *ServerOptions) {
-		options.MetricsHttpServerRequestsDurations = []prometheus.ObserverVec{histogram}
+		options.MetricsHttpServerRequests = observers
 	}
 }
-func ServerMetricsHttpServerRequestsResponseSize(histogram *prometheus.HistogramVec) ServerOption {
-	if histogram == nil {
-		histogram = defaultMetricsHttpServerRequestsResponseSizeHistogram
+func ServerMetricsHttpServerRequestsResponseSize(observers []prometheus.ObserverVec) ServerOption {
+	if observers == nil {
+		observers = []prometheus.ObserverVec{defaultMetricsHttpServerRequestsResponseSize}
 	}
 	return func(options *ServerOptions) {
-		options.MetricsHttpServerRequestsResponseSizes = []prometheus.ObserverVec{histogram}
+		options.MetricsHttpServerRequestsResponseSizes = observers
 	}
 }
-func ServerMetricsHttpServerRequestsRequestSize(histogram *prometheus.HistogramVec) ServerOption {
-	if histogram == nil {
-		histogram = defaultMetricsHttpServerRequestsRequestSizeHistogram
+func ServerMetricsHttpServerRequestsRequestSize(observers []prometheus.ObserverVec) ServerOption {
+	if observers == nil {
+		observers = []prometheus.ObserverVec{defaultMetricsHttpServerRequestsRequestSize}
 	}
 	return func(options *ServerOptions) {
-		options.MetricsHttpServerRequestsRequestSizes = []prometheus.ObserverVec{histogram}
+		options.MetricsHttpServerRequestsRequestSizes = observers
+	}
+}
+func ServerMetricsHttpServerRequestsTrace(observers []prometheus.ObserverVec) ServerOption {
+	if observers == nil {
+		observers = []prometheus.ObserverVec{defaultMetricsHttpServerRequestsTrace}
+	}
+	return func(options *ServerOptions) {
+		options.MetricsHttpServerRequestsTrace = observers
 	}
 }
 func ServerMetricsHttpServerRequestLabelFunc(httpServerRequestLabelFunc metrics.HttpServerRequestLabelFunc) ServerOption {
@@ -165,6 +199,36 @@ func ServerGracefulStopTimeout(gracefulStopTimeout string) ServerOption {
 func ServerGracefulStopTimeoutDuration(gracefulStopTimeoutDuration time.Duration) ServerOption {
 	return func(options *ServerOptions) {
 		options.GracefulStopTimeoutDuration = gracefulStopTimeoutDuration
+	}
+}
+func ServerReadTimeout(readTimeout string) ServerOption {
+	return func(options *ServerOptions) {
+		options.ReadTimeout = readTimeout
+	}
+}
+func ServerReadTimeoutDuration(readTimeoutDuration time.Duration) ServerOption {
+	return func(options *ServerOptions) {
+		options.ReadTimeoutDuration = readTimeoutDuration
+	}
+}
+func ServerReadHeaderTimeout(readHeaderTimeout string) ServerOption {
+	return func(options *ServerOptions) {
+		options.ReadHeaderTimeout = readHeaderTimeout
+	}
+}
+func ServerReadHeaderTimeoutDuration(readHeaderTimeoutDuration time.Duration) ServerOption {
+	return func(options *ServerOptions) {
+		options.ReadHeaderTimeoutDuration = readHeaderTimeoutDuration
+	}
+}
+func ServerWriteTimeout(writeTimeout string) ServerOption {
+	return func(options *ServerOptions) {
+		options.WriteTimeout = writeTimeout
+	}
+}
+func ServerWriteTimeoutDuration(writeTimeoutDuration time.Duration) ServerOption {
+	return func(options *ServerOptions) {
+		options.WriteTimeoutDuration = writeTimeoutDuration
 	}
 }
 func ServerRouterRequestTimeoutHandlers(requestTimeoutHandlers []routing.Handler) ServerRouterOption {
@@ -400,6 +464,30 @@ func (e *Engine) GetServerMap() map[string]*Server {
 
 /********** Server **********/
 func (s *Server) Resolve() {
+	if s.IdleTimeout != "" {
+		idleTimeoutDuration, err := time.ParseDuration(s.IdleTimeout)
+		if err == nil {
+			s.IdleTimeoutDuration = idleTimeoutDuration
+		}
+	}
+	if s.ReadTimeout != "" {
+		readTimeoutDuration, err := time.ParseDuration(s.ReadTimeout)
+		if err == nil {
+			s.ReadTimeoutDuration = readTimeoutDuration
+		}
+	}
+	if s.ReadHeaderTimeout != "" {
+		readHeaderTimeoutDuration, err := time.ParseDuration(s.ReadHeaderTimeout)
+		if err == nil {
+			s.ReadHeaderTimeoutDuration = readHeaderTimeoutDuration
+		}
+	}
+	if s.WriteTimeout != "" {
+		writeTimeoutDuration, err := time.ParseDuration(s.WriteTimeout)
+		if err == nil {
+			s.WriteTimeoutDuration = writeTimeoutDuration
+		}
+	}
 	if s.GracefulStopTimeout != "" {
 		gracefulStopTimeoutDuration, err := time.ParseDuration(s.GracefulStopTimeout)
 		if err == nil {
@@ -496,10 +584,9 @@ func (s *Server) Proxy(host []string, group string, path string, upstream string
 	})
 	return s
 }
-func (s *Server) Pprof(host []string, group string, basicAuth *ServerBasicAuth) *Server {
+func (s *Server) Pprof(host []string, basicAuth *ServerBasicAuth) *Server {
 	s.Router.Pprof = &ServerRouterPprof{
 		Host:      host,
-		Group:     group,
 		BasicAuth: basicAuth,
 	}
 	return s
@@ -525,16 +612,31 @@ func (h metricsHandler) Serve(ctx *api.Context) error {
 	return nil
 }
 
-type pprofHandler struct {
+type pprofHandlerFunc struct {
 	httpHandlerFunc http.HandlerFunc
 	basicAuth       *ServerBasicAuth
+}
+
+func (h pprofHandlerFunc) Serve(ctx *api.Context) error {
+	if h.basicAuth != nil {
+		ctx.Request.SetBasicAuth(h.basicAuth.Username, h.basicAuth.Username)
+	}
+	ctx.ResponseWriter.Header().Set("Content-Type", "text/html")
+	h.httpHandlerFunc(ctx.ResponseWriter, ctx.Request)
+	return nil
+}
+
+type pprofHandler struct {
+	httpHandler http.Handler
+	basicAuth   *ServerBasicAuth
 }
 
 func (h pprofHandler) Serve(ctx *api.Context) error {
 	if h.basicAuth != nil {
 		ctx.Request.SetBasicAuth(h.basicAuth.Username, h.basicAuth.Username)
 	}
-	h.httpHandlerFunc(ctx.ResponseWriter, ctx.Request)
+	ctx.ResponseWriter.Header().Set("Content-Type", "text/html")
+	h.httpHandler.ServeHTTP(ctx.ResponseWriter, ctx.Request)
 	return nil
 }
 
@@ -555,7 +657,9 @@ func (s *Server) SetServerReuqestCors(corsOptions *cors.Options) *Server {
 }
 func (s *Server) AddRouteGroup(group string) *ServerRouteGroup {
 	// Router Handlers (Global)
-	s.RouteGroups[group] = s.Router.AddRouteGroup(group)
+	if _, ok := s.RouteGroups[group]; !ok {
+		s.RouteGroups[group] = s.Router.AddRouteGroup(group)
+	}
 	return s.RouteGroups[group]
 }
 func (s *Server) AddRoute(method string, path string, handlers ...routing.Handler) *Server {
@@ -753,56 +857,29 @@ func (g *ServerRouteGroup) AddCallback(callback RouterCallback) *ServerRouteGrou
 // 添加API路由
 // 可进行参数校验
 func (g *ServerRouteGroup) AddApiRoute(method string, path string, handlerRoutes []*routeHandler) {
-	routeHandlers := make([]routing.Handler, len(handlerRoutes))
-	routeCnt := len(handlerRoutes)
-	for index, handlerRoute := range handlerRoutes {
-		route := handlerRoute
-		routeHandlers[index] = func(ctx *routing.Context) error {
-			requestHost := ctx.Request.Host
-			if requestHost == "" {
-				requestHost = ctx.Request.URL.Host
-			}
-			var handlerErrorChannels map[string]chan error = make(map[string]chan error, 0)
+	routeHandler := func(ctx *routing.Context) error {
+		requestHost := ctx.Request.Host
+		if requestHost == "" {
+			requestHost = ctx.Request.URL.Host
+		}
+		for _, route := range handlerRoutes {
 			for _, host := range route.Host {
 				if utility.WildcardMatch(host, requestHost) {
-					if _, ok := handlerErrorChannels[host]; !ok {
-						handlerErrorChannels[host] = make(chan error, 1)
-					} else {
-						return nil
-					}
-					// Jump After NotFoundHandler
-					ctx.Jump(routeCnt)
 					if route.BasicAuth != nil {
 						ctx.Request.SetBasicAuth(route.BasicAuth.Username, route.BasicAuth.Password)
 					}
 					apiCtx := &api.Context{
 						Context:  ctx,
-						Response: api.NewResponse(ctx.ResponseWriter),
+						Response: api.NewResponse(ctx),
 					}
-					go func(ctx *routing.Context, handlerErrorChan chan error) {
-						handlerErrorChan <- route.Handler.Serve(apiCtx)
-					}(ctx, handlerErrorChannels[host])
-					select {
-					case <-ctx.Context.Done():
-						ctx.Abort()
-						switch ctx.Context.Err() {
-						case context.DeadlineExceeded:
-							return routing.NewHTTPError(http.StatusRequestTimeout, http.StatusText(http.StatusRequestTimeout))
-						case context.Canceled:
-							return routing.NewHTTPError(http.StatusNoContent, http.StatusText(http.StatusNoContent))
-						}
-						return routing.NewHTTPError(http.StatusNoContent, http.StatusText(http.StatusNoContent))
-					case handlerError := <-handlerErrorChannels[host]:
-						return handlerError
-					}
+					return route.Handler.Serve(apiCtx)
 				}
 			}
-			return nil
 		}
+		// TODO custom NotFoundHandler
+		return routing.NotFoundHandler(ctx)
 	}
-	// TODO custom NotFoundHandler
-	routeHandlers = combineHandlers(routeHandlers, []routing.Handler{routing.NotFoundHandler})
-	g.AddRoute(method, path, routeHandlers...)
+	g.AddRoute(method, path, routeHandler)
 }
 
 // 添加API路由
