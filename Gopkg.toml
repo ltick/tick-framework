@@ -62,8 +62,8 @@
   version = "1.2.0"
 
 [[constraint]]
+  branch = "master"
   name = "github.com/ltick/ltick-validation"
-  version = "3.4.0"
 
 [[constraint]]
   branch = "master"
