@@ -366,13 +366,9 @@ func (r *ServerRouter) Resolve() {
 	}
 	if r.Options.SlashRemover != nil {
 		r.WithSlashRemover(*r.Options.SlashRemover)
-	} else {
-		r.WithSlashRemover(http.StatusMovedPermanently)
 	}
 	if r.Options.LanguageNegotiator != nil {
 		r.WithLanguageNegotiator(r.Options.LanguageNegotiator...)
-	} else {
-		r.WithLanguageNegotiator("en-US")
 	}
 	if r.Options.Cors != nil {
 		r.WithCors(*r.Options.Cors)
