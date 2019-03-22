@@ -6,52 +6,50 @@ import (
 	"unsafe"
 )
 
-func WildcardMatch(pattern, subject string) bool {
-	const WILDCARD = "*"
-	// Empty pattern can only match empty subject
+// WildcardMatchSimple - finds whether the text matches/satisfies the pattern string.
+// supports only '*' wildcard in the pattern.
+// considers a file system path as a flat name space.
+func WildcardMatchSimple(pattern, name string) bool {
 	if pattern == "" {
-		return subject == pattern
+		return name == pattern
 	}
-
-	// If the pattern _is_ awildcard, it matches everything
-	if pattern == WILDCARD {
+	if pattern == "*" {
 		return true
 	}
+	simple := true // Does only wildcard '*' match.
+	return deepMatchRune(name, pattern, simple)
+}
 
-	parts := strings.Split(pattern, WILDCARD)
-
-	if len(parts) == 1 {
-		// No wildcards in pattern, so test for equality
-		return subject == pattern
+func WildcardMatch(pattern, name string) (matched bool) {
+	if pattern == "" {
+		return name == pattern
 	}
+	if pattern == "*" {
+		return true
+	}
+	simple := false // Does extended wildcard '*' and '?' match.
+	return deepMatchRune(name, pattern, simple)
+}
 
-	leadingWildcard := strings.HasPrefix(pattern, WILDCARD)
-	trailingWildcard := strings.HasSuffix(pattern, WILDCARD)
-	end := len(parts) - 1
-
-	// Go over the leading parts and ensure they match.
-	for i := 0; i < end; i++ {
-		idx := strings.Index(subject, parts[i])
-
-		switch i {
-		case 0:
-			// Check the first section. Requires special handling.
-			if !leadingWildcard && idx != 0 {
-				return false
-			}
+func deepMatchRune(str, pattern string, simple bool) bool {
+	for len(pattern) > 0 {
+		switch pattern[0] {
 		default:
-			// Check that the middle parts match.
-			if idx < 0 {
+			if len(str) == 0 || str[0] != pattern[0] {
 				return false
 			}
+		case '?':
+			if len(str) == 0 && !simple {
+				return false
+			}
+		case '*':
+			return deepMatchRune(str, pattern[1:], simple) ||
+				(len(str) > 0 && deepMatchRune(str[1:], pattern, simple))
 		}
-
-		// Trim evaluated text from subject as we loop over the pattern.
-		subject = subject[idx+len(parts[i]):]
+		str = str[1:]
+		pattern = pattern[1:]
 	}
-
-	// Reached the last section. Requires special handling.
-	return trailingWildcard || strings.HasSuffix(subject, parts[end])
+	return len(str) == 0 && len(pattern) == 0
 }
 
 func SnakeToUpperCamel(s string) string {
