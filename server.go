@@ -710,9 +710,11 @@ func (r *ServerRouter) WithMiddlewares(middlewares []MiddlewareInterface) *Serve
 func (r *ServerRouter) AddMiddlewares(middleware RouterCallback) *ServerRouter {
 	r.AppendAnteriorHandler(func(c *routing.Context) (err error) {
 		if err = middleware.OnRequestStartup(c); err != nil {
-			return
+			c.Abort()
+			goto end
 		}
 		err = c.Next()
+	end:
 		middleware.OnRequestShutdown(c)
 		return
 	})
