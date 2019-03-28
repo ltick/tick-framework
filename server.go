@@ -15,8 +15,8 @@ import (
 	"github.com/ltick/tick-framework/api"
 	"github.com/ltick/tick-framework/metrics"
 	"github.com/ltick/tick-framework/utility"
+	"github.com/ltick/tick-framework/utility/datatypes"
 	"github.com/ltick/tick-routing"
-	"github.com/ltick/tick-routing/access"
 	"github.com/ltick/tick-routing/content"
 	"github.com/ltick/tick-routing/cors"
 	"github.com/ltick/tick-routing/fault"
@@ -108,10 +108,10 @@ type (
 	}
 
 	ServerRouterOptions struct {
-		RequestTimeout         string
+		RequestTimeout         datatypes.Duration
 		RequestTimeoutHandlers []routing.Handler
 		Callbacks              []RouterCallback
-		AccessLogFunc          access.LogWriterFunc
+		AccessLogFunc          LogWriterFunc
 		ErrorLogFunc           fault.LogFunc
 		ErrorHandler           fault.ConvertErrorFunc
 		RecoveryLogFunc        fault.LogFunc
@@ -238,7 +238,9 @@ func ServerRouterRequestTimeoutHandlers(requestTimeoutHandlers []routing.Handler
 }
 func ServerRouterRequestTimeout(requestTimeout string) ServerRouterOption {
 	return func(options *ServerRouterOptions) {
-		options.RequestTimeout = requestTimeout
+		if timeout, err := time.ParseDuration(requestTimeout); err == nil {
+			options.RequestTimeout = datatypes.NewDuration(timeout)
+		}
 	}
 }
 
@@ -247,11 +249,13 @@ func ServerRouterCallback(callbacks []RouterCallback) ServerRouterOption {
 		options.Callbacks = callbacks
 	}
 }
-func ServerRouterAccessLogFunc(accessLogFunc access.LogWriterFunc) ServerRouterOption {
+
+func ServerRouterAccessLogFunc(accessLogFunc LogWriterFunc) ServerRouterOption {
 	return func(options *ServerRouterOptions) {
 		options.AccessLogFunc = accessLogFunc
 	}
 }
+
 func ServerRouterErrorLogFunc(faultLogFunc fault.LogFunc) ServerRouterOption {
 	return func(options *ServerRouterOptions) {
 		options.ErrorLogFunc = faultLogFunc
@@ -310,7 +314,7 @@ func (e *Engine) NewServerRouter(setters ...ServerRouterOption) (router *ServerR
 		setter(serverRouterOptions)
 	}
 	router = &ServerRouter{
-		Router:  routing.New(e.Context),
+		Router:  routing.New(),
 		Options: serverRouterOptions,
 		Routes:  make([]*ServerRouterRoute, 0),
 		Proxys:  make([]*ServerRouterProxy, 0),
@@ -319,23 +323,13 @@ func (e *Engine) NewServerRouter(setters ...ServerRouterOption) (router *ServerR
 }
 
 func (r *ServerRouter) Resolve() {
-	if r.Options.RequestTimeout != "" {
-		handlerTimeoutDuration, err := time.ParseDuration(r.Options.RequestTimeout)
-		if err == nil {
-			r.TimeoutDuration = handlerTimeoutDuration
-		}
-	}
-	r.Timeout(r.TimeoutDuration, r.TimeoutHandlers...)
-	if r.Options.Callbacks != nil {
-		for _, c := range r.Options.Callbacks {
-			r.AddCallback(c)
-		}
-	}
+	// AccessLog
 	if r.Options.AccessLogFunc != nil {
 		r.WithAccessLogger(r.Options.AccessLogFunc)
 	} else {
 		r.WithAccessLogger(DefaultAccessLogFunc)
 	}
+	// Error
 	if r.Options.ErrorLogFunc != nil {
 		if r.Options.ErrorHandler != nil {
 			r.WithErrorHandler(r.Options.ErrorLogFunc, r.Options.ErrorHandler)
@@ -345,11 +339,13 @@ func (r *ServerRouter) Resolve() {
 	} else if r.Options.ErrorHandler != nil {
 		r.WithErrorHandler(DefaultErrorLogFunc(), r.Options.ErrorHandler)
 	}
+	// Panic
 	if r.Options.PanicHandler != nil {
 		r.WithPanicHandler(r.Options.PanicHandler)
 	} else {
 		r.WithPanicHandler(DefaultErrorLogFunc())
 	}
+	// Recovery
 	if r.Options.RecoveryLogFunc != nil {
 		if r.Options.RecoveryHandler != nil {
 			r.WithRecoveryHandler(r.Options.RecoveryLogFunc, r.Options.RecoveryHandler)
@@ -359,19 +355,35 @@ func (r *ServerRouter) Resolve() {
 	} else if r.Options.RecoveryHandler != nil {
 		r.WithRecoveryHandler(DefaultErrorLogFunc(), r.Options.RecoveryHandler)
 	}
+	// Type
 	if r.Options.TypeNegotiator != nil {
 		r.WithTypeNegotiator(r.Options.TypeNegotiator...)
 	} else {
 		r.WithTypeNegotiator(JSON, XML, XML2, HTML)
 	}
+	// Slash
 	if r.Options.SlashRemover != nil {
 		r.WithSlashRemover(*r.Options.SlashRemover)
 	}
+	// Language
 	if r.Options.LanguageNegotiator != nil {
 		r.WithLanguageNegotiator(r.Options.LanguageNegotiator...)
 	}
+	// CORS
 	if r.Options.Cors != nil {
 		r.WithCors(*r.Options.Cors)
+	}
+	// Timeout
+	if r.Options.RequestTimeout.Duration > 0 {
+		r.WithTimeout(r.Options.RequestTimeout.Duration)
+	}
+	// Callbacks
+	for _, c := range r.Options.Callbacks {
+		r.AddCallback(c)
+	}
+	// Middlewares
+	for _, m := range r.Middlewares {
+		r.AddMiddlewares(m)
 	}
 }
 
@@ -651,13 +663,6 @@ func (s *Server) SetServerReuqestCors(corsOptions *cors.Options) *Server {
 	}
 	return s
 }
-func (s *Server) AddRouteGroup(group string) *ServerRouteGroup {
-	// Router Handlers (Global)
-	if _, ok := s.RouteGroups[group]; !ok {
-		s.RouteGroups[group] = s.Router.AddRouteGroup(group)
-	}
-	return s.RouteGroups[group]
-}
 func (s *Server) AddRoute(method string, path string, handlers ...routing.Handler) *Server {
 	paths := strings.Split(path, "/")
 	prefix := "/"
@@ -687,16 +692,35 @@ func (s *Server) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 }
 
 func (r *ServerRouter) AddCallback(callback RouterCallback) *ServerRouter {
-	if callback != nil {
-		r.PrependStartupHandler(callback.OnRequestStartup)
-		r.AppendShutdownHandler(callback.OnRequestShutdown)
-	}
+	r.AppendStartupHandler(func(c *routing.Context) (err error) {
+		callback.OnRequestStartup(c)
+		err = c.Next()
+		callback.OnRequestShutdown(c)
+		return
+	})
 	return r
 }
 
 // Middlewares
 func (r *ServerRouter) WithMiddlewares(middlewares []MiddlewareInterface) *ServerRouter {
 	r.Middlewares = middlewares
+	return r
+}
+
+func (r *ServerRouter) AddMiddlewares(middleware RouterCallback) *ServerRouter {
+	r.AppendAnteriorHandler(func(c *routing.Context) (err error) {
+		if err = middleware.OnRequestStartup(c); err != nil {
+			return
+		}
+		err = c.Next()
+		middleware.OnRequestShutdown(c)
+		return
+	})
+	return r
+}
+
+func (r *ServerRouter) WithTimeout(timeout time.Duration) *ServerRouter {
+	r.AppendStartupHandler(fault.TimeoutHandler(timeout))
 	return r
 }
 
@@ -715,8 +739,8 @@ func (r *ServerRouter) WithMiddlewares(middlewares []MiddlewareInterface) *Serve
 //     }
 //     r := routing.New()
 //     r.UseAccessLogger(AccessLogger(myCustomLogger))
-func (r *ServerRouter) WithAccessLogger(loggerFunc access.LogWriterFunc) *ServerRouter {
-	r.AppendStartupHandler(access.CustomLogger(loggerFunc))
+func (r *ServerRouter) WithAccessLogger(loggerFunc LogWriterFunc) *ServerRouter {
+	r.AppendStartupHandler(CustomLogger(loggerFunc))
 	return r
 }
 
@@ -829,25 +853,6 @@ func (r *ServerRouter) WithSlashRemover(status int) *ServerRouter {
 //     }))
 func (r *ServerRouter) NewFileHandler(pathMap file.PathMap, opts ...file.ServerOptions) routing.Handler {
 	return file.Server(pathMap, opts...)
-}
-
-func (r *ServerRouter) AddRouteGroup(groupName string) *ServerRouteGroup {
-	g := &ServerRouteGroup{
-		RouteGroup: r.Group(groupName),
-	}
-	for _, m := range r.Middlewares {
-		g.AppendAnteriorHandler(m.OnRequestStartup)
-		g.PrependPosteriorHandler(m.OnRequestShutdown)
-	}
-	return g
-}
-
-func (g *ServerRouteGroup) AddCallback(callback RouterCallback) *ServerRouteGroup {
-	if callback != nil {
-		g.PrependStartupHandler(callback.OnRequestStartup)
-		g.AppendShutdownHandler(callback.OnRequestShutdown)
-	}
-	return g
 }
 
 // 添加API路由

@@ -375,8 +375,8 @@ func (e *Engine) NewServer(router *ServerRouter, setters ...ServerOption) *Serve
 	}
 	setters = append(setters, ServerLogWriter(e.logWriter))
 	serverOptions := &ServerOptions{
-		logWriter: defaultServerLogWriter,
-		Port:      defaultServerPort,
+		logWriter:                   defaultServerLogWriter,
+		Port:                        defaultServerPort,
 		GracefulStopTimeoutDuration: defaultServerGracefulStopTimeoutDuration,
 		ReadHeaderTimeoutDuration:   defaultServerReadHeaderTimeoutDuration,
 		ReadTimeoutDuration:         defaultServerReadTimeoutDuration,
@@ -790,47 +790,48 @@ func (e *Engine) Startup() (err error) {
 					},
 				}}, server.Router.Routes...)
 			}
-			sortedRouteGroup := make([]string, 0)
-			sortedRouteId := make(map[string][]string, 0)
-			routeHandlerMap := make(map[string]map[string][]*routeHandler)
+			var genHostHandlerFunc func(hosts []string, basicAuth *ServerBasicAuth, handler api.Handler) func(ctx *routing.Context) error = func(hosts []string, basicAuth *ServerBasicAuth, handler api.Handler) func(ctx *routing.Context) error {
+				return func(ctx *routing.Context) error {
+					var requestHost string = ctx.Request.Host
+					if requestHost == "" {
+						requestHost = ctx.Request.URL.Host
+					}
+					for _, host := range hosts {
+						if utility.WildcardMatch(host, requestHost) {
+							if basicAuth != nil {
+								ctx.Request.SetBasicAuth(basicAuth.Username, basicAuth.Password)
+							}
+							return handler.Serve(&api.Context{
+								Context:  ctx,
+								Response: api.NewResponse(ctx),
+							})
+						}
+					}
+					return routing.NotFoundHandler(ctx)
+				}
+			}
 			if server.Router.Routes != nil && len(server.Router.Routes) > 0 {
 				for _, route := range server.Router.Routes {
 					if route == nil {
 						return errors.Annotatef(errors.New("ltick: route does not exists"), errStartup)
 					}
-					server.AddRouteGroup(route.Group)
-					if _, ok := routeHandlerMap[route.Group]; !ok {
-						sortedRouteGroup = append(sortedRouteGroup, route.Group)
-						sortedRouteId[route.Group] = make([]string, 0)
-						routeHandlerMap[route.Group] = make(map[string][]*routeHandler, 0)
-					}
-					for index, method := range route.Method {
-						if route.Handlers[index] != nil {
-							routeId := method + "|" + route.Path
-							if _, ok := routeHandlerMap[route.Group][routeId]; !ok {
-								sortedRouteId[route.Group] = append(sortedRouteId[route.Group], routeId)
-								routeHandlerMap[route.Group][routeId] = make([]*routeHandler, 0)
-							}
-							routeHandlerMap[route.Group][routeId] = append(routeHandlerMap[route.Group][routeId], &routeHandler{
-								Handler: route.Handlers[index],
-								Host:    route.Host,
-							})
+					var (
+						index   int
+						method  string
+						handler api.Handler
+					)
+					for index, method = range route.Method {
+						if len(route.Handlers) < index {
+							continue
 						}
+						if handler = route.Handlers[index]; handler == nil {
+							continue
+						}
+						server.Router.Group(route.Group).To(method, route.Path, genHostHandlerFunc(route.Host, route.BasicAuth, handler))
 					}
 				}
 			}
-			for _, routeGroup := range sortedRouteGroup {
-				if len(proxyHandlers) > 0 {
-					server.RouteGroups[routeGroup].PrependAnteriorHandler(proxyHandlers...)
-				}
-				for _, routeId := range sortedRouteId[routeGroup] {
-					routeIds := strings.SplitN(routeId, "|", 2)
-					routeMethod := routeIds[0]
-					routePath := routeIds[1]
-					server.RouteGroups[routeGroup].AddApiRoute(routeMethod, routePath, routeHandlerMap[routeGroup][routeId])
-				}
-			}
-			e.Log(fmt.Sprintf("ltick: new server [serverOptions:'%+v', serverRouterOptions:'%+v', handlerTimeout:'%.6fs']", server.ServerOptions, server.Router.Options, server.Router.TimeoutDuration.Seconds()))
+			e.Log(fmt.Sprintf("ltick: new server [serverOptions:'%+v', serverRouterOptions:'%+v', handlerTimeout:'%.6fs']", server.ServerOptions, server.Router.Options, server.Router.Options.RequestTimeout.Duration.Seconds()))
 		}
 	}
 	// 注入模块
