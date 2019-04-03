@@ -790,26 +790,43 @@ func (e *Engine) Startup() (err error) {
 					},
 				}}, server.Router.Routes...)
 			}
-			var genHostHandlerFunc func(hosts []string, basicAuth *ServerBasicAuth, handler api.Handler) func(ctx *routing.Context) error = func(hosts []string, basicAuth *ServerBasicAuth, handler api.Handler) func(ctx *routing.Context) error {
-				return func(ctx *routing.Context) error {
-					var requestHost string = ctx.Request.Host
-					if requestHost == "" {
-						requestHost = ctx.Request.URL.Host
+			var (
+				// 当method、path相同时, routing只会添加第一个，所以做一个合并
+				mesh    map[string]map[string]map[string][]routeHandler = make(map[string]map[string]map[string][]routeHandler)
+				addMesh func(string, string, string, routeHandler)      = func(group string, method string, path string, handler routeHandler) {
+					var ok bool
+					method = strings.ToUpper(method)
+					if _, ok = mesh[group]; !ok {
+						mesh[group] = make(map[string]map[string][]routeHandler)
 					}
-					for _, host := range hosts {
-						if utility.WildcardMatch(host, requestHost) {
-							if basicAuth != nil {
-								ctx.Request.SetBasicAuth(basicAuth.Username, basicAuth.Password)
-							}
-							return handler.Serve(&api.Context{
-								Context:  ctx,
-								Response: api.NewResponse(ctx),
-							})
-						}
+					if _, ok = mesh[group][method]; !ok {
+						mesh[group][method] = make(map[string][]routeHandler)
 					}
-					return routing.NotFoundHandler(ctx)
+					mesh[group][method][path] = append(mesh[group][method][path], handler)
 				}
-			}
+				genHandlerFunc func(list []routeHandler) func(ctx *routing.Context) error = func(list []routeHandler) func(ctx *routing.Context) error {
+					return func(ctx *routing.Context) error {
+						var requestHost string = ctx.Request.Host
+						if requestHost == "" {
+							requestHost = ctx.Request.URL.Host
+						}
+						for _, route := range list {
+							for _, host := range route.Host {
+								if utility.WildcardMatch(host, requestHost) {
+									if route.BasicAuth != nil {
+										ctx.Request.SetBasicAuth(route.BasicAuth.Username, route.BasicAuth.Password)
+									}
+									return route.Handler.Serve(&api.Context{
+										Context:  ctx,
+										Response: api.NewResponse(ctx),
+									})
+								}
+							}
+						}
+						return routing.NotFoundHandler(ctx)
+					}
+				}
+			)
 			if server.Router.Routes != nil && len(server.Router.Routes) > 0 {
 				for _, route := range server.Router.Routes {
 					if route == nil {
@@ -827,7 +844,18 @@ func (e *Engine) Startup() (err error) {
 						if handler = route.Handlers[index]; handler == nil {
 							continue
 						}
-						server.Router.Group(route.Group).To(method, route.Path, genHostHandlerFunc(route.Host, route.BasicAuth, handler))
+						addMesh(route.Group, method, route.Path, routeHandler{
+							Host:      route.Host,
+							BasicAuth: route.BasicAuth,
+							Handler:   handler,
+						})
+					}
+				}
+				for group, methodMap := range mesh {
+					for method, pathMap := range methodMap {
+						for path, handlerList := range pathMap {
+							server.Router.Group(group).To(method, path, genHandlerFunc(handlerList))
+						}
 					}
 				}
 			}
