@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"net/http/httputil"
 	"net/http/pprof"
 	"os"
 	"os/exec"
@@ -629,41 +628,6 @@ func (e *Engine) Startup() (err error) {
 				continue
 			}
 			server.Router.Resolve()
-			// proxy
-			proxyHandlers := make([]routing.Handler, 0)
-			if server.Router.Proxys != nil && len(server.Router.Proxys) > 0 {
-				for _, proxy := range server.Router.Proxys {
-					if proxy != nil {
-						proxyHandler := func(c *routing.Context) error {
-							requestHost := c.Request.Host
-							if requestHost == "" {
-								requestHost = c.Request.URL.Host
-							}
-							for _, host := range proxy.Host {
-								if utility.WildcardMatch(host, requestHost) {
-									upstreamURL, err := proxy.Proxy(c)
-									if err != nil {
-										return routing.NewHTTPError(http.StatusInternalServerError, err.Error())
-									}
-									if upstreamURL != nil {
-										director := func(req *http.Request) {
-											req.URL.Scheme = upstreamURL.Scheme
-											req.URL.Host = upstreamURL.Host
-											req.Host = upstreamURL.Host
-											req.RequestURI = upstreamURL.RequestURI()
-										}
-										proxy := &httputil.ReverseProxy{Director: director}
-										proxy.ServeHTTP(c.ResponseWriter, c.Request)
-										c.Abort()
-									}
-								}
-							}
-							return nil
-						}
-						proxyHandlers = append(proxyHandlers, proxyHandler)
-					}
-				}
-			}
 			if server.Router.Metrics != nil {
 				server.Router.Routes = append([]*ServerRouterRoute{&ServerRouterRoute{
 					Method: []string{"GET"},
@@ -843,6 +807,17 @@ func (e *Engine) Startup() (err error) {
 						}
 						if handler = route.Handlers[index]; handler == nil {
 							continue
+						}
+						// proxy
+						if server.Router.Proxys != nil && len(server.Router.Proxys) > 0 {
+							for _, proxy := range server.Router.Proxys {
+								if proxy != nil {
+									addMesh(proxy.Group, method, proxy.Path, routeHandler{
+										Host:      proxy.Host,
+										Handler:   proxy,
+									})
+								}
+							}
 						}
 						addMesh(route.Group, method, route.Path, routeHandler{
 							Host:      route.Host,

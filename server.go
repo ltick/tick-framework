@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"os"
 	"regexp"
@@ -386,13 +387,12 @@ func (r *ServerRouter) Resolve() {
 		r.AddMiddlewares(m)
 	}
 }
-
-func (sp *ServerRouterProxy) Proxy(c *routing.Context) (*url.URL, error) {
+func (sp *ServerRouterProxy) Serve(c *api.Context) (error) {
 	captures := make(map[string]string)
 	r := regexp.MustCompile("<:(\\w+)>")
 	match := r.FindStringSubmatch(sp.Upstream)
 	if match == nil {
-		return nil, errors.New("ltick: upstream not match")
+		return errors.New("ltick: upstream not match")
 	}
 	for i, name := range r.SubexpNames() {
 		if i == 0 || name == "" {
@@ -417,13 +417,23 @@ func (sp *ServerRouterProxy) Proxy(c *routing.Context) (*url.URL, error) {
 		for name, capture := range captures {
 			upstream = strings.Replace(upstream, "<:"+name+">", capture, -1)
 		}
-		UpstreamURL, err := url.Parse(upstream)
+		upstreamURL, err := url.Parse(upstream)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		return UpstreamURL, nil
+		if upstreamURL != nil {
+			director := func(req *http.Request) {
+				req.URL.Scheme = upstreamURL.Scheme
+				req.URL.Host = upstreamURL.Host
+				req.Host = upstreamURL.Host
+				req.RequestURI = upstreamURL.RequestURI()
+			}
+			proxy := &httputil.ReverseProxy{Director: director}
+			proxy.ServeHTTP(c.ResponseWriter, c.Request)
+			c.Context.Abort()
+		}
 	}
-	return nil, nil
+	return nil
 }
 
 func (e *Engine) RegisterServer(name string, server *Server) {
