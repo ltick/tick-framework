@@ -5,10 +5,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/ltick/tick-config"
 	"github.com/joho/godotenv"
 	_ "github.com/joho/godotenv/autoload"
 	"github.com/juju/errors"
+	"github.com/ltick/tick-config"
 )
 
 var (
@@ -276,67 +276,132 @@ func (c *Config) Set(key string, value interface{}) {
 
 // GetString returns the value associated with the key as a string.
 func (c *Config) Get(key string) interface{} {
+	for optionKey, option := range c.options {
+		if key == optionKey && option.EnvironmentKey != "" && option.EnvironmentKey != optionKey {
+			return c.handler.Get(option.EnvironmentKey)
+		}
+	}
 	return c.handler.Get(key)
 }
 
 // GetString returns the value associated with the key as a string.
 func (c *Config) GetString(key string) string {
+	for optionKey, option := range c.options {
+		if key == optionKey && option.EnvironmentKey != "" && option.EnvironmentKey != optionKey {
+			return c.handler.GetString(option.EnvironmentKey)
+		}
+	}
 	return c.handler.GetString(key)
 }
 
 // GetBool returns the value associated with the key as a boolean.
 func (c *Config) GetBool(key string) bool {
+	for optionKey, option := range c.options {
+		if key == optionKey && option.EnvironmentKey != "" && option.EnvironmentKey != optionKey {
+			return c.handler.GetBool(option.EnvironmentKey)
+		}
+	}
 	return c.handler.GetBool(key)
 }
 
 // GetInt returns the value associated with the key as an integer.
 func (c *Config) GetInt(key string) int {
+	for optionKey, option := range c.options {
+		if key == optionKey && option.EnvironmentKey != "" && option.EnvironmentKey != optionKey {
+			return c.handler.GetInt(option.EnvironmentKey)
+		}
+	}
 	return c.handler.GetInt(key)
 }
 
 // GetInt64 returns the value associated with the key as an integer.
 func (c *Config) GetInt64(key string) int64 {
+	for optionKey, option := range c.options {
+		if key == optionKey && option.EnvironmentKey != "" && option.EnvironmentKey != optionKey {
+			return c.handler.GetInt64(option.EnvironmentKey)
+		}
+	}
 	return c.handler.GetInt64(key)
 }
 
 // GetFloat64 returns the value associated with the key as a float64.
 func (c *Config) GetFloat64(key string) float64 {
+	for optionKey, option := range c.options {
+		if key == optionKey && option.EnvironmentKey != "" && option.EnvironmentKey != optionKey {
+			return c.handler.GetFloat64(option.EnvironmentKey)
+		}
+	}
 	return c.handler.GetFloat64(key)
 }
 
 // GetTime returns the value associated with the key as time.
 func (c *Config) GetTime(key string) time.Time {
+	for optionKey, option := range c.options {
+		if key == optionKey && option.EnvironmentKey != "" && option.EnvironmentKey != optionKey {
+			return c.handler.GetTime(option.EnvironmentKey)
+		}
+	}
 	return c.handler.GetTime(key)
 }
 
 // GetDuration returns the value associated with the key as a duration.
 func (c *Config) GetDuration(key string) time.Duration {
+	for optionKey, option := range c.options {
+		if key == optionKey && option.EnvironmentKey != "" && option.EnvironmentKey != optionKey {
+			return c.handler.GetDuration(option.EnvironmentKey)
+		}
+	}
 	return c.handler.GetDuration(key)
 }
 
 // GetStringSlice returns the value associated with the key as a slice of strings.
 func (c *Config) GetStringSlice(key string) []string {
+	for optionKey, option := range c.options {
+		if key == optionKey && option.EnvironmentKey != "" && option.EnvironmentKey != optionKey {
+			return c.handler.GetStringSlice(option.EnvironmentKey)
+		}
+	}
 	return c.handler.GetStringSlice(key)
 }
 
 // GetStringMap returns the value associated with the key as a map of interfaces.
 func (c *Config) GetStringMap(key string) map[string]interface{} {
+	for optionKey, option := range c.options {
+		if key == optionKey && option.EnvironmentKey != "" && option.EnvironmentKey != optionKey {
+			return c.handler.GetStringMap(option.EnvironmentKey)
+		}
+	}
 	return c.handler.GetStringMap(key)
 }
 
 // GetStringMapString returns the value associated with the key as a map of strings.
 func (c *Config) GetStringMapString(key string) map[string]string {
+	for optionKey, option := range c.options {
+		if key == optionKey && option.EnvironmentKey != "" && option.EnvironmentKey != optionKey {
+			return c.handler.GetStringMapString(option.EnvironmentKey)
+		}
+	}
 	return c.handler.GetStringMapString(key)
 }
 
 // GetStringMapStringSlice returns the value associated with the key as a map to a slice of strings.
 func (c *Config) GetStringMapStringSlice(key string) map[string][]string {
+	for optionKey, option := range c.options {
+		if key == optionKey && option.EnvironmentKey != "" && option.EnvironmentKey != optionKey {
+			return c.handler.GetStringMapStringSlice(option.EnvironmentKey)
+		}
+	}
 	return c.handler.GetStringMapStringSlice(key)
 }
 
 // GetSizeInBytes returns the size of the value associated with the given key
 // in bytes.
 func (c *Config) GetSizeInBytes(key string) uint {
+	for optionKey, option := range c.options {
+		if key == optionKey && option.EnvironmentKey != "" && option.EnvironmentKey != optionKey {
+			return c.handler.GetSizeInBytes(option.EnvironmentKey)
+		}
+	}
 	return c.handler.GetSizeInBytes(key)
 }
 

@@ -49,7 +49,7 @@ func (d *Database) Prepare(ctx context.Context) (context.Context, error) {
 		"DATABASE_MYSQL_MAX_OPEN_CONNS": config.Option{Type: config.Int, EnvironmentKey: "DATABASE_MYSQL_MAX_OPEN_CONNS"},
 		"DATABASE_MYSQL_MAX_IDLE_CONNS": config.Option{Type: config.Int, EnvironmentKey: "DATABASE_MYSQL_MAX_IDLE_CONNS"},
 
-		"DATABASE_NOSQL_PROVIDER":   config.Option{Type: config.String, EnvironmentKey: "DATABASE_PROVIDER"},
+		"DATABASE_NOSQL_PROVIDER":   config.Option{Type: config.String, EnvironmentKey: "DATABASE_NOSQL_PROVIDER"},
 		"DATABASE_HBASE_HOST":       config.Option{Type: config.String, EnvironmentKey: "DATABASE_HBASE_HOST"},
 		"DATABASE_HBASE_TIMEOUT":    config.Option{Type: config.String, EnvironmentKey: "DATABASE_HBASE_TIMEOUT"},
 		"DATABASE_HBASE_MAX_ACTIVE": config.Option{Type: config.Int, EnvironmentKey: "DATABASE_HBASE_MAX_ACTIVE"},
