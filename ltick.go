@@ -254,20 +254,26 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 	}
 	if e.Registry.ComponentStates[configComponent.Name] == COMPONENT_STATE_INIT {
 		e.Registry.ComponentStates[configComponent.Name] = COMPONENT_STATE_PREPARED
-		e.Context, err = ci.Prepare(e.Context)
+		ctx, err := ci.Prepare(e.Context)
 		if err != nil {
 			err = errors.Annotate(err, errNew)
 			e.Log(errors.ErrorStack(err))
 			os.Exit(1)
 		}
+		if ctx != nil {
+			e.Context = ctx
+		}
 	}
 	if e.Registry.ComponentStates[configComponent.Name] == COMPONENT_STATE_PREPARED {
 		e.Registry.ComponentStates[configComponent.Name] = COMPONENT_STATE_INITIATED
-		e.Context, err = ci.Initiate(e.Context)
+		ctx, err := ci.Initiate(e.Context)
 		if err != nil {
 			err = errors.Annotate(err, errNew)
 			e.Log(errors.ErrorStack(err))
 			os.Exit(1)
+		}
+		if ctx != nil {
+			e.Context = ctx
 		}
 	}
 	// 注入模块
@@ -293,11 +299,14 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 		}
 		if e.Registry.ComponentStates[name] == COMPONENT_STATE_INIT {
 			e.Registry.ComponentStates[name] = COMPONENT_STATE_PREPARED
-			e.Context, err = ci.Prepare(e.Context)
+			ctx, err := ci.Prepare(e.Context)
 			if err != nil {
 				err = errors.Annotate(err, errNew)
 				e.Log(errors.ErrorStack(err))
 				os.Exit(1)
+			}
+			if ctx != nil {
+				e.Context = ctx
 			}
 		}
 	}
@@ -336,11 +345,14 @@ func New(registry *Registry, setters ...EngineOption) (e *Engine) {
 		}
 		if e.Registry.ComponentStates[c.Name] == COMPONENT_STATE_PREPARED {
 			e.Registry.ComponentStates[c.Name] = COMPONENT_STATE_INITIATED
-			e.Context, err = ci.Initiate(e.Context)
+			ctx, err := ci.Initiate(e.Context)
 			if err != nil {
 				err = errors.Annotate(err, errNew)
 				e.Log(errors.ErrorStack(err))
 				os.Exit(1)
+			}
+			if ctx != nil {
+				e.Context = ctx
 			}
 		}
 	}
@@ -374,8 +386,8 @@ func (e *Engine) NewServer(router *ServerRouter, setters ...ServerOption) *Serve
 	}
 	setters = append(setters, ServerLogWriter(e.logWriter))
 	serverOptions := &ServerOptions{
-		logWriter:                   defaultServerLogWriter,
-		Port:                        defaultServerPort,
+		logWriter: defaultServerLogWriter,
+		Port:      defaultServerPort,
 		GracefulStopTimeoutDuration: defaultServerGracefulStopTimeoutDuration,
 		ReadHeaderTimeoutDuration:   defaultServerReadHeaderTimeoutDuration,
 		ReadTimeoutDuration:         defaultServerReadTimeoutDuration,
@@ -600,11 +612,14 @@ func (e *Engine) Startup() (err error) {
 			e.Log(errors.ErrorStack(err))
 			os.Exit(1)
 		}
-		e.Context, err = mi.Initiate(e.Context)
+		ctx, err := mi.Initiate(e.Context)
 		if err != nil {
 			err = errors.Annotate(err, errStartup)
 			e.Log(errors.ErrorStack(err))
 			os.Exit(1)
+		}
+		if ctx != nil {
+			e.Context = ctx
 		}
 	}
 	if e.EngineOptions.callback != nil {
@@ -623,151 +638,10 @@ func (e *Engine) Startup() (err error) {
 	}
 	if e.ServerMap != nil {
 		for _, server := range e.ServerMap {
-			server.Resolve()
-			if server.Router == nil {
-				continue
-			}
-			server.Router.Resolve()
-			if server.Router.Metrics != nil {
-				server.Router.Routes = append([]*ServerRouterRoute{&ServerRouterRoute{
-					Method: []string{"GET"},
-					Host:   server.Router.Metrics.Host,
-					Group:  server.Router.Metrics.Group,
-					Path:   "",
-					Handlers: []api.Handler{
-						metricsHandler{
-							basicAuth: server.Router.Metrics.BasicAuth,
-						},
-					},
-				}}, server.Router.Routes...)
-			}
-			if server.Router.Pprof != nil {
-				server.Router.Routes = append([]*ServerRouterRoute{&ServerRouterRoute{
-					Method: []string{"ANY"},
-					Host:   server.Router.Pprof.Host,
-					Group:  "/debug/pprof", // follow official route rule
-					Path:   "",
-					Handlers: []api.Handler{
-						pprofHandlerFunc{
-							httpHandlerFunc: pprof.Index,
-							basicAuth:       server.Router.Pprof.BasicAuth,
-						},
-					},
-				}, &ServerRouterRoute{
-					Method: []string{"ANY"},
-					Host:   server.Router.Pprof.Host,
-					Group:  "/debug/pprof", // follow official route rule
-					Path:   "/goroutine",
-					Handlers: []api.Handler{
-						pprofHandler{
-							httpHandler: pprof.Handler("goroutine"),
-							basicAuth:   server.Router.Pprof.BasicAuth,
-						},
-					},
-				}, &ServerRouterRoute{
-					Method: []string{"ANY"},
-					Host:   server.Router.Pprof.Host,
-					Group:  "/debug/pprof", // follow official route rule
-					Path:   "/threadcreate",
-					Handlers: []api.Handler{
-						pprofHandler{
-							httpHandler: pprof.Handler("threadcreate"),
-							basicAuth:   server.Router.Pprof.BasicAuth,
-						},
-					},
-				}, &ServerRouterRoute{
-					Method: []string{"ANY"},
-					Host:   server.Router.Pprof.Host,
-					Group:  "/debug/pprof", // follow official route rule
-					Path:   "/heap",
-					Handlers: []api.Handler{
-						pprofHandler{
-							httpHandler: pprof.Handler("heap"),
-							basicAuth:   server.Router.Pprof.BasicAuth,
-						},
-					},
-				}, &ServerRouterRoute{
-					Method: []string{"ANY"},
-					Host:   server.Router.Pprof.Host,
-					Group:  "/debug/pprof", // follow official route rule
-					Path:   "/block",
-					Handlers: []api.Handler{
-						pprofHandler{
-							httpHandler: pprof.Handler("block"),
-							basicAuth:   server.Router.Pprof.BasicAuth,
-						},
-					},
-				}, &ServerRouterRoute{
-					Method: []string{"ANY"},
-					Host:   server.Router.Pprof.Host,
-					Group:  "/debug/pprof", // follow official route rule
-					Path:   "/mutex",
-					Handlers: []api.Handler{
-						pprofHandler{
-							httpHandler: pprof.Handler("mutex"),
-							basicAuth:   server.Router.Pprof.BasicAuth,
-						},
-					},
-				}, &ServerRouterRoute{
-					Method: []string{"ANY"},
-					Host:   server.Router.Pprof.Host,
-					Group:  "/debug/pprof", // follow official route rule
-					Path:   "/cmdline",
-					Handlers: []api.Handler{
-						pprofHandlerFunc{
-							httpHandlerFunc: pprof.Cmdline,
-							basicAuth:       server.Router.Pprof.BasicAuth,
-						},
-					},
-				}, &ServerRouterRoute{
-					Method: []string{"ANY"},
-					Host:   server.Router.Pprof.Host,
-					Group:  "/debug/pprof", // follow official route rule
-					Path:   "/profile",
-					Handlers: []api.Handler{
-						pprofHandlerFunc{
-							httpHandlerFunc: pprof.Profile,
-							basicAuth:       server.Router.Pprof.BasicAuth,
-						},
-					},
-				}, &ServerRouterRoute{
-					Method: []string{"ANY"},
-					Host:   server.Router.Pprof.Host,
-					Group:  "/debug/pprof", // follow official route rule
-					Path:   "/symbol",
-					Handlers: []api.Handler{
-						pprofHandlerFunc{
-							httpHandlerFunc: pprof.Symbol,
-							basicAuth:       server.Router.Pprof.BasicAuth,
-						},
-					},
-				}, &ServerRouterRoute{
-					Method: []string{"ANY"},
-					Host:   server.Router.Pprof.Host,
-					Group:  "/debug/pprof", // follow official route rule
-					Path:   "/trace",
-					Handlers: []api.Handler{
-						pprofHandlerFunc{
-							httpHandlerFunc: pprof.Trace,
-							basicAuth:       server.Router.Pprof.BasicAuth,
-						},
-					},
-				}}, server.Router.Routes...)
-			}
 			var (
+				sortedMesh []string                                        = make([]string, 0)
+				mesh       map[string]map[string]map[string][]routeHandler = make(map[string]map[string]map[string][]routeHandler)
 				// 当method、path相同时, routing只会添加第一个，所以做一个合并
-				mesh    map[string]map[string]map[string][]routeHandler = make(map[string]map[string]map[string][]routeHandler)
-				addMesh func(string, string, string, routeHandler)      = func(group string, method string, path string, handler routeHandler) {
-					var ok bool
-					method = strings.ToUpper(method)
-					if _, ok = mesh[group]; !ok {
-						mesh[group] = make(map[string]map[string][]routeHandler)
-					}
-					if _, ok = mesh[group][method]; !ok {
-						mesh[group][method] = make(map[string][]routeHandler)
-					}
-					mesh[group][method][path] = append(mesh[group][method][path], handler)
-				}
 				genHandlerFunc func(list []routeHandler) func(ctx *routing.Context) error = func(list []routeHandler) func(ctx *routing.Context) error {
 					return func(ctx *routing.Context) error {
 						var requestHost string = ctx.Request.Host
@@ -790,7 +664,71 @@ func (e *Engine) Startup() (err error) {
 						return routing.NotFoundHandler(ctx)
 					}
 				}
+				addMesh func(string, string, string, routeHandler) = func(method string, group string, path string, handler routeHandler) {
+					var ok bool
+					method = strings.ToUpper(method)
+					if _, ok = mesh[method]; !ok {
+						mesh[method] = make(map[string]map[string][]routeHandler)
+					}
+					if _, ok = mesh[method][group]; !ok {
+						mesh[method][group] = make(map[string][]routeHandler)
+					}
+					if _, ok = mesh[method][group][path]; !ok {
+						mesh[method][group][path] = make([]routeHandler, 0)
+						sortedMesh = append(sortedMesh, method+"$"+group+"$"+path)
+					}
+					mesh[method][group][path] = append(mesh[method][group][path], handler)
+				}
 			)
+			server.Resolve()
+			if server.Router == nil {
+				continue
+			}
+			server.Router.Resolve()
+			if server.Router.Metrics != nil {
+				addMesh("GET", server.Router.Metrics.Group, "", routeHandler{
+					Host:      server.Router.Metrics.Host,
+					BasicAuth: server.Router.Metrics.BasicAuth,
+					Handler:   metricsHandler{},
+				})
+			}
+			if server.Router.Pprof != nil {
+				addMesh("ANY", "/debug/pprof", "*", routeHandler{
+					Host:      server.Router.Pprof.Host,
+					BasicAuth: server.Router.Pprof.BasicAuth,
+					Handler: pprofHandlerFunc{
+						httpHandlerFunc: pprof.Index,
+					},
+				})
+				addMesh("ANY", "/debug/pprof", "/cmdline", routeHandler{
+					Host:      server.Router.Pprof.Host,
+					BasicAuth: server.Router.Pprof.BasicAuth,
+					Handler: pprofHandlerFunc{
+						httpHandlerFunc: pprof.Cmdline,
+					},
+				})
+				addMesh("ANY", "/debug/pprof", "/profile", routeHandler{
+					Host:      server.Router.Pprof.Host,
+					BasicAuth: server.Router.Pprof.BasicAuth,
+					Handler: pprofHandlerFunc{
+						httpHandlerFunc: pprof.Profile,
+					},
+				})
+				addMesh("ANY", "/debug/pprof", "/symbol", routeHandler{
+					Host:      server.Router.Pprof.Host,
+					BasicAuth: server.Router.Pprof.BasicAuth,
+					Handler: pprofHandlerFunc{
+						httpHandlerFunc: pprof.Symbol,
+					},
+				})
+				addMesh("ANY", "/debug/pprof", "/trace", routeHandler{
+					Host:      server.Router.Pprof.Host,
+					BasicAuth: server.Router.Pprof.BasicAuth,
+					Handler: pprofHandlerFunc{
+						httpHandlerFunc: pprof.Trace,
+					},
+				})
+			}
 			if server.Router.Routes != nil && len(server.Router.Routes) > 0 {
 				for _, route := range server.Router.Routes {
 					if route == nil {
@@ -812,25 +750,26 @@ func (e *Engine) Startup() (err error) {
 						if server.Router.Proxys != nil && len(server.Router.Proxys) > 0 {
 							for _, proxy := range server.Router.Proxys {
 								if proxy != nil {
-									addMesh(proxy.Group, method, proxy.Path, routeHandler{
-										Host:      proxy.Host,
-										Handler:   proxy,
+									addMesh(method, proxy.Group, proxy.Path, routeHandler{
+										Host:    proxy.Host,
+										Handler: proxy,
 									})
 								}
 							}
 						}
-						addMesh(route.Group, method, route.Path, routeHandler{
+						addMesh(method, route.Group, route.Path, routeHandler{
 							Host:      route.Host,
 							BasicAuth: route.BasicAuth,
 							Handler:   handler,
 						})
 					}
 				}
-				for group, methodMap := range mesh {
-					for method, pathMap := range methodMap {
-						for path, handlerList := range pathMap {
-							server.Router.Group(group).To(method, path, genHandlerFunc(handlerList))
-						}
+				for _, meshKey := range sortedMesh {
+					meshes := strings.SplitN(meshKey, "$", 3)
+					if strings.Compare(strings.ToLower(meshes[0]), "any") == 0 {
+						server.Router.Group(meshes[1]).Any(meshes[2], genHandlerFunc(mesh[meshes[0]][meshes[1]][meshes[2]]))
+					} else {
+						server.Router.Group(meshes[1]).To(meshes[0], meshes[2], genHandlerFunc(mesh[meshes[0]][meshes[1]][meshes[2]]))
 					}
 				}
 			}
@@ -856,9 +795,12 @@ func (e *Engine) Startup() (err error) {
 		}
 		if e.Registry.ComponentStates[c.Name] == COMPONENT_STATE_PREPARED {
 			e.Registry.ComponentStates[c.Name] = COMPONENT_STATE_INITIATED
-			e.Context, err = ci.Initiate(e.Context)
+			ctx, err := ci.Initiate(e.Context)
 			if err != nil {
 				return errors.Annotatef(err, errStartupComponentInitiate, sortedComponenetName[index])
+			}
+			if ctx != nil {
+				e.Context = ctx
 			}
 		}
 	}
@@ -870,9 +812,12 @@ func (e *Engine) Startup() (err error) {
 		}
 		if e.Registry.ComponentStates[c.Name] == COMPONENT_STATE_INITIATED {
 			e.Registry.ComponentStates[c.Name] = COMPONENT_STATE_STARTUP
-			e.Context, err = ci.OnStartup(e.Context)
+			ctx, err := ci.OnStartup(e.Context)
 			if err != nil {
 				return errors.Annotatef(err, errStartupComponentStartup, sortedComponenetName[index])
+			}
+			if ctx != nil {
+				e.Context = ctx
 			}
 		}
 	}
@@ -893,9 +838,12 @@ func (e *Engine) Shutdown() (err error) {
 		}
 		if e.Registry.ComponentStates[c.Name] == COMPONENT_STATE_STARTUP {
 			e.Registry.ComponentStates[c.Name] = COMPONENT_STATE_SHUTDOWN
-			e.Context, err = component.OnShutdown(e.Context)
+			ctx, err := component.OnShutdown(e.Context)
 			if err != nil {
 				return errors.Annotatef(err, errShutdownComponentShutdown, sortedComponenetName[index])
+			}
+			if ctx != nil {
+				e.Context = ctx
 			}
 		}
 	}

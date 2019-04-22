@@ -619,26 +619,18 @@ func (s *Server) Metrics(host []string, group string, basicAuth *ServerBasicAuth
 }
 
 type metricsHandler struct {
-	basicAuth *ServerBasicAuth
 }
 
 func (h metricsHandler) Serve(ctx *api.Context) error {
-	if h.basicAuth != nil {
-		ctx.Request.SetBasicAuth(h.basicAuth.Username, h.basicAuth.Username)
-	}
 	promhttp.Handler().ServeHTTP(ctx.ResponseWriter, ctx.Request)
 	return nil
 }
 
 type pprofHandlerFunc struct {
 	httpHandlerFunc http.HandlerFunc
-	basicAuth       *ServerBasicAuth
 }
 
 func (h pprofHandlerFunc) Serve(ctx *api.Context) error {
-	if h.basicAuth != nil {
-		ctx.Request.SetBasicAuth(h.basicAuth.Username, h.basicAuth.Username)
-	}
 	ctx.ResponseWriter.Header().Set("Content-Type", "text/html")
 	h.httpHandlerFunc(ctx.ResponseWriter, ctx.Request)
 	return nil
