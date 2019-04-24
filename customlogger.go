@@ -8,9 +8,7 @@ import (
 	"github.com/ltick/tick-routing/access"
 )
 
-type LogWriterFunc func(c *routing.Context, res *access.LogResponseWriter, elapsed float64)
-
-func CustomLogger(loggerFunc LogWriterFunc) routing.Handler {
+func CustomLogger(loggerFunc access.LogWriterFunc) routing.Handler {
 	return func(c *routing.Context) error {
 		startTime := time.Now()
 
@@ -20,7 +18,7 @@ func CustomLogger(loggerFunc LogWriterFunc) routing.Handler {
 		err := c.Next()
 
 		elapsed := float64(time.Now().Sub(startTime).Nanoseconds()) / 1e6
-		loggerFunc(c, rw, elapsed)
+		loggerFunc(c.Request, rw, elapsed)
 
 		return err
 	}

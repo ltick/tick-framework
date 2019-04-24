@@ -18,6 +18,7 @@ import (
 	"github.com/ltick/tick-framework/utility"
 	"github.com/ltick/tick-framework/utility/datatypes"
 	"github.com/ltick/tick-routing"
+	"github.com/ltick/tick-routing/access"
 	"github.com/ltick/tick-routing/content"
 	"github.com/ltick/tick-routing/cors"
 	"github.com/ltick/tick-routing/fault"
@@ -64,7 +65,7 @@ type (
 		MetricsHttpServerRequestsTrace         []prometheus.ObserverVec
 		MetricsHttpServerRequestsResponseSizes []prometheus.ObserverVec
 		MetricsHttpServerRequestsRequestSizes  []prometheus.ObserverVec
-		MetricsHttpServerRequestLabelFunc      metrics.HttpServerRequestLabelFunc
+		MetricsHttpServerRequestLabelFuncs      []metrics.HttpServerRequestLabelFunc
 	}
 	ServerBasicAuth struct {
 		Username string
@@ -112,7 +113,7 @@ type (
 		RequestTimeout         datatypes.Duration
 		RequestTimeoutHandlers []routing.Handler
 		Callbacks              []RouterCallback
-		AccessLogFunc          LogWriterFunc
+		AccessLogFunc          access.LogWriterFunc
 		ErrorLogFunc           fault.LogFunc
 		ErrorHandler           fault.ConvertErrorFunc
 		RecoveryLogFunc        fault.LogFunc
@@ -182,9 +183,9 @@ func ServerMetricsHttpServerRequestsTrace(observers []prometheus.ObserverVec) Se
 		options.MetricsHttpServerRequestsTrace = observers
 	}
 }
-func ServerMetricsHttpServerRequestLabelFunc(httpServerRequestLabelFunc metrics.HttpServerRequestLabelFunc) ServerOption {
+func ServerMetricsHttpServerRequestLabelFunc(httpServerRequestLabelFuncs ...metrics.HttpServerRequestLabelFunc) ServerOption {
 	return func(options *ServerOptions) {
-		options.MetricsHttpServerRequestLabelFunc = httpServerRequestLabelFunc
+		options.MetricsHttpServerRequestLabelFuncs = httpServerRequestLabelFuncs
 	}
 }
 func ServerLogWriter(logWriter io.Writer) ServerOption {
@@ -251,7 +252,7 @@ func ServerRouterCallback(callbacks []RouterCallback) ServerRouterOption {
 	}
 }
 
-func ServerRouterAccessLogFunc(accessLogFunc LogWriterFunc) ServerRouterOption {
+func ServerRouterAccessLogFunc(accessLogFunc access.LogWriterFunc) ServerRouterOption {
 	return func(options *ServerRouterOptions) {
 		options.AccessLogFunc = accessLogFunc
 	}
@@ -743,7 +744,7 @@ func (r *ServerRouter) WithTimeout(timeout time.Duration) *ServerRouter {
 //     }
 //     r := routing.New()
 //     r.UseAccessLogger(AccessLogger(myCustomLogger))
-func (r *ServerRouter) WithAccessLogger(loggerFunc LogWriterFunc) *ServerRouter {
+func (r *ServerRouter) WithAccessLogger(loggerFunc access.LogWriterFunc) *ServerRouter {
 	r.AppendStartupHandler(CustomLogger(loggerFunc))
 	return r
 }

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"log"
 	"time"
+	"net/http"
 
 	"github.com/ltick/tick-framework/utility"
-	"github.com/ltick/tick-routing"
 	"github.com/ltick/tick-routing/access"
 	"github.com/ltick/tick-routing/fault"
 	"github.com/prometheus/client_golang/prometheus"
@@ -100,29 +100,29 @@ func DefaultErrorLogFunc() fault.LogFunc {
 	}
 }
 
-func DefaultAccessLogFunc(c *routing.Context, rw *access.LogResponseWriter, elapsed float64) {
+func DefaultAccessLogFunc(req *http.Request, rw *access.LogResponseWriter, elapsed float64) {
 	//来源请求ID
-	forwardRequestId := c.Get("uniqid")
+	forwardRequestId := req.Context().Value("uniqid")
 	//请求ID
-	requestId := c.Get("requestId")
+	requestId := req.Context().Value("requestId")
 	//客户端IP
-	clientIP := c.Get("clientIP")
+	clientIP := req.Context().Value(req.RemoteAddr)
 	//服务端IP
-	serverAddress := c.Get("serverAddress")
-	requestLine := fmt.Sprintf("%s %s %s", c.Request.Method, c.Request.RequestURI, c.Request.Proto)
+	serverAddress := req.Context().Value(http.LocalAddrContextKey)
+	requestLine := fmt.Sprintf("%s %s %s", req.Method, req.RequestURI, req.Proto)
 	debug := new(bool)
-	if c.Get("DEBUG") != nil {
-		*debug = c.Get("DEBUG").(bool)
+	if req.Context().Value("DEBUG") != nil {
+		*debug = req.Context().Value("DEBUG").(bool)
 	}
 	if *debug {
-		DefaultLogFunc(c.Context, `LTICK_ACCESS|%s|%s|%s|%s - %s [%s] "%s" %d %d %d %.3f "%s" "%s" %s %s "%v" "%v"`, forwardRequestId, requestId, serverAddress, clientIP, c.Request.Host, time.Now().Format("2/Jan/2006:15:04:05 -0700"), requestLine, c.Request.ContentLength, rw.Status, rw.BytesWritten, elapsed/1e3, c.Request.Header.Get("Referer"), c.Request.Header.Get("User-Agent"), c.Request.RemoteAddr, serverAddress, c.Request.Header, rw.Header())
+		DefaultLogFunc(req.Context(), `LTICK_ACCESS|%s|%s|%s|%s - %s [%s] "%s" %d %d %d %.3f "%s" "%s" %s %s "%v" "%v"`, forwardRequestId, requestId, serverAddress, clientIP, req.Host, time.Now().Format("2/Jan/2006:15:04:05 -0700"), requestLine, req.ContentLength, rw.Status, rw.BytesWritten, elapsed/1e3, req.Header.Get("Referer"), req.Header.Get("User-Agent"), req.RemoteAddr, serverAddress, req.Header, rw.Header())
 	} else {
-		DefaultLogFunc(c.Context, `LTICK_ACCESS|%s|%s|%s|%s - %s [%s] "%s" %d %d %d %.3f "%s" "%s" %s %s "-" "-"`, forwardRequestId, requestId, serverAddress, clientIP, c.Request.Host, time.Now().Format("2/Jan/2006:15:04:05 -0700"), requestLine, c.Request.ContentLength, rw.Status, rw.BytesWritten, elapsed/1e3, c.Request.Header.Get("Referer"), c.Request.Header.Get("User-Agent"), c.Request.RemoteAddr, serverAddress)
+		DefaultLogFunc(req.Context(), `LTICK_ACCESS|%s|%s|%s|%s - %s [%s] "%s" %d %d %d %.3f "%s" "%s" %s %s "-" "-"`, forwardRequestId, requestId, serverAddress, clientIP, req.Host, time.Now().Format("2/Jan/2006:15:04:05 -0700"), requestLine, req.ContentLength, rw.Status, rw.BytesWritten, elapsed/1e3, req.Header.Get("Referer"), req.Header.Get("User-Agent"), req.RemoteAddr, serverAddress)
 	}
 	if *debug {
-		DefaultLogFunc(c.Context, `%s - %s [%s] "%s" %d %d %d %.3f "%s" "%s" %s %s "%v" "%v"`, clientIP, c.Request.Host, time.Now().Format("2/Jan/2006:15:04:05 -0700"), requestLine, c.Request.ContentLength, rw.Status, rw.BytesWritten, elapsed/1e3, c.Request.Header.Get("Referer"), c.Request.Header.Get("User-Agent"), c.Request.RemoteAddr, serverAddress, c.Request.Header, rw.Header())
+		DefaultLogFunc(req.Context(), `%s - %s [%s] "%s" %d %d %d %.3f "%s" "%s" %s %s "%v" "%v"`, clientIP, req.Host, time.Now().Format("2/Jan/2006:15:04:05 -0700"), requestLine, req.ContentLength, rw.Status, rw.BytesWritten, elapsed/1e3, req.Header.Get("Referer"), req.Header.Get("User-Agent"), req.RemoteAddr, serverAddress, req.Header, rw.Header())
 	} else {
-		DefaultLogFunc(c.Context, `%s - %s [%s] "%s" %d %d %d %.3f "%s" "%s" %s %s "-" "-"`, clientIP, c.Request.Host, time.Now().Format("2/Jan/2006:15:04:05 -0700"), requestLine, c.Request.ContentLength, rw.Status, rw.BytesWritten, elapsed/1e3, c.Request.Header.Get("Referer"), c.Request.Header.Get("User-Agent"), c.Request.RemoteAddr, serverAddress)
+		DefaultLogFunc(req.Context(), `%s - %s [%s] "%s" %d %d %d %.3f "%s" "%s" %s %s "-" "-"`, clientIP, req.Host, time.Now().Format("2/Jan/2006:15:04:05 -0700"), requestLine, req.ContentLength, rw.Status, rw.BytesWritten, elapsed/1e3, req.Header.Get("Referer"), req.Header.Get("User-Agent"), req.RemoteAddr, serverAddress)
 	}
 }
 
