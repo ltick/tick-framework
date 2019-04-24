@@ -750,10 +750,12 @@ func (e *Engine) Startup() (err error) {
 						if server.Router.Proxys != nil && len(server.Router.Proxys) > 0 {
 							for _, proxy := range server.Router.Proxys {
 								if proxy != nil {
-									addMesh(method, proxy.Group, proxy.Path, routeHandler{
-										Host:    proxy.Host,
-										Handler: proxy,
-									})
+									if proxy.Group == route.Group && proxy.Path == route.Path {
+										addMesh(method, proxy.Group, proxy.Path, routeHandler{
+											Host:    proxy.Host,
+											Handler: proxy,
+										})
+									}
 								}
 							}
 						}
@@ -762,6 +764,16 @@ func (e *Engine) Startup() (err error) {
 							BasicAuth: route.BasicAuth,
 							Handler:   handler,
 						})
+					}
+				}
+				if server.Router.Proxys != nil && len(server.Router.Proxys) > 0 {
+					for _, proxy := range server.Router.Proxys {
+						if proxy != nil {
+							addMesh("ANY", proxy.Group, proxy.Path, routeHandler{
+								Host:    proxy.Host,
+								Handler: proxy,
+							})
+						}
 					}
 				}
 				for _, meshKey := range sortedMesh {
@@ -878,22 +890,28 @@ func (e *Engine) ServerListenAndServe(name string, server *Server) {
 	e.Log("ltick: Server start listen ", server.Port, "...")
 	var handler http.Handler = server.Router
 	if server.MetricsHttpServerRequests != nil {
-		if server.MetricsHttpServerRequestLabelFunc != nil {
-			handler = metrics.InstrumentHttpServerRequests(server.MetricsHttpServerRequests, server.MetricsHttpServerRequestsTrace, handler, server.MetricsHttpServerRequestLabelFunc)
+		if len(server.MetricsHttpServerRequestLabelFuncs) > 0 {
+			for _, metricsHttpServerRequestLabelFunc := range server.MetricsHttpServerRequestLabelFuncs{
+				handler = metrics.InstrumentHttpServerRequests(server.MetricsHttpServerRequests, server.MetricsHttpServerRequestsTrace, handler, metricsHttpServerRequestLabelFunc)
+			}
 		} else {
 			handler = metrics.InstrumentHttpServerRequests(server.MetricsHttpServerRequests, server.MetricsHttpServerRequestsTrace, handler)
 		}
 	}
 	if server.MetricsHttpServerRequestsResponseSizes != nil {
-		if server.MetricsHttpServerRequestLabelFunc != nil {
-			handler = metrics.InstrumentHttpServerRequestsResponseSize(server.MetricsHttpServerRequestsResponseSizes, handler, server.MetricsHttpServerRequestLabelFunc)
+		if len(server.MetricsHttpServerRequestLabelFuncs) > 0 {
+			for _, metricsHttpServerRequestLabelFunc := range server.MetricsHttpServerRequestLabelFuncs{
+				handler = metrics.InstrumentHttpServerRequestsResponseSize(server.MetricsHttpServerRequestsResponseSizes, handler, metricsHttpServerRequestLabelFunc)
+			}
 		} else {
 			handler = metrics.InstrumentHttpServerRequestsResponseSize(server.MetricsHttpServerRequestsResponseSizes, handler)
 		}
 	}
 	if server.MetricsHttpServerRequestsRequestSizes != nil {
-		if server.MetricsHttpServerRequestLabelFunc != nil {
-			handler = metrics.InstrumentHttpServerRequestsRequestSize(server.MetricsHttpServerRequestsRequestSizes, handler, server.MetricsHttpServerRequestLabelFunc)
+		if len(server.MetricsHttpServerRequestLabelFuncs) > 0 {
+			for _, metricsHttpServerRequestLabelFunc := range server.MetricsHttpServerRequestLabelFuncs {
+				handler = metrics.InstrumentHttpServerRequestsRequestSize(server.MetricsHttpServerRequestsRequestSizes, handler, metricsHttpServerRequestLabelFunc)
+			}
 		} else {
 			handler = metrics.InstrumentHttpServerRequestsRequestSize(server.MetricsHttpServerRequestsRequestSizes, handler)
 		}

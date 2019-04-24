@@ -88,8 +88,8 @@ var debugLogFunc utility.LogFunc = func(ctx context.Context, format string, data
 	copy(logData[3:], data)
 	appLogger.Debug("TEST|%s|%s|%s|"+format, logData...)
 }
-var accessLogFunc access.LogWriterFunc = func(c *routing.Context, rw *access.LogResponseWriter, elapsed float64) {
-	ctxDebugLogger := c.Context.Value("appLogger")
+var accessLogFunc access.LogWriterFunc = func(req *http.Request, rw *access.LogResponseWriter, elapsed float64) {
+	ctxDebugLogger := req.Context().Value("appLogger")
 	if ctxDebugLogger == nil {
 		return
 	}
@@ -97,7 +97,7 @@ var accessLogFunc access.LogWriterFunc = func(c *routing.Context, rw *access.Log
 	if !ok {
 		return
 	}
-	ctxAccessLogger := c.Context.Value("accessLogger")
+	ctxAccessLogger := req.Context().Value("accessLogger")
 	if ctxAccessLogger == nil {
 		return
 	}
@@ -106,27 +106,27 @@ var accessLogFunc access.LogWriterFunc = func(c *routing.Context, rw *access.Log
 		return
 	}
 	//来源请求ID
-	forwardRequestId := c.Get("uniqid")
+	forwardRequestId := req.Context().Value("uniqid")
 	//请求ID
-	requestId := c.Get("requestId")
+	requestId := req.Context().Value("requestId")
 	//客户端IP
-	clientIP := c.Get("clientIP")
+	clientIP := req.Context().Value("clientIP")
 	//服务端IP
-	serverAddress := c.Get("serverAddress")
-	requestLine := fmt.Sprintf("%s %s %s", c.Request.Method, c.Request.RequestURI, c.Request.Proto)
+	serverAddress := req.Context().Value("serverAddress")
+	requestLine := fmt.Sprintf("%s %s %s", req.Method, req.RequestURI, req.Proto)
 	debug := new(bool)
-	if c.Get("DEBUG") != nil {
-		*debug = c.Get("DEBUG").(bool)
+	if req.Context().Value("DEBUG") != nil {
+		*debug = req.Context().Value("DEBUG").(bool)
 	}
 	if *debug {
-		appLogger.Info(`TEST_ACCESS|%s|%s|%s|%s - %s [%s] "%s" %d %d %d %.3f "%s" "%s" %s %s "%v" "%v"`, forwardRequestId, requestId, serverAddress, clientIP, c.Request.Host, time.Now().Format("2/Jan/2006:15:04:05 -0700"), requestLine, c.Request.ContentLength, rw.Status, rw.BytesWritten, elapsed/1e3, c.Request.Header.Get("Referer"), c.Request.Header.Get("User-Agent"), c.Request.RemoteAddr, serverAddress, c.Request.Header, rw.Header())
+		appLogger.Info(`TEST_ACCESS|%s|%s|%s|%s - %s [%s] "%s" %d %d %d %.3f "%s" "%s" %s %s "%v" "%v"`, forwardRequestId, requestId, serverAddress, clientIP, req.Host, time.Now().Format("2/Jan/2006:15:04:05 -0700"), requestLine, req.ContentLength, rw.Status, rw.BytesWritten, elapsed/1e3, req.Header.Get("Referer"), req.Header.Get("User-Agent"), req.RemoteAddr, serverAddress, req.Header, rw.Header())
 	} else {
-		appLogger.Info(`TEST_ACCESS|%s|%s|%s|%s - %s [%s] "%s" %d %d %d %.3f "%s" "%s" %s %s "-" "-"`, forwardRequestId, requestId, serverAddress, clientIP, c.Request.Host, time.Now().Format("2/Jan/2006:15:04:05 -0700"), requestLine, c.Request.ContentLength, rw.Status, rw.BytesWritten, elapsed/1e3, c.Request.Header.Get("Referer"), c.Request.Header.Get("User-Agent"), c.Request.RemoteAddr, serverAddress)
+		appLogger.Info(`TEST_ACCESS|%s|%s|%s|%s - %s [%s] "%s" %d %d %d %.3f "%s" "%s" %s %s "-" "-"`, forwardRequestId, requestId, serverAddress, clientIP, req.Host, time.Now().Format("2/Jan/2006:15:04:05 -0700"), requestLine, req.ContentLength, rw.Status, rw.BytesWritten, elapsed/1e3, req.Header.Get("Referer"), req.Header.Get("User-Agent"), req.RemoteAddr, serverAddress)
 	}
 	if *debug {
-		accessLogger.Info(`%s - %v [%s] "%s" %d %d %d %.3f "%s" "%s" %s %s "%v" "%v"`, clientIP, c.Request.Host, time.Now().Format("2/Jan/2006:15:04:05 -0700"), requestLine, c.Request.ContentLength, rw.Status, rw.BytesWritten, elapsed/1e3, c.Request.Header.Get("Referer"), c.Request.Header.Get("User-Agent"), c.Request.RemoteAddr, serverAddress, c.Request.Header, rw.Header())
+		accessLogger.Info(`%s - %v [%s] "%s" %d %d %d %.3f "%s" "%s" %s %s "%v" "%v"`, clientIP, req.Host, time.Now().Format("2/Jan/2006:15:04:05 -0700"), requestLine, req.ContentLength, rw.Status, rw.BytesWritten, elapsed/1e3, req.Header.Get("Referer"), req.Header.Get("User-Agent"), req.RemoteAddr, serverAddress, req.Header, rw.Header())
 	} else {
-		accessLogger.Info(`%s - %v [%s] "%s" %d %d %d %.3f "%s" "%s" %s %s "-" "-"`, clientIP, c.Request.Host, time.Now().Format("2/Jan/2006:15:04:05 -0700"), requestLine, c.Request.ContentLength, rw.Status, rw.BytesWritten, elapsed/1e3, c.Request.Header.Get("Referer"), c.Request.Header.Get("User-Agent"), c.Request.RemoteAddr, serverAddress)
+		accessLogger.Info(`%s - %v [%s] "%s" %d %d %d %.3f "%s" "%s" %s %s "-" "-"`, clientIP, req.Host, time.Now().Format("2/Jan/2006:15:04:05 -0700"), requestLine, req.ContentLength, rw.Status, rw.BytesWritten, elapsed/1e3, req.Header.Get("Referer"), req.Header.Get("User-Agent"), req.RemoteAddr, serverAddress)
 	}
 }
 
@@ -252,11 +252,7 @@ func (suite *TestServerSuite) SetupTest() {
 
 func (suite *TestServerSuite) TestDefaultServer() {
 	rg := suite.defaultServer.GetRouteGroup("/")
-	if rg == nil {
-		rg = suite.defaultServer.AddRouteGroup("/")
-	}
 	assert.NotNil(suite.T(), rg)
-	rg.AddCallback(&ServerGroupRequestCallback{})
 	rg.AddRoute("GET", "user/<id>", func(c *routing.Context) error {
 		_, err := c.ResponseWriter.Write([]byte(c.Param("id")))
 		return err
@@ -309,11 +305,7 @@ func (suite *TestServerSuite) TestConfigureServer() {
 
 func (suite *TestServerSuite) TestServer() {
 	rg := suite.server.GetRouteGroup("/")
-	if rg == nil {
-		rg = suite.server.AddRouteGroup("/")
-	}
 	assert.NotNil(suite.T(), rg)
-	rg.AddCallback(&ServerGroupRequestCallback{})
 	rg.AddRoute("GET", "user/<id>", func(c *routing.Context) error {
 		_, err := c.ResponseWriter.Write([]byte(c.Param("id")))
 		return err
@@ -388,9 +380,6 @@ func (p Param) Doc() api.Doc {
 }
 func (suite *TestServerSuite) TestApi() {
 	rg := suite.server.GetRouteGroup("/")
-	if rg == nil {
-		rg = suite.server.AddRouteGroup("/")
-	}
 	assert.NotNil(suite.T(), rg)
 	apiHandler, err := api.ToAPIHandler(&Param{}, true)
 	assert.Nil(suite.T(), err)
