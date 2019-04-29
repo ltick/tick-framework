@@ -208,6 +208,7 @@ func (ctx *Context) ResponseBytes(status int, contentType string, content []byte
 		}
 	}
 	ctx.Response.Header().Set(HeaderContentLength, strconv.Itoa(len(content)))
+	ctx.Response.WriteHeader(status)
 	return ctx.Response.Write(content)
 }
 
