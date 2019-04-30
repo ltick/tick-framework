@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	errRedisNewHandler         = "kvstore(redis): new handler error"
+	errRedisNewHandler            = "kvstore(redis): new handler error"
 	errRedisConnectionNotExists   = "kvstore(redis): '%s' handler not exists"
 	errRedisZscanCursorTypeError  = "kvstore(redis): zscan cursor type error"
 	errRedisZscanValueTypeError   = "kvstore(redis): zscan value type error"
@@ -423,27 +423,35 @@ func (this *RedisPool) Zrevrange(key interface{}, start, end interface{}) (inter
 	}
 	return value, nil
 }
-func (this *RedisPool) ZrangeByScore(key interface{}, start, end interface{}) (interface{}, error) {
+func (this *RedisPool) ZrangeByScore(key interface{}, min, max interface{}, limits ...interface{}) (value interface{}, err error) {
 	c := this.Pool.Get()
 	defer c.Close()
 	sKey, err := this.generateKey(key)
 	if err != nil {
 		return nil, err
 	}
-	value, err := c.Do("ZRANGEBYSCORE", sKey, start, end, "WITHSCORES")
+	if len(limits) > 0 {
+		value, err = c.Do("ZRANGEBYSCORE", sKey, min, max, "WITHSCORES", "LIMIT", limits)
+	} else {
+		value, err = c.Do("ZRANGEBYSCORE", sKey, min, max, "WITHSCORES")
+	}
 	if err != nil {
 		return nil, err
 	}
 	return value, nil
 }
-func (this *RedisPool) ZrevrangeByScore(key interface{}, start, end interface{}) (interface{}, error) {
+func (this *RedisPool) ZrevrangeByScore(key interface{}, min, max, limits ...interface{}) (value interface{}, err error) {
 	c := this.Pool.Get()
 	defer c.Close()
 	sKey, err := this.generateKey(key)
 	if err != nil {
 		return nil, err
 	}
-	value, err := c.Do("ZREVRANGEBYSCORE", sKey, start, end, "WITHSCORES")
+	if len(limits) > 0 {
+		value, err = c.Do("ZREVRANGEBYSCORE", sKey, max, min, "WITHSCORES", "LIMIT", limits)
+	} else {
+		value, err = c.Do("ZREVRANGEBYSCORE", sKey, max, min, "WITHSCORES")
+	}
 	if err != nil {
 		return nil, err
 	}
