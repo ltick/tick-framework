@@ -42,6 +42,7 @@ func (c *Kvstore) Prepare(ctx context.Context) (context.Context, error) {
 		"KVSTORE_REDIS_MAX_IDLE":   config.Option{Type: config.Int, EnvironmentKey: "KVSTORE_REDIS_MAX_IDLE"},
 		"KVSTORE_REDIS_MAX_ACTIVE": config.Option{Type: config.Int, EnvironmentKey: "KVSTORE_REDIS_MAX_ACTIVE"},
 		"KVSTORE_REDIS_KEY_PREFIX": config.Option{Type: config.String, EnvironmentKey: "KVSTORE_REDIS_KEY_PREFIX"},
+		"KVSTORE_REDIS_DEBUG":      config.Option{Type: config.Bool, EnvironmentKey: "KVSTORE_REDIS_DEBUG"},
 	}
 	err := c.Config.SetOptions(configs)
 	if err != nil {
@@ -80,6 +81,9 @@ func (c *Kvstore) Initiate(ctx context.Context) (context.Context, error) {
 	}
 	if _, ok := c.configs["KVSTORE_REDIS_MAX_IDLE"]; !ok {
 		c.configs["KVSTORE_REDIS_MAX_IDLE"] = c.Config.GetInt("KVSTORE_REDIS_MAX_IDLE")
+	}
+	if _, ok := c.configs["KVSTORE_REDIS_DEBUG"]; !ok {
+		c.configs["KVSTORE_REDIS_DEBUG"] = c.Config.GetBool("KVSTORE_REDIS_DEBUG")
 	}
 	return ctx, nil
 }
