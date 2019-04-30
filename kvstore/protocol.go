@@ -175,6 +175,9 @@ type KvstoreHandler interface {
 	Zadd(key interface{}, args ...interface{}) error
 	Zrem(key interface{}, field interface{}) (interface{}, error)
 	Zrange(key interface{}, start interface{}, end interface{}) (interface{}, error)
+	Zrevrange(key interface{}, start, end interface{}) (interface{}, error)
+	ZrangeByScore(key interface{}, start, end interface{}) (interface{}, error)
+	ZrevrangeByScore(key interface{}, start, end interface{}) (interface{}, error)
 	Zscore(key interface{}, field interface{}) (interface{}, error)
 	Zcard(key interface{}) (int64, error)
 	Zscan(key interface{}, cursor string, match string, count int64) (nextCursor string, keys []string, err error)
