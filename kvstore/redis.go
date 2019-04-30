@@ -306,6 +306,22 @@ func (this *RedisPool) Hget(key interface{}, field interface{}) (interface{}, er
 	}
 	return value, nil
 }
+func (this *RedisPool) Hlen(key interface{}) (interface{}, error) {
+	c := this.Pool.Get()
+	if this.Debug {
+		c = redis.NewLoggingConn(c, log.New(os.Stdout, "", log.LstdFlags), "")
+	}
+	defer c.Close()
+	sKey, err := this.generateKey(key)
+	if err != nil {
+		return nil, err
+	}
+	count, err := c.Do("HLEN", sKey)
+	if err != nil {
+		return nil, err
+	}
+	return count, nil
+}
 func (this *RedisPool) Hdel(key interface{}, field interface{}) (interface{}, error) {
 	c := this.Pool.Get()
 	if this.Debug {
