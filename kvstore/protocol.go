@@ -174,6 +174,8 @@ type KvstoreHandler interface {
 	Hget(key interface{}, field interface{}) (interface{}, error)
 	Hdel(key interface{}, field interface{}) (interface{}, error)
 	Hgetall(key interface{}) (interface{}, error)
+	Hlen(key interface{}) (interface{}, error)
+	Hscan(key interface{}, cursor string, match string, count int64) (interface{}, error)
 	Exists(key interface{}) (bool, error)
 	ScanStruct(src []interface{}, dest interface{}) error
 	Sadd(key interface{}, args ...interface{}) error
@@ -188,7 +190,6 @@ type KvstoreHandler interface {
 	Zcard(key interface{}) (int64, error)
 	Zscan(key interface{}, cursor string, match string, count int64) (nextCursor string, keys []string, err error)
 	Sscan(key interface{}, cursor string, match string, count int64) (interface{}, error)
-	Hscan(key interface{}, cursor string, match string, count int64) (interface{}, error)
 	Scan(cursor string, match string, count int64) (nextCursor string, keys []string, err error)
 	Sort(key interface{}, by interface{}, offest int64, count int64, asc *bool, alpha *bool, get ...interface{}) ([]string, error)
 }
