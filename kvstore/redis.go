@@ -3,12 +3,14 @@ package kvstore
 import (
 	"context"
 	"errors"
+	"log"
 	"strconv"
 	"strings"
 
 	"fmt"
 
 	"github.com/gomodule/redigo/redis"
+	"os"
 )
 
 var (
@@ -97,6 +99,15 @@ func (this *RedisHandler) NewHandler(name string, config map[string]interface{})
 			return nil, errors.New(errRedisNewHandler + ": KVSTORE_REDIS_MAX_IDLE data type must be int")
 		}
 	}
+	configDebug := config["KVSTORE_REDIS_DEBUG"]
+	if configDebug != nil {
+		debug, ok := configDebug.(bool)
+		if ok {
+			pool.Debug = debug
+		} else {
+			return nil, errors.New(errRedisNewHandler + ": KVSTORE_REDIS_DEBUG data type must be bool")
+		}
+	}
 	if pool.Host != "" {
 		pool.Pool = &redis.Pool{
 			MaxIdle:   pool.MaxIdle,
@@ -140,6 +151,7 @@ type RedisPool struct {
 	Password  string
 	Database  int
 	KeyPrefix string
+	Debug     bool
 }
 
 func (this *RedisPool) GetConfig() map[string]interface{} {
@@ -151,11 +163,15 @@ func (this *RedisPool) GetConfig() map[string]interface{} {
 		"max_idle":   this.MaxIdle,
 		"max_active": this.MaxActive,
 		"prefix":     this.KeyPrefix,
+		"debug":      this.Debug,
 	}
 }
 
 func (this *RedisPool) Get(key interface{}) (interface{}, error) {
 	c := this.Pool.Get()
+	if this.Debug {
+		c = redis.NewLoggingConn(c, log.New(os.Stdout, "", log.LstdFlags), "")
+	}
 	defer c.Close()
 	sKey, err := this.generateKey(key)
 	if err != nil {
@@ -170,6 +186,9 @@ func (this *RedisPool) Get(key interface{}) (interface{}, error) {
 
 func (this *RedisPool) Set(key interface{}, value interface{}) error {
 	c := this.Pool.Get()
+	if this.Debug {
+		c = redis.NewLoggingConn(c, log.New(os.Stdout, "", log.LstdFlags), "")
+	}
 	defer c.Close()
 	sKey, err := this.generateKey(key)
 	if err != nil {
@@ -180,6 +199,9 @@ func (this *RedisPool) Set(key interface{}, value interface{}) error {
 }
 func (this *RedisPool) Del(key interface{}) (interface{}, error) {
 	c := this.Pool.Get()
+	if this.Debug {
+		c = redis.NewLoggingConn(c, log.New(os.Stdout, "", log.LstdFlags), "")
+	}
 	defer c.Close()
 	sKey, err := this.generateKey(key)
 	if err != nil {
@@ -193,6 +215,9 @@ func (this *RedisPool) Del(key interface{}) (interface{}, error) {
 }
 func (this *RedisPool) Keys(key interface{}) (interface{}, error) {
 	c := this.Pool.Get()
+	if this.Debug {
+		c = redis.NewLoggingConn(c, log.New(os.Stdout, "", log.LstdFlags), "")
+	}
 	defer c.Close()
 	sKey, err := this.generateKey(key)
 	if err != nil {
@@ -216,6 +241,9 @@ func (this *RedisPool) Expire(key interface{}, expire int64) error {
 }
 func (this *RedisPool) Hmset(key interface{}, args ...interface{}) error {
 	c := this.Pool.Get()
+	if this.Debug {
+		c = redis.NewLoggingConn(c, log.New(os.Stdout, "", log.LstdFlags), "")
+	}
 	defer c.Close()
 	sKey, err := this.generateKey(key)
 	if err != nil {
@@ -230,6 +258,9 @@ func (this *RedisPool) Hmset(key interface{}, args ...interface{}) error {
 }
 func (this *RedisPool) Hmget(key interface{}, args ...interface{}) (interface{}, error) {
 	c := this.Pool.Get()
+	if this.Debug {
+		c = redis.NewLoggingConn(c, log.New(os.Stdout, "", log.LstdFlags), "")
+	}
 	defer c.Close()
 	sKey, err := this.generateKey(key)
 	if err != nil {
@@ -248,6 +279,9 @@ func (this *RedisPool) Hmget(key interface{}, args ...interface{}) (interface{},
 }
 func (this *RedisPool) Hset(key interface{}, field interface{}, value interface{}) error {
 	c := this.Pool.Get()
+	if this.Debug {
+		c = redis.NewLoggingConn(c, log.New(os.Stdout, "", log.LstdFlags), "")
+	}
 	defer c.Close()
 	sKey, err := this.generateKey(key)
 	if err != nil {
@@ -258,6 +292,9 @@ func (this *RedisPool) Hset(key interface{}, field interface{}, value interface{
 }
 func (this *RedisPool) Hget(key interface{}, field interface{}) (interface{}, error) {
 	c := this.Pool.Get()
+	if this.Debug {
+		c = redis.NewLoggingConn(c, log.New(os.Stdout, "", log.LstdFlags), "")
+	}
 	defer c.Close()
 	sKey, err := this.generateKey(key)
 	if err != nil {
@@ -271,6 +308,9 @@ func (this *RedisPool) Hget(key interface{}, field interface{}) (interface{}, er
 }
 func (this *RedisPool) Hdel(key interface{}, field interface{}) (interface{}, error) {
 	c := this.Pool.Get()
+	if this.Debug {
+		c = redis.NewLoggingConn(c, log.New(os.Stdout, "", log.LstdFlags), "")
+	}
 	defer c.Close()
 	sKey, err := this.generateKey(key)
 	if err != nil {
@@ -284,6 +324,9 @@ func (this *RedisPool) Hdel(key interface{}, field interface{}) (interface{}, er
 }
 func (this *RedisPool) Hgetall(key interface{}) (interface{}, error) {
 	c := this.Pool.Get()
+	if this.Debug {
+		c = redis.NewLoggingConn(c, log.New(os.Stdout, "", log.LstdFlags), "")
+	}
 	defer c.Close()
 	sKey, err := this.generateKey(key)
 	if err != nil {
@@ -300,6 +343,9 @@ func (this *RedisPool) ScanStruct(src []interface{}, dest interface{}) error {
 }
 func (this *RedisPool) Exists(key interface{}) (bool, error) {
 	c := this.Pool.Get()
+	if this.Debug {
+		c = redis.NewLoggingConn(c, log.New(os.Stdout, "", log.LstdFlags), "")
+	}
 	defer c.Close()
 	sKey, err := this.generateKey(key)
 	if err != nil {
@@ -317,6 +363,9 @@ func (this *RedisPool) Exists(key interface{}) (bool, error) {
 }
 func (this *RedisPool) Sadd(key interface{}, args ...interface{}) error {
 	c := this.Pool.Get()
+	if this.Debug {
+		c = redis.NewLoggingConn(c, log.New(os.Stdout, "", log.LstdFlags), "")
+	}
 	defer c.Close()
 	sKey, err := this.generateKey(key)
 	if err != nil {
@@ -331,6 +380,9 @@ func (this *RedisPool) Sadd(key interface{}, args ...interface{}) error {
 }
 func (this *RedisPool) Scard(key interface{}) (int64, error) {
 	c := this.Pool.Get()
+	if this.Debug {
+		c = redis.NewLoggingConn(c, log.New(os.Stdout, "", log.LstdFlags), "")
+	}
 	defer c.Close()
 	sKey, err := this.generateKey(key)
 	if err != nil {
@@ -340,6 +392,9 @@ func (this *RedisPool) Scard(key interface{}) (int64, error) {
 }
 func (this *RedisPool) Zadd(key interface{}, value ...interface{}) error {
 	c := this.Pool.Get()
+	if this.Debug {
+		c = redis.NewLoggingConn(c, log.New(os.Stdout, "", log.LstdFlags), "")
+	}
 	defer c.Close()
 	sKey, err := this.generateKey(key)
 	if err != nil {
@@ -363,6 +418,9 @@ func (this *RedisPool) Zadd(key interface{}, value ...interface{}) error {
 }
 func (this *RedisPool) Zcard(key interface{}) (int64, error) {
 	c := this.Pool.Get()
+	if this.Debug {
+		c = redis.NewLoggingConn(c, log.New(os.Stdout, "", log.LstdFlags), "")
+	}
 	defer c.Close()
 	sKey, err := this.generateKey(key)
 	if err != nil {
@@ -373,6 +431,9 @@ func (this *RedisPool) Zcard(key interface{}) (int64, error) {
 }
 func (this *RedisPool) Zscore(key interface{}, field interface{}) (interface{}, error) {
 	c := this.Pool.Get()
+	if this.Debug {
+		c = redis.NewLoggingConn(c, log.New(os.Stdout, "", log.LstdFlags), "")
+	}
 	defer c.Close()
 	sKey, err := this.generateKey(key)
 	if err != nil {
@@ -386,6 +447,9 @@ func (this *RedisPool) Zscore(key interface{}, field interface{}) (interface{}, 
 }
 func (this *RedisPool) Zrem(key interface{}, field interface{}) (interface{}, error) {
 	c := this.Pool.Get()
+	if this.Debug {
+		c = redis.NewLoggingConn(c, log.New(os.Stdout, "", log.LstdFlags), "")
+	}
 	defer c.Close()
 	sKey, err := this.generateKey(key)
 	if err != nil {
@@ -399,6 +463,9 @@ func (this *RedisPool) Zrem(key interface{}, field interface{}) (interface{}, er
 }
 func (this *RedisPool) Zrange(key interface{}, start, end interface{}) (interface{}, error) {
 	c := this.Pool.Get()
+	if this.Debug {
+		c = redis.NewLoggingConn(c, log.New(os.Stdout, "", log.LstdFlags), "")
+	}
 	defer c.Close()
 	sKey, err := this.generateKey(key)
 	if err != nil {
@@ -412,6 +479,9 @@ func (this *RedisPool) Zrange(key interface{}, start, end interface{}) (interfac
 }
 func (this *RedisPool) Zrevrange(key interface{}, start, end interface{}) (interface{}, error) {
 	c := this.Pool.Get()
+	if this.Debug {
+		c = redis.NewLoggingConn(c, log.New(os.Stdout, "", log.LstdFlags), "")
+	}
 	defer c.Close()
 	sKey, err := this.generateKey(key)
 	if err != nil {
@@ -425,6 +495,9 @@ func (this *RedisPool) Zrevrange(key interface{}, start, end interface{}) (inter
 }
 func (this *RedisPool) ZrangeByScore(key interface{}, min, max interface{}, limits ...interface{}) (value interface{}, err error) {
 	c := this.Pool.Get()
+	if this.Debug {
+		c = redis.NewLoggingConn(c, log.New(os.Stdout, "", log.LstdFlags), "")
+	}
 	defer c.Close()
 	sKey, err := this.generateKey(key)
 	if err != nil {
@@ -442,6 +515,9 @@ func (this *RedisPool) ZrangeByScore(key interface{}, min, max interface{}, limi
 }
 func (this *RedisPool) ZrevrangeByScore(key interface{}, min, max interface{}, limits ...interface{}) (value interface{}, err error) {
 	c := this.Pool.Get()
+	if this.Debug {
+		c = redis.NewLoggingConn(c, log.New(os.Stdout, "", log.LstdFlags), "")
+	}
 	defer c.Close()
 	sKey, err := this.generateKey(key)
 	if err != nil {
@@ -459,6 +535,9 @@ func (this *RedisPool) ZrevrangeByScore(key interface{}, min, max interface{}, l
 }
 func (this *RedisPool) Zscan(key interface{}, cursor string, match string, count int64) (nextCursor string, keys []string, err error) {
 	c := this.Pool.Get()
+	if this.Debug {
+		c = redis.NewLoggingConn(c, log.New(os.Stdout, "", log.LstdFlags), "")
+	}
 	defer c.Close()
 	sKey, err := this.generateKey(key)
 	if err != nil {
@@ -504,6 +583,9 @@ func (this *RedisPool) Zscan(key interface{}, cursor string, match string, count
 }
 func (this *RedisPool) Sscan(key interface{}, cursor string, match string, count int64) (interface{}, error) {
 	c := this.Pool.Get()
+	if this.Debug {
+		c = redis.NewLoggingConn(c, log.New(os.Stdout, "", log.LstdFlags), "")
+	}
 	defer c.Close()
 	sKey, err := this.generateKey(key)
 	if err != nil {
@@ -523,6 +605,9 @@ func (this *RedisPool) Sscan(key interface{}, cursor string, match string, count
 }
 func (this *RedisPool) Hscan(key interface{}, cursor string, match string, count int64) (interface{}, error) {
 	c := this.Pool.Get()
+	if this.Debug {
+		c = redis.NewLoggingConn(c, log.New(os.Stdout, "", log.LstdFlags), "")
+	}
 	defer c.Close()
 	sKey, err := this.generateKey(key)
 	if err != nil {
@@ -542,6 +627,9 @@ func (this *RedisPool) Hscan(key interface{}, cursor string, match string, count
 }
 func (this *RedisPool) Scan(cursor string, match string, count int64) (nextCursor string, keys []string, err error) {
 	c := this.Pool.Get()
+	if this.Debug {
+		c = redis.NewLoggingConn(c, log.New(os.Stdout, "", log.LstdFlags), "")
+	}
 	defer c.Close()
 	args := redis.Args{}.Add(cursor)
 	if match != "" {
@@ -580,6 +668,9 @@ func (this *RedisPool) Scan(cursor string, match string, count int64) (nextCurso
 }
 func (this *RedisPool) Sort(key interface{}, by interface{}, offest int64, count int64, desc *bool, alpha *bool, gets ...interface{}) ([]string, error) {
 	c := this.Pool.Get()
+	if this.Debug {
+		c = redis.NewLoggingConn(c, log.New(os.Stdout, "", log.LstdFlags), "")
+	}
 	defer c.Close()
 	sKey, err := this.generateKey(key)
 	if err != nil {
