@@ -104,7 +104,9 @@ func (c *Kvstore) OnStartup(ctx context.Context) (context.Context, error) {
 func (c *Kvstore) OnShutdown(ctx context.Context) (context.Context, error) {
 	return ctx, nil
 }
-
+func (c *Kvstore) GetConfig() map[string]interface{} {
+	return c.configs
+}
 func (c *Kvstore) GetProvider() string {
 	return c.provider
 }

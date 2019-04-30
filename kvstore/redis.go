@@ -471,7 +471,7 @@ func (this *RedisPool) Zrange(key interface{}, start, end interface{}) (interfac
 	if err != nil {
 		return nil, err
 	}
-	value, err := c.Do("ZRANGE", sKey, start, end, "WITHSCORES")
+	value, err := c.Do("ZRANGE", sKey, start, end)
 	if err != nil {
 		return nil, err
 	}
@@ -487,7 +487,7 @@ func (this *RedisPool) Zrevrange(key interface{}, start, end interface{}) (inter
 	if err != nil {
 		return nil, err
 	}
-	value, err := c.Do("ZREVRANGE", sKey, start, end, "WITHSCORES")
+	value, err := c.Do("ZREVRANGE", sKey, start, end)
 	if err != nil {
 		return nil, err
 	}
@@ -503,11 +503,14 @@ func (this *RedisPool) ZrangeByScore(key interface{}, min, max interface{}, limi
 	if err != nil {
 		return nil, err
 	}
+	args := redis.Args{}.Add(sKey).Add(min).Add(max).Add("WITHSCORES")
 	if len(limits) > 0 {
-		value, err = c.Do("ZRANGEBYSCORE", sKey, min, max, "WITHSCORES", "LIMIT", limits)
-	} else {
-		value, err = c.Do("ZRANGEBYSCORE", sKey, min, max, "WITHSCORES")
+		args = args.Add("LIMIT").Add(limits...)
 	}
+	if len(limits) > 0 {
+		args = args.Add("LIMIT").Add(limits...)
+	}
+	value, err = c.Do("ZRANGEBYSCORE", args...)
 	if err != nil {
 		return nil, err
 	}
@@ -523,11 +526,11 @@ func (this *RedisPool) ZrevrangeByScore(key interface{}, min, max interface{}, l
 	if err != nil {
 		return nil, err
 	}
+	args := redis.Args{}.Add(sKey).Add(max).Add(min).Add("WITHSCORES")
 	if len(limits) > 0 {
-		value, err = c.Do("ZREVRANGEBYSCORE", sKey, max, min, "WITHSCORES", "LIMIT", limits)
-	} else {
-		value, err = c.Do("ZREVRANGEBYSCORE", sKey, max, min, "WITHSCORES")
+		args = args.Add("LIMIT").Add(limits...)
 	}
+	value, err = c.Do("ZREVRANGEBYSCORE", args...)
 	if err != nil {
 		return nil, err
 	}
