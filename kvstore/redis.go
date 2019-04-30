@@ -440,7 +440,7 @@ func (this *RedisPool) ZrangeByScore(key interface{}, min, max interface{}, limi
 	}
 	return value, nil
 }
-func (this *RedisPool) ZrevrangeByScore(key interface{}, min, max, limits ...interface{}) (value interface{}, err error) {
+func (this *RedisPool) ZrevrangeByScore(key interface{}, min, max interface{}, limits ...interface{}) (value interface{}, err error) {
 	c := this.Pool.Get()
 	defer c.Close()
 	sKey, err := this.generateKey(key)
