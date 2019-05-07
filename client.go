@@ -45,7 +45,7 @@ type (
 		MetricsHttpClientRequestsTraceTls []prometheus.ObserverVec
 		// observer of send request
 		MetricsHttpClientRequestsTraceRequest []prometheus.ObserverVec
-		MetricsHttpClientRequestLabelFunc     metrics.HttpClientRequestLabelFunc
+		MetricsHttpClientRequestLabelFuncs    []metrics.HttpClientRequestLabelFunc
 	}
 
 	Client struct {
@@ -160,9 +160,9 @@ func ClientMetricsHttpClientRequestsTraceRequest(observers []prometheus.Observer
 		options.MetricsHttpClientRequestsTraceRequest = observers
 	}
 }
-func ClientMetricsHttpClientRequestLabelFunc(httpClientRequestLabelFunc metrics.HttpClientRequestLabelFunc) ClientOption {
+func ClientMetricsHttpClientRequestLabelFunc(httpClientRequestLabelFuncs ...metrics.HttpClientRequestLabelFunc) ClientOption {
 	return func(options *ClientOptions) {
-		options.MetricsHttpClientRequestLabelFunc = httpClientRequestLabelFunc
+		options.MetricsHttpClientRequestLabelFuncs = httpClientRequestLabelFuncs
 	}
 }
 func NewHttpClient(setters ...ClientOption) *http.Client {
@@ -216,8 +216,10 @@ func NewHttpClient(setters ...ClientOption) *http.Client {
 
 	// Wrap the default RoundTripper with middleware.
 	if c.MetricsHttpClientRequestsDurations != nil {
-		if c.MetricsHttpClientRequestLabelFunc != nil {
-			httpClient.Transport = metrics.InstrumentHttpClientRequest(c.MetricsHttpClientRequestsDurations, httpClient.Transport, c.MetricsHttpClientRequestLabelFunc)
+		if c.MetricsHttpClientRequestLabelFuncs != nil {
+			for _, metricsHttpClientRequestLabelFunc := range c.MetricsHttpClientRequestLabelFuncs {
+				httpClient.Transport = metrics.InstrumentHttpClientRequest(c.MetricsHttpClientRequestsDurations, httpClient.Transport, metricsHttpClientRequestLabelFunc)
+			}
 		} else {
 			httpClient.Transport = metrics.InstrumentHttpClientRequest(c.MetricsHttpClientRequestsDurations, httpClient.Transport)
 		}
@@ -238,14 +240,18 @@ func NewHttpClient(setters ...ClientOption) *http.Client {
 	if c.MetricsHttpClientRequestsTraceRequest != nil {
 		observers["request"] = c.MetricsHttpClientRequestsTraceRequest
 	}
-	if c.MetricsHttpClientRequestLabelFunc != nil {
-		httpClient.Transport = metrics.InstrumentHttpClientRequestTrace(observers, httpClient.Transport, c.MetricsHttpClientRequestLabelFunc)
+	if c.MetricsHttpClientRequestLabelFuncs != nil {
+		for _, metricsHttpClientRequestLabelFunc := range c.MetricsHttpClientRequestLabelFuncs {
+			httpClient.Transport = metrics.InstrumentHttpClientRequestTrace(observers, httpClient.Transport, metricsHttpClientRequestLabelFunc)
+		}
 	} else {
 		httpClient.Transport = metrics.InstrumentHttpClientRequestTrace(observers, httpClient.Transport)
 	}
 	if c.MetricsHttpClientRequestsCounter != nil {
-		if c.MetricsHttpClientRequestLabelFunc != nil {
-			httpClient.Transport = metrics.InstrumentHttpClientRequestCounter(c.MetricsHttpClientRequestsCounter, httpClient.Transport, c.MetricsHttpClientRequestLabelFunc)
+		if c.MetricsHttpClientRequestLabelFuncs != nil {
+			for _, metricsHttpClientRequestLabelFunc := range c.MetricsHttpClientRequestLabelFuncs {
+				httpClient.Transport = metrics.InstrumentHttpClientRequestCounter(c.MetricsHttpClientRequestsCounter, httpClient.Transport, metricsHttpClientRequestLabelFunc)
+			}
 		} else {
 			httpClient.Transport = metrics.InstrumentHttpClientRequestCounter(c.MetricsHttpClientRequestsCounter, httpClient.Transport)
 		}
