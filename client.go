@@ -187,9 +187,6 @@ func NewHttpClient(setters ...ClientOption) *http.Client {
 	if c.ExpectContinueTimeout == 0 {
 		c.ExpectContinueTimeout = DEFAULT_EXPECT_CONTINUE_TIMEOUT
 	}
-	if c.ExpectContinueTimeout == 0 {
-		c.ExpectContinueTimeout = DEFAULT_EXPECT_CONTINUE_TIMEOUT
-	}
 	if c.MaxIdleConns == 0 {
 		c.MaxIdleConns = DEFAULT_MAX_IDLE_CONNS
 	}
