@@ -23,7 +23,14 @@ func InArrayString(needle string, haystack []string, caseSensitives ...bool) *in
 	}
 	return nil
 }
-
+func InArrayInt(needle int, haystack []int) *int {
+	for index, value := range haystack {
+		if needle == value {
+			return &index
+		}
+	}
+	return nil
+}
 func InMapString(needle string, haystack map[string]string) bool {
 	for _, value := range haystack {
 		if needle == value {
