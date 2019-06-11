@@ -472,9 +472,6 @@ func (a *Api) BindFields(
 	if apiParams == nil {
 		apiParams = Map(map[string]interface{}{})
 	}
-	if req.Form == nil {
-		req.ParseMultipartForm(a.maxMemory)
-	}
 	var queryValues url.Values
 	defer func() {
 		if p := recover(); p != nil {
@@ -548,6 +545,9 @@ func (a *Api) BindFields(
 				} else if param.IsRequired() {
 					return errors.Annotate(errors.New("missing formData param"), errBindFields)
 				}
+			}
+			if req.Form == nil {
+				req.ParseMultipartForm(a.maxMemory)
 			}
 			if req.MultipartForm != nil {
 				paramValues, ok := req.MultipartForm.Value[param.name]
