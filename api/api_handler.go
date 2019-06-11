@@ -513,6 +513,9 @@ func (a *Api) BindFields(
 
 		case "formData":
 			// Can not exist with `body` param at the same time
+			if req.Form == nil {
+				req.ParseMultipartForm(a.maxMemory)
+			}
 			if param.IsFile() {
 				if req.MultipartForm != nil {
 					fhs := req.MultipartForm.File[param.name]
@@ -545,9 +548,6 @@ func (a *Api) BindFields(
 				} else if param.IsRequired() {
 					return errors.Annotate(errors.New("missing formData param"), errBindFields)
 				}
-			}
-			if req.Form == nil {
-				req.ParseMultipartForm(a.maxMemory)
 			}
 			if req.MultipartForm != nil {
 				paramValues, ok := req.MultipartForm.Value[param.name]
