@@ -472,9 +472,6 @@ func (a *Api) BindFields(
 	if apiParams == nil {
 		apiParams = Map(map[string]interface{}{})
 	}
-	if req.Form == nil {
-		req.ParseMultipartForm(a.maxMemory)
-	}
 	var queryValues url.Values
 	defer func() {
 		if p := recover(); p != nil {
@@ -516,6 +513,9 @@ func (a *Api) BindFields(
 
 		case "formData":
 			// Can not exist with `body` param at the same time
+			if req.Form == nil {
+				req.ParseMultipartForm(a.maxMemory)
+			}
 			if param.IsFile() {
 				if req.MultipartForm != nil {
 					fhs := req.MultipartForm.File[param.name]
