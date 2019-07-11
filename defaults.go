@@ -135,7 +135,6 @@ func init() {
 	},
 		[]string{"server_addr", "host", "method", "uri", "status"},
 	)
-	prometheus.MustRegister(defaultMetricsHttpServerRequests)
 	defaultMetricsHttpServerRequestsResponseSize = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "http_server_requests_response_size_bytes",
@@ -144,7 +143,6 @@ func init() {
 		},
 		[]string{"server_addr", "host", "method", "uri", "status"},
 	)
-	prometheus.MustRegister(defaultMetricsHttpServerRequestsResponseSize)
 	defaultMetricsHttpServerRequestsRequestSize = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "http_server_requests_request_size_bytes",
@@ -153,7 +151,6 @@ func init() {
 		},
 		[]string{"server_addr", "host", "method", "uri", "status"},
 	)
-	prometheus.MustRegister(defaultMetricsHttpServerRequestsRequestSize)
 	defaultMetricsHttpServerRequestsTrace = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "http_server_requests_trace_seconds",
 		Help:    "A histogram of request trace latencies for requests.",
@@ -161,13 +158,11 @@ func init() {
 	},
 		[]string{"event", "server_addr", "host", "method", "uri", "status"},
 	)
-	prometheus.MustRegister(defaultMetricsHttpServerRequestsTrace)
 	// Http Client
 	defaultMetricsHttpClientRequestsInFlight = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "http_client_requests_in_flight",
 		Help: "A gauge of in-flight requests for the wrapped client.",
 	})
-	prometheus.MustRegister(defaultMetricsHttpClientRequestsInFlight)
 	defaultMetricsHttpClientRequestsCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "http_client_requests_total",
@@ -175,7 +170,6 @@ func init() {
 		},
 		[]string{"server_addr", "host", "method", "uri", "status"},
 	)
-	prometheus.MustRegister(defaultMetricsHttpClientRequestsCounter)
 	// Http Client Histogram
 	defaultMetricsHttpClientRequests = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "http_client_requests_seconds",
@@ -184,7 +178,6 @@ func init() {
 	},
 		[]string{"server_addr", "host", "method", "uri", "status"},
 	)
-	prometheus.MustRegister(defaultMetricsHttpClientRequests)
 	defaultMetricsHttpClientRequestsTraceConnection = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "http_client_requests_trace_connection_seconds",
 		Help:    "A histogram of request trace latencies for connection.",
@@ -192,7 +185,6 @@ func init() {
 	},
 		[]string{"event", "server_addr", "host", "method", "uri"},
 	)
-	prometheus.MustRegister(defaultMetricsHttpClientRequestsTraceConnection)
 	defaultMetricsHttpClientRequestsTraceConnect = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "http_client_requests_trace_connect_seconds",
 		Help:    "A histogram of request trace latencies for connect.",
@@ -200,7 +192,6 @@ func init() {
 	},
 		[]string{"event", "server_addr", "host", "method", "uri"},
 	)
-	prometheus.MustRegister(defaultMetricsHttpClientRequestsTraceConnect)
 	defaultMetricsHttpClientRequestsTraceDns = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "http_client_requests_trace_dns_seconds",
 		Help:    "A histogram of request trace latencies for dns.",
@@ -208,7 +199,6 @@ func init() {
 	},
 		[]string{"event", "server_addr", "host", "method", "uri"},
 	)
-	prometheus.MustRegister(defaultMetricsHttpClientRequestsTraceDns)
 	defaultMetricsHttpClientRequestsTraceTls = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "http_client_requests_trace_tls_seconds",
 		Help:    "A histogram of request trace latencies for tls.",
@@ -216,7 +206,6 @@ func init() {
 	},
 		[]string{"event", "server_addr", "host", "method", "uri"},
 	)
-	prometheus.MustRegister(defaultMetricsHttpClientRequestsTraceTls)
 	defaultMetricsHttpClientRequestsTraceRequest = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "http_client_requests_trace_request_seconds",
 		Help:    "A histogram of request trace latencies for request.",
@@ -224,5 +213,4 @@ func init() {
 	},
 		[]string{"event", "server_addr", "host", "method", "uri"},
 	)
-	prometheus.MustRegister(defaultMetricsHttpClientRequestsTraceRequest)
 }

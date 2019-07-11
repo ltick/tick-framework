@@ -94,22 +94,21 @@ func ClientMaxIdleConnsPerHost(maxIdleConnsPerHost int) ClientOption {
 	}
 }
 func ClientMetricsHttpClientRequestsInFlight(gauge prometheus.Gauge) ClientOption {
+	if gauge == nil {
+		gauge = defaultMetricsHttpClientRequestsInFlight
+	}
 	return func(options *ClientOptions) {
-		if gauge != nil {
-			options.MetricsHttpClientRequestsInFlight = gauge
-		} else {
-			options.MetricsHttpClientRequestsInFlight = defaultMetricsHttpClientRequestsInFlight
-		}
-
+		prometheus.MustRegister(gauge)
+		options.MetricsHttpClientRequestsInFlight = gauge
 	}
 }
 func ClientMetricsHttpClientRequestsCounter(counter *prometheus.CounterVec) ClientOption {
+	if counter == nil {
+		counter = defaultMetricsHttpClientRequestsCounter
+	}
 	return func(options *ClientOptions) {
-		if counter != nil {
-			options.MetricsHttpClientRequestsCounter = counter
-		} else {
-			options.MetricsHttpClientRequestsCounter = defaultMetricsHttpClientRequestsCounter
-		}
+		prometheus.MustRegister(counter)
+		options.MetricsHttpClientRequestsCounter = counter
 	}
 }
 func ClientMetricsHttpClientRequestsDuration(observers []prometheus.ObserverVec) ClientOption {
@@ -117,6 +116,9 @@ func ClientMetricsHttpClientRequestsDuration(observers []prometheus.ObserverVec)
 		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequests}
 	}
 	return func(options *ClientOptions) {
+		for _, observer := range observers {
+			prometheus.MustRegister(observer)
+		}
 		options.MetricsHttpClientRequestsDurations = observers
 	}
 }
@@ -125,6 +127,9 @@ func ClientMetricsHttpClientRequestsTraceConnection(observers []prometheus.Obser
 		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequestsTraceConnection}
 	}
 	return func(options *ClientOptions) {
+		for _, observer := range observers {
+			prometheus.MustRegister(observer)
+		}
 		options.MetricsHttpClientRequestsTraceConnection = observers
 	}
 }
@@ -133,6 +138,9 @@ func ClientMetricsHttpClientRequestsTraceDns(observers []prometheus.ObserverVec)
 		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequestsTraceDns}
 	}
 	return func(options *ClientOptions) {
+		for _, observer := range observers {
+			prometheus.MustRegister(observer)
+		}
 		options.MetricsHttpClientRequestsTraceDns = observers
 	}
 }
@@ -141,6 +149,9 @@ func ClientMetricsHttpClientRequestsTraceConnect(observers []prometheus.Observer
 		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequestsTraceConnect}
 	}
 	return func(options *ClientOptions) {
+		for _, observer := range observers {
+			prometheus.MustRegister(observer)
+		}
 		options.MetricsHttpClientRequestsTraceConnect = observers
 	}
 }
@@ -149,6 +160,9 @@ func ClientMetricsHttpClientRequestsTraceTls(observers []prometheus.ObserverVec)
 		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequestsTraceTls}
 	}
 	return func(options *ClientOptions) {
+		for _, observer := range observers {
+			prometheus.MustRegister(observer)
+		}
 		options.MetricsHttpClientRequestsTraceTls = observers
 	}
 }
@@ -157,6 +171,9 @@ func ClientMetricsHttpClientRequestsTraceRequest(observers []prometheus.Observer
 		observers = []prometheus.ObserverVec{defaultMetricsHttpClientRequestsTraceRequest}
 	}
 	return func(options *ClientOptions) {
+		for _, observer := range observers {
+			prometheus.MustRegister(observer)
+		}
 		options.MetricsHttpClientRequestsTraceRequest = observers
 	}
 }
