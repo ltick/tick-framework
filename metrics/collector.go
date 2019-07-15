@@ -60,7 +60,10 @@ func RegisterSummary(name string, cs *prometheus.SummaryVec) error {
 func (i *Metrics) RegisterSummary(name string, cs *prometheus.SummaryVec) error {
 	if _, ok := summarys[name]; !ok {
 		summarys[name] = cs
-		prometheus.MustRegister(cs)
+		err := prometheus.Register(cs)
+		if err != nil {
+			return errors.Annotate(err, errRegisterSummary)
+		}
 	} else {
 		return errors.Annotate(errors.Errorf(errSummaryHasRegistered, name), errRegisterSummary)
 	}
@@ -82,7 +85,10 @@ func RegisterCounter(name string, cs *prometheus.CounterVec) error {
 func (i *Metrics) RegisterCounter(name string, cs *prometheus.CounterVec) error {
 	if _, ok := counters[name]; !ok {
 		counters[name] = cs
-		prometheus.MustRegister(cs)
+		err := prometheus.Register(cs)
+		if err != nil {
+			return errors.Annotate(err, errRegisterCounter)
+		}
 	} else {
 		return errors.Annotate(errors.Errorf(errCounterHasRegistered, name), errRegisterCounter)
 	}
@@ -104,7 +110,10 @@ func RegisterGauge(name string, cs *prometheus.GaugeVec) error {
 func (i *Metrics) RegisterGauge(name string, cs *prometheus.GaugeVec) error {
 	if _, ok := gauges[name]; !ok {
 		gauges[name] = cs
-		prometheus.MustRegister(cs)
+		err := prometheus.Register(cs)
+		if err != nil {
+			return errors.Annotate(err, errRegisterGauge)
+		}
 	} else {
 		return errors.Annotate(errors.Errorf(errGaugeHasRegistered, name), errRegisterGauge)
 	}
@@ -126,7 +135,10 @@ func RegisterHistogram(name string, cs *prometheus.HistogramVec) error {
 func (i *Metrics) RegisterHistogram(name string, cs *prometheus.HistogramVec) error {
 	if _, ok := histograms[name]; !ok {
 		histograms[name] = cs
-		prometheus.MustRegister(cs)
+		err := prometheus.Register(cs)
+		if err != nil {
+			return errors.Annotate(err, errRegisterHistogram)
+		}
 	} else {
 		return errors.Annotate(errors.Errorf(errHistogramHasRegistered, name), errRegisterHistogram)
 	}

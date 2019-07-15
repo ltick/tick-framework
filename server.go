@@ -156,6 +156,9 @@ func ServerMetricsHttpServerRequests(observers []prometheus.ObserverVec) ServerO
 		observers = []prometheus.ObserverVec{defaultMetricsHttpServerRequests}
 	}
 	return func(options *ServerOptions) {
+		for _, observer := range observers {
+			prometheus.Register(observer)
+		}
 		options.MetricsHttpServerRequests = observers
 	}
 }
@@ -164,6 +167,9 @@ func ServerMetricsHttpServerRequestsResponseSize(observers []prometheus.Observer
 		observers = []prometheus.ObserverVec{defaultMetricsHttpServerRequestsResponseSize}
 	}
 	return func(options *ServerOptions) {
+		for _, observer := range observers {
+			prometheus.Register(observer)
+		}
 		options.MetricsHttpServerRequestsResponseSizes = observers
 	}
 }
@@ -172,6 +178,9 @@ func ServerMetricsHttpServerRequestsRequestSize(observers []prometheus.ObserverV
 		observers = []prometheus.ObserverVec{defaultMetricsHttpServerRequestsRequestSize}
 	}
 	return func(options *ServerOptions) {
+		for _, observer := range observers {
+			prometheus.Register(observer)
+		}
 		options.MetricsHttpServerRequestsRequestSizes = observers
 	}
 }
@@ -180,6 +189,9 @@ func ServerMetricsHttpServerRequestsTrace(observers []prometheus.ObserverVec) Se
 		observers = []prometheus.ObserverVec{defaultMetricsHttpServerRequestsTrace}
 	}
 	return func(options *ServerOptions) {
+		for _, observer := range observers {
+			prometheus.Register(observer)
+		}
 		options.MetricsHttpServerRequestsTrace = observers
 	}
 }
