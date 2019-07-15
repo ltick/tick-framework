@@ -98,7 +98,7 @@ func ClientMetricsHttpClientRequestsInFlight(gauge prometheus.Gauge) ClientOptio
 		gauge = defaultMetricsHttpClientRequestsInFlight
 	}
 	return func(options *ClientOptions) {
-		prometheus.MustRegister(gauge)
+		prometheus.Register(gauge)
 		options.MetricsHttpClientRequestsInFlight = gauge
 	}
 }
@@ -107,7 +107,7 @@ func ClientMetricsHttpClientRequestsCounter(counter *prometheus.CounterVec) Clie
 		counter = defaultMetricsHttpClientRequestsCounter
 	}
 	return func(options *ClientOptions) {
-		prometheus.MustRegister(counter)
+		prometheus.Register(counter)
 		options.MetricsHttpClientRequestsCounter = counter
 	}
 }
@@ -117,7 +117,7 @@ func ClientMetricsHttpClientRequestsDuration(observers []prometheus.ObserverVec)
 	}
 	return func(options *ClientOptions) {
 		for _, observer := range observers {
-			prometheus.MustRegister(observer)
+			prometheus.Register(observer)
 		}
 		options.MetricsHttpClientRequestsDurations = observers
 	}
@@ -128,7 +128,7 @@ func ClientMetricsHttpClientRequestsTraceConnection(observers []prometheus.Obser
 	}
 	return func(options *ClientOptions) {
 		for _, observer := range observers {
-			prometheus.MustRegister(observer)
+			prometheus.Register(observer)
 		}
 		options.MetricsHttpClientRequestsTraceConnection = observers
 	}
@@ -139,7 +139,7 @@ func ClientMetricsHttpClientRequestsTraceDns(observers []prometheus.ObserverVec)
 	}
 	return func(options *ClientOptions) {
 		for _, observer := range observers {
-			prometheus.MustRegister(observer)
+			prometheus.Register(observer)
 		}
 		options.MetricsHttpClientRequestsTraceDns = observers
 	}
@@ -150,7 +150,7 @@ func ClientMetricsHttpClientRequestsTraceConnect(observers []prometheus.Observer
 	}
 	return func(options *ClientOptions) {
 		for _, observer := range observers {
-			prometheus.MustRegister(observer)
+			prometheus.Register(observer)
 		}
 		options.MetricsHttpClientRequestsTraceConnect = observers
 	}
@@ -161,7 +161,7 @@ func ClientMetricsHttpClientRequestsTraceTls(observers []prometheus.ObserverVec)
 	}
 	return func(options *ClientOptions) {
 		for _, observer := range observers {
-			prometheus.MustRegister(observer)
+			prometheus.Register(observer)
 		}
 		options.MetricsHttpClientRequestsTraceTls = observers
 	}
@@ -172,7 +172,7 @@ func ClientMetricsHttpClientRequestsTraceRequest(observers []prometheus.Observer
 	}
 	return func(options *ClientOptions) {
 		for _, observer := range observers {
-			prometheus.MustRegister(observer)
+			prometheus.Register(observer)
 		}
 		options.MetricsHttpClientRequestsTraceRequest = observers
 	}
