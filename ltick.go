@@ -654,6 +654,7 @@ func (e *Engine) Startup() (err error) {
 									if route.BasicAuth != nil {
 										ctx.Request.SetBasicAuth(route.BasicAuth.Username, route.BasicAuth.Password)
 									}
+									ctx.Context = utility.MergeContext(ctx.Request.Context(), ctx.Context)
 									return route.Handler.Serve(&api.Context{
 										Context:  ctx,
 										Response: api.NewResponse(ctx),
